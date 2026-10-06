@@ -172,15 +172,44 @@ export function buildMonthlyResult(
   subjects.sort((a, b) => a.subjectName.localeCompare(b.subjectName, "bn"));
 
   const overallPct = calculatePercentage(obtained, totalMarks);
-  const og = calculateGrade(overallPct);
+  const compulsory = subjects.filter((s) => !s.isFourth);
+  const optional = subjects.find((s) => s.isFourth);
+  const hasCompulsoryFail = compulsory.some((s) => s.gpa === 0);
+
+  let finalGpa = 0;
+  let finalGrade = "F";
+
+  if (hasCompulsoryFail && compulsory.length > 0) {
+    finalGpa = 0.0;
+    finalGrade = "F";
+  } else if (compulsory.length > 0) {
+    let totalGp = compulsory.reduce((sum, s) => sum + s.gpa, 0);
+    if (optional && optional.gpa > 2.0) {
+      totalGp += optional.gpa - 2.0;
+    }
+    const divisor = compulsory.length;
+    finalGpa = Math.min(5.0, Math.round((totalGp / divisor) * 100) / 100);
+    if (finalGpa >= 5.0) finalGrade = "A+";
+    else if (finalGpa >= 4.0) finalGrade = "A";
+    else if (finalGpa >= 3.5) finalGrade = "A-";
+    else if (finalGpa >= 3.0) finalGrade = "B";
+    else if (finalGpa >= 2.0) finalGrade = "C";
+    else if (finalGpa >= 1.0) finalGrade = "D";
+    else finalGrade = "F";
+  } else {
+    const og = calculateGrade(overallPct);
+    finalGpa = og.gpa;
+    finalGrade = og.grade;
+  }
+
   return {
     subjects,
     overall: {
       totalMarks,
       obtained,
       percentage: overallPct,
-      grade: og.grade,
-      gpa: og.gpa,
+      grade: finalGrade,
+      gpa: finalGpa,
     },
   };
 }

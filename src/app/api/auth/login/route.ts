@@ -24,7 +24,10 @@ export async function POST(req: Request) {
       .first<{ id: number; name: string; username: string; password_hash: string; role: "ADMIN" | "TEACHER" | "STUDENT" }>(undefined as never)
       .catch(() => null);
 
-    const valid = user ? await verifyPassword(body.password, user.password_hash) : false;
+    // Constant-time mitigation against username enumeration
+    const DUMMY_HASH = "pbkdf2$100000$YXVkaXRzYWx0MTIzNDU2Nw==$YXVkaXRoYXNoMTIzNDU2Nzg5MDEyMzQ1Njc4OTA=";
+    const hashToVerify = user ? user.password_hash : DUMMY_HASH;
+    const valid = await verifyPassword(body.password, hashToVerify);
     if (!user || !valid) {
       return fail(401, MSG.loginFailed);
     }

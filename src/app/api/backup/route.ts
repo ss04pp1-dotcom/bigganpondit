@@ -130,7 +130,19 @@ export async function POST(req: Request) {
         "settings",
       ] as const;
 
-      // statements are executed atomically through db.batch
+      const TABLE_COLUMNS: Record<string, readonly string[]> = {
+        users: ["id", "name", "username", "password_hash", "role", "created_at", "updated_at"],
+        teachers: ["id", "user_id", "short_name", "signature_key", "created_at", "updated_at"],
+        classes: ["id", "name", "sort_order", "created_at", "updated_at"],
+        students: ["id", "user_id", "name", "class_id", "division", "section", "roll", "photo_key", "created_at", "updated_at"],
+        subjects: ["id", "name", "class_id", "division", "is_fourth_subject", "created_at", "updated_at"],
+        teacher_subjects: ["id", "teacher_id", "subject_id", "created_at", "updated_at"],
+        exams: ["id", "class_id", "division", "subject_id", "month", "year", "exam_date", "title", "total_marks", "created_by", "created_at", "updated_at"],
+        marks: ["id", "exam_id", "student_id", "attendance", "obtained_marks", "created_at", "updated_at"],
+        settings: ["id", "key", "value", "updated_at"],
+      };
+
+      // statements are executed safely in batches
       const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
       // delete in reverse dependency order (FK-safe)
       for (const t of ["sessions", "marks", "exams", "teacher_subjects", "students", "teachers", "subjects", "settings", "classes", "users"]) {
@@ -139,13 +151,15 @@ export async function POST(req: Request) {
       for (const t of insertOrder) {
         const rows = payload.tables[t];
         if (!Array.isArray(rows)) continue;
+        const allowedCols = TABLE_COLUMNS[t];
+        if (!allowedCols) continue;
         for (const r of rows) {
-          const cols = Object.keys(r);
+          const cols = Object.keys(r).filter((col) => allowedCols.includes(col));
           if (!cols.includes("id")) continue;
           stmts.push(
             db.prepare(
-              `INSERT INTO ${t} (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`
-            ).bind(...cols.map((c) => r[c] === undefined ? null : r[c]))
+              `INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`
+            ).bind(...cols.map((c) => (r[c] === undefined ? null : r[c])))
           );
         }
       }
@@ -181,7 +195,12 @@ export async function POST(req: Request) {
       if (currentRegistry !== "[]" && restoredRegistry && restoredRegistry.value !== currentRegistry) {
         stmts.push(db.prepare("UPDATE settings SET value = ?, updated_at = datetime('now') WHERE key = ?").bind(currentRegistry, SETTING_BACKUP_REGISTRY));
       }
-      await db.batch(stmts);
+      // Cloudflare D1 max batch size is 100 statements. Chunk to safe slices of 80:
+      const CHUNK_SIZE = 80;
+      for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
+        const chunk = stmts.slice(i, i + CHUNK_SIZE);
+        await db.batch(chunk);
+      }
       return ok({ message: "ব্যাকআপ রিস্টোর করা হয়েছে। অন্য সব ব্যবহারকারীকে আবার লগইন করতে হবে।" });
     }
 

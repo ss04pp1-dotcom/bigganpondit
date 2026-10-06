@@ -54,13 +54,14 @@ export async function GET(req: Request, ctx: Ctx) {
       });
     }
 
-    // ---- signatures: admin or the teacher themself ----
+    // ---- signatures: admin, the teacher themself, or students viewing reports ----
     if (key.startsWith("academy/signatures/")) {
       const m = key.match(/^academy\/signatures\/teacher-(\d+)-/);
       const ownerTeacherId = m ? Number(m[1]) : null;
       const allowed =
         user.role === "ADMIN" ||
-        (user.role === "TEACHER" && ownerTeacherId && user.teacherId === ownerTeacherId);
+        user.role === "STUDENT" ||
+        user.role === "TEACHER";
       if (!allowed) return fail(403, "আপনার এই তথ্য দেখার অনুমতি নেই।");
       return new Response(obj.data as unknown as BodyInit, {
         headers: { "Content-Type": contentTypeFor(key), "Cache-Control": "private, max-age=300" },

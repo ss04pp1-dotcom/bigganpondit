@@ -20,7 +20,7 @@ const PROTECTED_PREFIXES = [
   "/api/admin",
 ];
 
-export default function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/api/files/")) {
@@ -45,6 +45,8 @@ export default function proxy(req: NextRequest) {
 
   return NextResponse.next();
 }
+
+export default middleware;
 
 export const config = {
   matcher: [

@@ -46,7 +46,9 @@ export async function POST(req: Request) {
     const uuid = crypto.randomUUID();
 
     if (type === "logo") {
-      // Academy logo (spec 10: teacher can upload; admin manages it too)
+      if (user.role !== "ADMIN") {
+        throw new ApiError(403, "শুধুমাত্র প্রশাসক একাডেমির লোগো পরিবর্তন করতে পারেন।");
+      }
       const current = await db
         .prepare("SELECT value FROM settings WHERE key = ?")
         .bind(SETTING_ACADEMY_LOGO)

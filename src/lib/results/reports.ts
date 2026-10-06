@@ -460,3 +460,25 @@ export async function getDirectorSignatureInfo(db: D1Database) {
     institution: d?.institution || null,
   };
 }
+
+export async function getSubjectTeachersMap(db: D1Database): Promise<Map<number, { name: string; shortName: string }>> {
+  const map = new Map<number, { name: string; shortName: string }>();
+  const rows = (
+    await db
+      .prepare(
+        `SELECT ts.subject_id, u.name as teacher_name, t.short_name as teacher_short_name
+         FROM teacher_subjects ts
+         JOIN teachers t ON t.id = ts.teacher_id
+         JOIN users u ON u.id = t.user_id`
+      )
+      .all<{ subject_id: number; teacher_name: string; teacher_short_name: string }>()
+      .catch(() => null)
+  )?.results ?? [];
+  for (const r of rows) {
+    map.set(r.subject_id, {
+      name: r.teacher_name,
+      shortName: r.teacher_short_name || (r.teacher_name ? r.teacher_name.slice(0, 2).toUpperCase() : ""),
+    });
+  }
+  return map;
+}

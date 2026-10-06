@@ -6,6 +6,8 @@ import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
+import { OfficialResultCard } from "@/components/app/official-result-card";
+import { getSubjectTeachersMap, getStudentExamRows } from "@/lib/results/reports";
 import { AnnualChart } from "@/components/app/annual-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -65,6 +67,33 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const dirInfo = await getDirectorSignatureInfo(db);
+  const teacherMap = await getSubjectTeachersMap(db);
+  const examRows = studentId ? await getStudentExamRows(db, { studentId, year, subjectIds: null }) : [];
+  const bySub = new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
+  for (const r of examRows) {
+    const cur = bySub.get(r.subjectId) ?? { name: r.subjectName, isFourth: r.subjectIsFourth, total: 0, obtained: 0 };
+    cur.total += r.total;
+    cur.obtained += r.obtained;
+    bySub.set(r.subjectId, cur);
+  }
+  const officialSubjects = [...bySub.entries()].map(([subId, s]) => {
+    const t = teacherMap.get(subId);
+    const pct = s.total > 0 ? (s.obtained / s.total) * 100 : 0;
+    const gpa = pct >= 80 ? 5.0 : pct >= 70 ? 4.0 : pct >= 60 ? 3.5 : pct >= 50 ? 3.0 : pct >= 40 ? 2.0 : pct >= 33 ? 1.0 : 0.0;
+    const grade = pct >= 80 ? "A+" : pct >= 70 ? "A" : pct >= 60 ? "A-" : pct >= 50 ? "B" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
+    return {
+      subjectId: subId,
+      subjectName: s.name,
+      teacherName: t?.name ?? user.name,
+      teacherShortName: t?.shortName ?? user.shortName,
+      totalMarks: s.total,
+      classHighest: s.total,
+      obtained: s.obtained,
+      grade,
+      gpa,
+      isFourth: s.isFourth,
+    };
+  });
 
   return (
     <div className="space-y-4">
@@ -133,7 +162,30 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
 
       {report ? (
         <>
-          <Card className="print-area">
+          {/* 100% pixel-to-pixel Official Result Sheet & Booklet */}
+          <OfficialResultCard
+            mode="ANNUAL"
+            year={year}
+            student={{
+              name: report.student.name,
+              roll: report.student.roll,
+              className: report.student.className,
+              division: report.student.division,
+              section: report.student.section,
+            }}
+            subjects={officialSubjects}
+            overall={{
+              totalMarks: officialSubjects.reduce((acc, s) => acc + s.totalMarks, 0),
+              obtained: officialSubjects.reduce((acc, s) => acc + s.obtained, 0),
+              grade: report.annual.overall.grade ?? "—",
+              gpa: report.annual.overall.gpa ?? 0,
+              percentage: report.annual.overall.percentage ?? 0,
+            }}
+            directorInfo={dirInfo}
+            defaultTab="SHEET"
+          />
+        
+          <Card className="no-print">
             <CardContent className="pt-4">
               <div className="a4-sheet !max-w-none !border-0 !p-0 !shadow-none">
                 {/* page 1: table */}

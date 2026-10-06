@@ -433,3 +433,43 @@ tbody tr:hover { background: #f7fbff !important; }
   white-space: nowrap;
   animation: marquee 25s linear infinite;
 }
+
+/* Official Result Sheet & Booklet print fidelity (Image 1 100% pixel-to-pixel copy) */
+@media print {
+  .official-result-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background-color: #edf6ed !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    border: 2px solid #000000 !important;
+    padding: 10mm 12mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  .official-result-sheet * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .official-result-booklet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background-color: #fdfbf7 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    border: 2px solid #000000 !important;
+    padding: 10mm 12mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  .official-result-booklet * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

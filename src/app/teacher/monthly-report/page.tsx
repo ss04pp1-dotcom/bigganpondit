@@ -6,6 +6,8 @@ import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
+import { OfficialResultCard } from "@/components/app/official-result-card";
+import { getSubjectTeachersMap } from "@/lib/results/reports";
 import { CommentBox } from "@/components/reports/comment-box";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -73,6 +75,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const dirInfo = await getDirectorSignatureInfo(db);
+  const teacherMap = await getSubjectTeachersMap(db);
 
   const report = studentId && classId
     ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted })
@@ -161,138 +164,39 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
         </CardContent>
       </Card>
 
-      {/* individual report card */}
+      {/* individual report card (100% pixel-to-pixel copy of Image 1) */}
       {report ? (
-        <>
-          <Card className="print-area">
-            <CardContent className="pt-4">
-              <div className="a4-sheet !max-w-none !border-0 !p-0 !shadow-none">
-                <ReportHeader
-                  academyName={academyName}
-                  logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-                  teacherName={`${user.name} (${user.shortName ?? ""})`}
-                  subtitle={`মাসিক ফলাফল রিপোর্ট — ${MONTHS_BN[month - 1]} ${bn(year)}`}
-                />
-
-                <div className="print-avoid-break mt-4 flex items-center gap-4 rounded-xl border border-border bg-muted/30 p-4">
-                  <StudentAvatar photoKey={report.student.photoKey} name={report.student.name} size="xl" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-lg font-bold">{report.student.name}</p>
-                    <p className="text-[13px] text-muted-foreground">
-                      {classLabel(report.student.className)}
-                      {report.student.division ? ` — ${divisionLabel(report.student.division)}` : ""}
-                      {report.student.section ? ` • শাখা ${report.student.section}` : ""} • রোল {bn(report.student.roll)}
-                    </p>
-                    <p className="text-[13px] text-muted-foreground">{MONTHS_BN[month - 1]} • {bn(year)}</p>
-                  </div>
-                </div>
-
-                {/* subject table (spec 33) */}
-                <div className="print-avoid-break mt-4 overflow-x-auto">
-                  <table className="w-full border-collapse text-[13px]">
-                    <thead>
-                      <tr className="bg-muted/60 text-left text-[12px]">
-                        <th className="border border-border px-3 py-2 font-semibold">বিষয়</th>
-                        <th className="border border-border px-3 py-2 text-right font-semibold">মোট নম্বর</th>
-                        <th className="border border-border px-3 py-2 text-right font-semibold">সর্বোচ্চ</th>
-                        <th className="border border-border px-3 py-2 text-right font-semibold">প্রাপ্ত</th>
-                        <th className="border border-border px-3 py-2 text-center font-semibold">গ্রেড</th>
-                        <th className="border border-border px-3 py-2 text-center font-semibold">GPA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.subjects.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="border border-border px-3 py-8 text-center text-muted-foreground">
-                            এই মাসে কোনো ফলাফল পাওয়া যায়নি।
-                          </td>
-                        </tr>
-                      ) : (
-                        report.subjects.flatMap((s) => {
-                          const rows = report.examRowsBySubject.get(s.subjectId) ?? [];
-                          return [
-                            <tr key={`summary-${s.subjectId}`} className="bg-primary/5">
-                              <td className="border border-border px-3 py-2 font-semibold">
-                                {s.subjectName}
-                                {s.isFourth ? <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700">৪র্থ</span> : null}
-                              </td>
-                              <td className="border border-border px-3 py-2 text-right">{fmtNum(s.totalMarks)}</td>
-                              <td className="border border-border px-3 py-2 text-right">{fmtNum(s.classHighest)}</td>
-                              <td className="border border-border px-3 py-2 text-right font-semibold">{fmtNum(s.obtained)}</td>
-                              <td className="border border-border px-3 py-2 text-center font-semibold">{s.grade}</td>
-                              <td className="border border-border px-3 py-2 text-center">{fmtGpa(s.gpa)}</td>
-                            </tr>,
-                            ...rows.map((r) => (
-                              <tr key={`exam-${r.examId}`} className="text-[12px] text-muted-foreground">
-                                <td className="border border-border px-3 py-1.5 pl-7">↳ {r.title}</td>
-                                <td className="border border-border px-3 py-1.5 text-right">{fmtNum(r.total)}</td>
-                                <td className="border border-border px-3 py-1.5 text-right">{fmtNum(r.highest)}</td>
-                                <td className="border border-border px-3 py-1.5 text-right">{fmtNum(r.obtained)}</td>
-                                <td className="border border-border px-3 py-1.5 text-center">{r.grade}</td>
-                                <td className="border border-border px-3 py-1.5 text-center">{fmtGpa(r.gpa)}</td>
-                              </tr>
-                            )),
-                          ];
-                        })
-                      )}
-                    </tbody>
-                    {report.subjects.length > 0 && (
-                      <tfoot>
-                        <tr className="bg-primary/5 font-semibold">
-                          <td className="border border-border px-3 py-2">সর্বমোট</td>
-                          <td className="border border-border px-3 py-2 text-right">{fmtNum(report.overall.totalMarks)}</td>
-                          <td className="border border-border px-3 py-2" />
-                          <td className="border border-border px-3 py-2 text-right">{fmtNum(report.overall.obtained)}</td>
-                          <td className="border border-border px-3 py-2 text-center">{report.overall.grade}</td>
-                          <td className="border border-border px-3 py-2 text-center">{fmtGpa(report.overall.gpa)}</td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-
-                {/* summary strip */}
-                <div className="print-avoid-break mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-[11px] text-muted-foreground">সার্বিক শতকরা</p>
-                    <p className="text-xl font-bold">{fmtPct(report.overall.percentage)}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-[11px] text-muted-foreground">গ্রেড</p>
-                    <p className="text-xl font-bold">{report.overall.grade}</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-[11px] text-muted-foreground">GPA</p>
-                    <p className="text-xl font-bold">{fmtGpa(report.overall.gpa)}</p>
-                  </div>
-                  <div className="rounded-lg bg-primary/10 p-3 text-center">
-                    <p className="text-[11px] text-muted-foreground">মেধা অবস্থান</p>
-                    <p className="text-xl font-bold text-primary">
-                      {position ? `${bn(position)} / ${bn(summaryAll?.entries.length ?? 0)}` : "—"}
-                    </p>
-                  </div>
-                </div>
-
-                <CommentBox />
-
-                {/* Point 08: Single teacher result print -> Both Teacher + Director signatures */}
-                <PrintSignatures
-                  directorName={dirInfo.name}
-                  directorSignatureUrl={dirInfo.signatureUrl}
-                  directorInstitution={dirInfo.institution}
-                  teacherName={user.name}
-                  teacherSignatureUrl={user.signatureKey ? `/api/files/${user.signatureKey}` : null}
-                  teacherSubject={`${classLabel(className)} ${division ? divisionLabel(division) : ""}`}
-                  isSingleTeacher={true}
-                  showGuardian={true}
-                />
-              </div>
-            </CardContent>
-          </Card>
-          <div className="no-print flex justify-center">
-            <PrintButton label="প্রিন্ট করুন (A4) — PDF সংরক্ষণ করা যায়" />
-          </div>
-        </>
+        <OfficialResultCard
+          mode="MONTHLY"
+          month={month}
+          year={year}
+          student={{
+            name: report.student.name,
+            roll: report.student.roll,
+            className: report.student.className,
+            division: report.student.division,
+            section: report.student.section,
+          }}
+          subjects={(report.subjects ?? []).map((s) => {
+            const t = teacherMap.get(s.subjectId);
+            return {
+              subjectId: s.subjectId,
+              subjectName: s.subjectName,
+              teacherName: t?.name ?? user.name,
+              teacherShortName: t?.shortName ?? user.shortName,
+              totalMarks: s.totalMarks,
+              classHighest: s.classHighest,
+              obtained: s.obtained,
+              grade: s.grade,
+              gpa: s.gpa,
+              isFourth: s.isFourth,
+            };
+          })}
+          overall={report.overall}
+          position={position}
+          directorInfo={dirInfo}
+          defaultTab="SHEET"
+        />
       ) : (
         /* ---- All students class summary ---- */
         <>

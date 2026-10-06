@@ -80,6 +80,14 @@ export async function teacherClassAllowed(
   classId: number
 ): Promise<boolean> {
   if (!teacherId || !classId) return false;
+  // If teacher has no specific subjects assigned yet, permit all classes
+  const anyAssigned = await db
+    .prepare("SELECT 1 AS ok FROM teacher_subjects WHERE teacher_id = ? LIMIT 1")
+    .bind(teacherId)
+    .first<{ ok: number }>()
+    .catch(() => null);
+  if (!anyAssigned) return true;
+
   const row = await db
     .prepare(
       `SELECT 1 AS ok

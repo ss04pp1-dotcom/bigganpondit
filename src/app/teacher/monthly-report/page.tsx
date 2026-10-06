@@ -37,8 +37,13 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const curYear = new Date().getFullYear();
   const curMonth = new Date().getMonth() + 1;
 
-  const allowedClasses = await getTeacherClasses(db, user.teacherId!);
-  const className = one(sp.class) && allowedClasses.includes(one(sp.class)!) ? one(sp.class)! : allowedClasses.includes("10") ? "10" : allowedClasses[0] ?? "10";
+  const allowedClasses = await getTeacherClasses(db, user.teacherId);
+  const allDbClasses = (
+    await db.prepare("SELECT name FROM classes ORDER BY sort_order DESC").all<{ name: string }>().catch(() => null)
+  )?.results.map((r) => r.name) ?? ["10", "9", "8", "7", "6"];
+  const activeClasses = allowedClasses.length > 0 ? allowedClasses : allDbClasses;
+
+  const className = one(sp.class) && activeClasses.includes(one(sp.class)!) ? one(sp.class)! : activeClasses.includes("10") ? "10" : activeClasses[0] ?? "10";
   const requiresDiv = className === "9" || className === "10";
   const division = requiresDiv ? (one(sp.division) === "HUMANITIES" ? "HUMANITIES" : "SCIENCE") : null;
   const month = Number(one(sp.month)) || curMonth;
@@ -95,7 +100,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
               <Select name="class" defaultValue={className}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {allowedClasses.map((c) => (
+                  {activeClasses.map((c) => (
                     <SelectItem key={c} value={c}>{classLabel(c)}</SelectItem>
                   ))}
                 </SelectContent>

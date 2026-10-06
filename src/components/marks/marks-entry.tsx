@@ -215,13 +215,18 @@ export function MarksEntry({ subjects }: { subjects: EntrySubject[] }) {
           <div className="space-y-1.5">
             <Label>বিষয়</Label>
             <Select value={subjectId ? String(subjectId) : ""} onValueChange={(v) => setSubjectId(Number(v))}>
-              <SelectTrigger className="h-11"><SelectValue placeholder="বিষয় নির্বাচন" /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue placeholder={classSubjects.length === 0 ? "কোনো বিষয় নেই" : "বিষয় নির্বাচন"} /></SelectTrigger>
               <SelectContent>
                 {classSubjects.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {classSubjects.length === 0 && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                এই শ্রেণিতে আপনার কোনো অনুমোদিত বিষয় নেই।
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">

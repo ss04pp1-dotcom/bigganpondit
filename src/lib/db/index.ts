@@ -23,9 +23,31 @@ export function getDb(): Promise<D1Database> {
   if (!g.__academyInit) {
     g.__academyInit = (async () => {
       const cf = await getCloudflareEnv();
-      const db: D1Database = cf?.DB
-        ? (cf.DB as unknown as D1Database)
-        : await getLocalD1();
+      let db: D1Database;
+      if (cf?.DB) {
+        db = cf.DB as unknown as D1Database;
+      } else {
+        try {
+          db = await getLocalD1();
+        } catch {
+          console.error("Neither Cloudflare D1 nor local SQLite is available.");
+          db = {
+            prepare: () => ({
+              bind: () => ({
+                first: async () => null,
+                all: async () => ({ results: [], success: true, meta: {} }),
+                run: async () => ({ success: true, meta: {} }),
+              }),
+              first: async () => null,
+              all: async () => ({ results: [], success: true, meta: {} }),
+              run: async () => ({ success: true, meta: {} }),
+            }),
+            batch: async () => [],
+            exec: async () => ({ count: 0, duration: 0 }),
+            dump: async () => new ArrayBuffer(0),
+          } as unknown as D1Database;
+        }
+      }
       g.__academyDb = db;
       try {
         await bootstrap(db, cf);

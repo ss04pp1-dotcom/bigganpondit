@@ -15,17 +15,25 @@ export interface CloudflareEnv {
 
 export async function getCloudflareEnv(): Promise<CloudflareEnv | null> {
   try {
+    // 1) Direct global or process.env check (immediate, zero async overhead)
+    const directEnv = (globalThis as any).env || (process as any).env;
+    if (directEnv?.DB) return directEnv as CloudflareEnv;
+
+    // 2) @opennextjs/cloudflare context with 800ms race timeout to prevent infinite hang
     const mod: any = await import("@opennextjs/cloudflare");
     if (typeof mod?.getCloudflareContext === "function") {
-      let ctx: any;
-      try {
-        ctx = await mod.getCloudflareContext({ async: true });
-      } catch {
-        ctx = mod.getCloudflareContext();
-      }
-      if (ctx && typeof ctx.then === "function") {
-        ctx = await ctx;
-      }
+      const fetchContext = async () => {
+        try {
+          const res = mod.getCloudflareContext({ async: true });
+          return res && typeof res.then === "function" ? await res : res;
+        } catch {
+          const res = mod.getCloudflareContext();
+          return res && typeof res.then === "function" ? await res : res;
+        }
+      };
+
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 800));
+      const ctx: any = await Promise.race([fetchContext(), timeout]);
       if (ctx?.env) return ctx.env as CloudflareEnv;
     }
   } catch (err) {

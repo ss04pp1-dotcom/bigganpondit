@@ -128,6 +128,26 @@ export async function POST(req: Request) {
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
 
+    if (type === "pending-student-photo") {
+      const requestId = Number(form.get("requestId") ?? 0);
+      if (!requestId) throw new ApiError(400, "অনুরোধ আইডি প্রদান করুন।");
+      const reqRow = await db
+        .prepare("SELECT id, photo_key, class_id FROM student_requests WHERE id = ?")
+        .bind(requestId)
+        .first<{ id: number; photo_key: string | null; class_id: number }>()
+        .catch(() => null);
+      if (!reqRow) throw new ApiError(404, MSG.notFound);
+      if (user.role === "TEACHER" && user.teacherId) {
+        const allowed = await teacherClassAllowed(db, user.teacherId, reqRow.class_id);
+        if (!allowed) throw new ApiError(403, MSG.noPermissionView);
+      }
+      const key = `academy/requests/${requestId}/${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await db.prepare("UPDATE student_requests SET photo_key = ?, updated_at = datetime('now') WHERE id = ?").bind(key, requestId).run();
+      if (reqRow.photo_key) await bucket.delete(reqRow.photo_key).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
     throw new ApiError(400, "অজানা আপলোড ধরন।");
   } catch (e) {
     return handleError(e);

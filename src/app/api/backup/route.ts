@@ -44,6 +44,7 @@ const TABLES = [
   "marks",
   "settings",
   "webauthn_credentials",
+  "student_requests",
 ] as const;
 
 export async function GET(req: Request) {
@@ -129,6 +130,8 @@ export async function POST(req: Request) {
         "exams",
         "marks",
         "settings",
+        "student_requests",
+        "webauthn_credentials",
       ] as const;
 
       const TABLE_COLUMNS: Record<string, readonly string[]> = {
@@ -146,12 +149,18 @@ export async function POST(req: Request) {
         marks: ["id", "exam_id", "student_id", "attendance", "obtained_marks", "created_at", "updated_at"],
         settings: ["id", "key", "value", "updated_at"],
         webauthn_credentials: ["id", "user_id", "credential_id", "public_key", "counter", "device_name", "created_at", "updated_at"],
+        student_requests: [
+          "id", "teacher_id", "name", "class_id", "division", "section", "roll", "username",
+          "password_hash", "photo_key", "father_name", "mother_name", "school_name", "phone",
+          "address", "blood_group", "dob", "status", "admin_notes", "reviewed_by", "reviewed_at",
+          "created_at", "updated_at"
+        ],
       };
 
       // statements are executed safely in batches
       const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
       // delete in reverse dependency order (FK-safe)
-      for (const t of ["sessions", "marks", "exams", "teacher_subjects", "students", "teachers", "subjects", "settings", "classes", "users"]) {
+      for (const t of ["sessions", "marks", "exams", "teacher_subjects", "student_requests", "students", "teachers", "subjects", "settings", "classes", "users", "webauthn_credentials", "webauthn_challenges"]) {
         stmts.push(db.prepare(`DELETE FROM ${t}`));
       }
       for (const t of insertOrder) {

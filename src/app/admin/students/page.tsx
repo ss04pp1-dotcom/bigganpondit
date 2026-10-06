@@ -11,10 +11,10 @@ export default async function AdminStudentsPage() {
       <div>
         <h1 className="text-xl font-bold">শিক্ষার্থী ব্যবস্থাপনা</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          সব শিক্ষার্থী — যুক্ত/সম্পাদনা/মুছে ফেলুন, ছবি ও পাসওয়ার্ড সহ।
+          সব শিক্ষার্থী — যুক্ত/সম্পাদনা/মুছে ফেলুন, শিক্ষকের পাঠানো অনুরোধ অনুমোদন এবং ছবি ও পাসওয়ার্ড ব্যবস্থাপনা।
         </p>
       </div>
-      <StudentManager />
+      <StudentManager role="ADMIN" />
     </div>
   );
 }

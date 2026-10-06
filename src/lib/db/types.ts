@@ -104,3 +104,29 @@ export interface SettingRow {
   key: string;
   value: string | null;
 }
+
+export interface StudentRequestRow {
+  id: number;
+  teacher_id: number | null;
+  name: string;
+  class_id: number;
+  division: string | null;
+  section: string | null;
+  roll: number;
+  username: string;
+  password_hash: string;
+  photo_key: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  school_name: string | null;
+  phone: string | null;
+  address: string | null;
+  blood_group: string | null;
+  dob: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  admin_notes: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

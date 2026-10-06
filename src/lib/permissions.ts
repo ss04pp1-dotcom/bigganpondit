@@ -10,8 +10,9 @@ export interface SubjectWithClass extends SubjectRow {
 /** All subjects a teacher is authorized to manage (joined with class name). */
 export async function getTeacherSubjects(
   db: D1Database,
-  teacherId: number
+  teacherId: number | undefined | null
 ): Promise<SubjectWithClass[]> {
+  if (!teacherId) return [];
   const res = await db
     .prepare(
       `SELECT s.*, c.name as class_name
@@ -33,9 +34,10 @@ export async function getTeacherSubjects(
  */
 export async function teacherSubjectAllowed(
   db: D1Database,
-  teacherId: number,
+  teacherId: number | undefined | null,
   subjectId: number
 ): Promise<SubjectWithClass | null> {
+  if (!teacherId || !subjectId) return null;
   const row = await db
     .prepare(
       `SELECT s.*, c.name as class_name
@@ -53,8 +55,9 @@ export async function teacherSubjectAllowed(
 /** Distinct class numbers the teacher has any subject in. */
 export async function getTeacherClasses(
   db: D1Database,
-  teacherId: number
+  teacherId: number | undefined | null
 ): Promise<string[]> {
+  if (!teacherId) return [];
   const res = await db
     .prepare(
       `SELECT DISTINCT c.name as class_name
@@ -73,9 +76,10 @@ export async function getTeacherClasses(
 /** Whether the teacher may manage students/marks of this class (any subject in it). */
 export async function teacherClassAllowed(
   db: D1Database,
-  teacherId: number,
+  teacherId: number | undefined | null,
   classId: number
 ): Promise<boolean> {
+  if (!teacherId || !classId) return false;
   const row = await db
     .prepare(
       `SELECT 1 AS ok

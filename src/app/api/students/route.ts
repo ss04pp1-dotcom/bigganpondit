@@ -40,12 +40,14 @@ export async function GET(req: Request) {
     // Teachers: only students of classes they teach (server-side enforced).
     if (user.role === "TEACHER" && user.teacherId) {
       const allowedClasses = await getTeacherClasses(db, user.teacherId);
-      if (allowedClasses.length === 0) return ok({ students: [] });
-      if (className && !allowedClasses.includes(className)) {
-        throw new ApiError(403, MSG.noPermissionView);
+      // If teacher has assigned classes, enforce them; if unassigned, allow browsing
+      if (allowedClasses.length > 0) {
+        if (className && !allowedClasses.includes(className)) {
+          throw new ApiError(403, MSG.noPermissionView);
+        }
+        clauses.push(`c.name IN (${allowedClasses.map(() => "?").join(",")})`);
+        params.push(...allowedClasses);
       }
-      clauses.push(`c.name IN (${allowedClasses.map(() => "?").join(",")})`);
-      params.push(...allowedClasses);
     }
 
     if (className && /^(6|7|8|9|10)$/.test(className)) {
@@ -117,6 +119,13 @@ export async function POST(req: Request) {
       .catch(() => null);
     if (dupUser) throw new ApiError(400, "এই ইউজারনেম ইতোমধ্যে ব্যবহৃত হয়েছে।");
 
+    const dupReqUser = await db
+      .prepare("SELECT id FROM student_requests WHERE username = ? AND status = 'PENDING'")
+      .bind(body.username)
+      .first<{ id: number }>()
+      .catch(() => null);
+    if (dupReqUser) throw new ApiError(400, "এই ইউজারনেম দিয়ে ইতোমধ্যে একটি অনুরোধ অপেক্ষারত আছে।");
+
     const dupRoll = await db
       .prepare(
         "SELECT id FROM students WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '') AND roll = ?"
@@ -126,7 +135,56 @@ export async function POST(req: Request) {
       .catch(() => null);
     if (dupRoll) throw new ApiError(400, "এই রোল নম্বর ইতোমধ্যে ব্যবহৃত হয়েছে।");
 
+    const dupReqRoll = await db
+      .prepare(
+        "SELECT id FROM student_requests WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '') AND roll = ? AND status = 'PENDING'"
+      )
+      .bind(classRow.id, body.division ?? null, body.roll)
+      .first<{ id: number }>()
+      .catch(() => null);
+    if (dupReqRoll) throw new ApiError(400, "এই রোল নম্বর দিয়ে ইতোমধ্যে একটি অনুরোধ অপেক্ষারত আছে।");
+
     const hash = await hashPassword(body.password);
+
+    // If teacher submitted: submit as student request pending admin approval
+    if (user.role === "TEACHER") {
+      const insRes = await db
+        .prepare(
+          `INSERT INTO student_requests (
+            teacher_id, name, class_id, division, section, roll, username, password_hash,
+            father_name, mother_name, school_name, phone, address, blood_group, dob, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+        )
+        .bind(
+          user.teacherId ?? null,
+          body.name,
+          classRow.id,
+          body.division ?? null,
+          body.section ?? null,
+          body.roll,
+          body.username,
+          hash,
+          body.fatherName ?? null,
+          body.motherName ?? null,
+          body.schoolName ?? null,
+          body.phone ?? null,
+          body.address ?? null,
+          body.bloodGroup ?? null,
+          body.dob ?? null
+        )
+        .run();
+      const requestId = Number(insRes.meta.last_row_id ?? 0);
+      return ok(
+        {
+          message: "শিক্ষার্থীর তথ্য সফলভাবে পাঠানো হয়েছে। প্রশাসনের অনুমোদনের পর চূড়ান্তভাবে যুক্ত হবে।",
+          pending: true,
+          requestId,
+        },
+        201
+      );
+    }
+
+    // Admin creates directly
     const res = await db
       .prepare("INSERT INTO users (name, username, password_hash, role) VALUES (?, ?, ?, 'STUDENT')")
       .bind(body.name, body.username, hash)
@@ -158,8 +216,14 @@ export async function POST(req: Request) {
       )
       .run();
 
-    const created = await db.prepare("SELECT id, photo_key FROM students WHERE user_id = ?").bind(userId).first<{ id: number; photo_key: string | null }>();
-    return ok({ message: MSG.saved, studentId: created?.id ?? null, photoKey: created?.photo_key ?? null }, 201);
+    const created = await db
+      .prepare("SELECT id, photo_key FROM students WHERE user_id = ?")
+      .bind(userId)
+      .first<{ id: number; photo_key: string | null }>();
+    return ok(
+      { message: MSG.saved, studentId: created?.id ?? null, photoKey: created?.photo_key ?? null, pending: false },
+      201
+    );
   } catch (e) {
     return handleError(e);
   }

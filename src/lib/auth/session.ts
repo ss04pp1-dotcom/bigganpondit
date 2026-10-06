@@ -94,11 +94,23 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
   };
 
   if (user.role === "TEACHER") {
-    const t = await db
+    let t = await db
       .prepare("SELECT * FROM teachers WHERE user_id = ?")
       .bind(user.id)
       .first<TeacherRow>()
       .catch(() => null);
+    if (!t) {
+      await db
+        .prepare("INSERT OR IGNORE INTO teachers (user_id, short_name) VALUES (?, ?)")
+        .bind(user.id, (user.name || "শিক্ষক").slice(0, 4))
+        .run()
+        .catch(() => null);
+      t = await db
+        .prepare("SELECT * FROM teachers WHERE user_id = ?")
+        .bind(user.id)
+        .first<TeacherRow>()
+        .catch(() => null);
+    }
     if (t) {
       out.teacherId = t.id;
       out.shortName = t.short_name;

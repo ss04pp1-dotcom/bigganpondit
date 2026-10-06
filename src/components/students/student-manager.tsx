@@ -1,18 +1,45 @@
 "use client";
 
 // Student management: grouped list + add/edit/delete/view dialogs.
-// Spec 11–15. Teachers may manage only students of their authorized classes
-// (enforced server-side in the API).
+// Teachers submit student registrations as requests requiring admin approval.
+// Admins review and approve/reject teacher requests or add students directly.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Eye, Pencil, Plus, Search, Trash2, UserPlus, Loader2 } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  UserPlus,
+  Loader2,
+  Check,
+  X,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Inbox,
+  UserCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { StudentAvatar } from "@/components/app/student-avatar";
@@ -46,6 +73,33 @@ interface Row {
   address?: string | null;
   blood_group?: string | null;
   dob?: string | null;
+}
+
+interface RequestRow {
+  id: number;
+  teacher_id: number | null;
+  teacher_name?: string | null;
+  teacher_short_name?: string | null;
+  reviewer_name?: string | null;
+  name: string;
+  class_id: number;
+  class_name: string;
+  division: string | null;
+  section: string | null;
+  roll: number;
+  username: string;
+  photo_key: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  school_name: string | null;
+  phone: string | null;
+  address: string | null;
+  blood_group: string | null;
+  dob: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  admin_notes: string | null;
+  reviewed_at: string | null;
+  created_at: string;
 }
 
 interface FormState {
@@ -105,7 +159,7 @@ function matches(row: Row, f: Filter): boolean {
   return row.class_name === cls && row.division === div;
 }
 
-// distinct visual styling per class (spec 14)
+// distinct visual styling per class
 const CLASS_STYLE: Record<string, string> = {
   "10": "border-l-blue-500 bg-blue-50/40",
   "9": "border-l-violet-500 bg-violet-50/40",
@@ -114,7 +168,14 @@ const CLASS_STYLE: Record<string, string> = {
   "6": "border-l-rose-500 bg-rose-50/40",
 };
 
-export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
+export function StudentManager({
+  canCreate = true,
+  role = "ADMIN",
+}: {
+  canCreate?: boolean;
+  role?: "ADMIN" | "TEACHER";
+}) {
+  const [mainTab, setMainTab] = useState<"students" | "requests">("students");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -124,12 +185,24 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
   const [viewId, setViewId] = useState<number | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const pendingPreview = useMemo(() => (pendingPhoto ? URL.createObjectURL(pendingPhoto) : null), [pendingPhoto]);
+
+  // Request management state
+  const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [reqLoading, setReqLoading] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [reqFilter, setReqFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [rejectModalReq, setRejectModalReq] = useState<RequestRow | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+
+  const { toast } = useToast();
+
   useEffect(() => {
     return () => {
       if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     };
   }, [pendingPreview]);
-  const { toast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,9 +215,26 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
     }
   }, [q]);
 
+  const loadRequests = useCallback(async () => {
+    setReqLoading(true);
+    try {
+      const endpoint =
+        role === "ADMIN" ? "/api/admin/student-requests?status=ALL" : "/api/teacher/student-requests";
+      const res = await fetch(endpoint);
+      const json = await res.json();
+      if (json.ok) {
+        setRequests(json.requests ?? []);
+        setPendingCount(json.pendingCount ?? 0);
+      }
+    } finally {
+      setReqLoading(false);
+    }
+  }, [role]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadRequests();
+  }, [load, loadRequests]);
 
   const visible = useMemo(() => rows.filter((r) => matches(r, filter)), [rows, filter]);
   const groups = useMemo(() => {
@@ -161,6 +251,11 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
       return a[0].localeCompare(b[0]);
     });
   }, [visible]);
+
+  const filteredRequests = useMemo(() => {
+    if (reqFilter === "ALL") return requests;
+    return requests.filter((r) => r.status === reqFilter);
+  }, [requests, reqFilter]);
 
   async function save() {
     if (!form) return;
@@ -208,13 +303,30 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
           const uploadJson = await uploadRes.json();
           if (!uploadRes.ok || !uploadJson.ok) throw new Error(uploadJson.error ?? "upload failed");
         } catch {
-          toast({ title: "শিক্ষার্থী তৈরি হয়েছে, কিন্তু ছবি আপলোড হয়নি। সম্পাদনা থেকে আবার আপলোড করুন।", variant: "destructive" });
+          toast({
+            title: "শিক্ষার্থী তৈরি হয়েছে, কিন্তু ছবি আপলোড হয়নি। সম্পাদনা থেকে আবার আপলোড করুন।",
+            variant: "destructive",
+          });
+        }
+      } else if (!form.id && json.pending && json.requestId && pendingPhoto) {
+        try {
+          const fd = new FormData();
+          fd.append("file", pendingPhoto);
+          fd.append("type", "pending-student-photo");
+          fd.append("requestId", String(json.requestId));
+          await fetch("/api/uploads", { method: "POST", body: fd });
+        } catch {
+          // non-fatal
         }
       }
       toast({ title: json.message });
       setPendingPhoto(null);
       setForm(null);
       await load();
+      await loadRequests();
+      if (role === "TEACHER" && !form.id) {
+        setMainTab("requests");
+      }
     } finally {
       setSaving(false);
     }
@@ -231,161 +343,513 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
     await load();
   }
 
+  async function handleApprove(reqId: number) {
+    setApprovingId(reqId);
+    try {
+      const res = await fetch(`/api/admin/student-requests/${reqId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "অনুমোদন করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: data.message });
+      await load();
+      await loadRequests();
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  async function handleRejectConfirm() {
+    if (!rejectModalReq) return;
+    setRejectingId(rejectModalReq.id);
+    try {
+      const res = await fetch(`/api/admin/student-requests/${rejectModalReq.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REJECT", notes: rejectNote }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "বাতিল করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: data.message });
+      setRejectModalReq(null);
+      setRejectNote("");
+      await loadRequests();
+    } finally {
+      setRejectingId(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* toolbar */}
-      <Card>
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && load()}
-              placeholder="নাম বা রোল দিয়ে খুঁজুন…"
-              className="h-10 pl-9"
-            />
-          </div>
-          {canCreate && (
-            <Button className="h-10 gap-2" onClick={() => { setPendingPhoto(null); setForm({ ...emptyForm }); }}>
-              <UserPlus className="h-4 w-4" /> তথ্য সংযুক্ত করুন
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* filter tabs */}
-      <div className="app-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-        {FILTERS.map((f) => (
+      {/* Top Segmented Navigation: Active Students vs Requests */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 text-[13px] font-semibold">
           <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
+            onClick={() => setMainTab("students")}
             className={cn(
-              "shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors",
-              filter === f.key
-                ? "bg-primary text-white shadow-sm"
-                : "bg-white text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-border"
+              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 transition-all",
+              mainTab === "students"
+                ? "bg-white text-blue-700 shadow-xs font-bold"
+                : "text-slate-600 hover:text-slate-900"
             )}
           >
-            {f.label}
+            <UserCheck className="h-4 w-4" />
+            <span>সিস্টেমের শিক্ষার্থী</span>
+            <span className="rounded-full bg-slate-200 px-2 py-0.2 text-[11px] font-bold text-slate-700">
+              {bn(rows.length)}
+            </span>
           </button>
-        ))}
+          <button
+            onClick={() => setMainTab("requests")}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 transition-all relative",
+              mainTab === "requests"
+                ? "bg-white text-blue-700 shadow-xs font-bold"
+                : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <Inbox className="h-4 w-4" />
+            <span>{role === "ADMIN" ? "অনুমোদন অনুরোধ" : "আমার পাঠানো অনুরোধ"}</span>
+            {pendingCount > 0 && (
+              <span className="rounded-full bg-amber-500 px-2 py-0.2 text-[11px] font-bold text-white animate-pulse">
+                {bn(pendingCount)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {canCreate && mainTab === "students" && (
+          <Button
+            className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs"
+            onClick={() => {
+              setPendingPhoto(null);
+              setForm({ ...emptyForm });
+            }}
+          >
+            <UserPlus className="h-4 w-4" />
+            {role === "TEACHER" ? "শিক্ষার্থী যুক্তির আবেদন" : "তথ্য সংযুক্ত করুন"}
+          </Button>
+        )}
       </div>
 
-      {/* grouped list */}
-      {loading ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> লোড হচ্ছে…
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-white py-16 text-center text-muted-foreground">
-          কোনো শিক্ষার্থী পাওয়া যায়নি।
-        </div>
-      ) : (
+      {/* VIEW 1: ACTIVE STUDENTS LIST */}
+      {mainTab === "students" && (
         <div className="space-y-4">
-          {groups.map(([key, list]) => {
-            const [cls, div] = key.split("|");
-            const label = div ? groupLabel(cls, div) : `${bn(cls)} শ্রেণি`;
-            return (
-              <section key={key} className={cn("print-avoid-break overflow-hidden rounded-xl border border-border border-l-4", CLASS_STYLE[cls] ?? "")}>
-                <header className="flex items-center justify-between bg-white/70 px-4 py-2.5">
-                  <h3 className="text-[14px] font-bold">{classLabel(cls)}{div ? ` — ${divisionLabel(div)}` : ""}</h3>
-                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[12px] font-medium text-muted-foreground border border-border">
-                    {bn(list.length)} জন
-                  </span>
-                </header>
-                <ul className="divide-y divide-border/70">
-                  {list.map((row) => (
-                    <li key={row.id} className="flex items-center gap-3 bg-white/40 px-4 py-3">
-                      <StudentAvatar photoKey={row.photo_key} name={row.name} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-semibold">{row.name}</p>
-                        <p className="text-[12px] text-muted-foreground">
-                          রোল {bn(row.roll)}
-                          {row.division ? ` • ${divisionLabel(row.division)}` : ""}
-                          {row.section ? ` • শাখা ${row.section}` : ""} • @{row.username}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <Button
-                          size="sm"
-                          className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
-                          onClick={() => setViewId(row.id)}
-                        >
-                          ভিউ
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
-                          onClick={() => {
-                            setPendingPhoto(null);
-                            setForm({
-                              id: row.id,
-                              name: row.name,
-                              className: row.class_name,
-                              division: row.division ?? "SCIENCE",
-                              section: row.section ?? "",
-                              roll: String(row.roll),
-                              username: row.username,
-                              password: "",
-                              photo_key: row.photo_key,
-                              fatherName: row.father_name ?? "",
-                              motherName: row.mother_name ?? "",
-                              schoolName: row.school_name ?? "",
-                              phone: row.phone ?? "",
-                              address: row.address ?? "",
-                              bloodGroup: row.blood_group ?? "",
-                              dob: row.dob ?? "",
-                            });
-                          }}
-                        >
-                          এডিট
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+          {/* notice for teacher about approval workflow */}
+          {role === "TEACHER" && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3 text-[12px] text-blue-900 flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">ℹ️</span>
+                <span>
+                  <strong>শিক্ষকদের জন্য নির্দেশিকা:</strong> আপনি নতুন শিক্ষার্থী যুক্ত করলে তা সরাসরি তালিকায় আসবে না। তথ্যগুলো প্রশাসনের কাছে অনুমোদনের জন্য যাবে এবং অ্যাডমিন অনুমোদন করলেই কেবল মূল তালিকায় রোল অনুযায়ী প্রদর্শিত হবে।
+                </span>
+              </div>
+              <button
+                onClick={() => setMainTab("requests")}
+                className="shrink-0 text-blue-700 hover:underline font-bold text-xs"
+              >
+                অনুরোধ স্ট্যাটাস দেখুন →
+              </button>
+            </div>
+          )}
+
+          {/* toolbar */}
+          <Card>
+            <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && load()}
+                  placeholder="নাম বা রোল দিয়ে খুঁজুন…"
+                  className="h-10 pl-9"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* filter tabs */}
+          <div className="app-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "shrink-0 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors",
+                  filter === f.key
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-white text-muted-foreground hover:bg-accent hover:text-accent-foreground border border-border"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* grouped list */}
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /> লোড হচ্ছে…
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-white py-16 text-center text-muted-foreground">
+              কোনো শিক্ষার্থী পাওয়া যায়নি।
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {groups.map(([key, list]) => {
+                const [cls, div] = key.split("|");
+                return (
+                  <section
+                    key={key}
+                    className={cn(
+                      "print-avoid-break overflow-hidden rounded-xl border border-border border-l-4",
+                      CLASS_STYLE[cls] ?? ""
+                    )}
+                  >
+                    <header className="flex items-center justify-between bg-white/70 px-4 py-2.5">
+                      <h3 className="text-[14px] font-bold">
+                        {classLabel(cls)}
+                        {div ? ` — ${divisionLabel(div)}` : ""}
+                      </h3>
+                      <span className="rounded-full bg-white px-2.5 py-0.5 text-[12px] font-medium text-muted-foreground border border-border">
+                        {bn(list.length)} জন
+                      </span>
+                    </header>
+                    <ul className="divide-y divide-border/70">
+                      {list.map((row) => (
+                        <li key={row.id} className="flex items-center gap-3 bg-white/40 px-4 py-3">
+                          <StudentAvatar photoKey={row.photo_key} name={row.name} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[14px] font-semibold">{row.name}</p>
+                            <p className="text-[12px] text-muted-foreground">
+                              রোল {bn(row.roll)}
+                              {row.division ? ` • ${divisionLabel(row.division)}` : ""}
+                              {row.section ? ` • শাখা ${row.section}` : ""} • @{row.username}
+                              {row.phone ? ` • 📞 ${bn(row.phone)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <Button
                               size="sm"
-                              className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#ef4444] text-white hover:bg-[#dc2626] shadow-xs"
+                              className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
+                              onClick={() => setViewId(row.id)}
                             >
-                              ডিলিট
+                              ভিউ
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>মুছে ফেলার নিশ্চয়তা</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {row.name} (রোল {bn(row.roll)})-কে মুছে ফেলা হবে। এই শিক্ষার্থীর সব নম্বরও মুছে যাবে। এই তথ্য মুছে ফেলা হবে — আপনি কি নিশ্চিত?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>না</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => remove(row.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                হ্যাঁ, মুছে ফেলুন
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+                            {role === "ADMIN" && (
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
+                                onClick={() => {
+                                  setPendingPhoto(null);
+                                  setForm({
+                                    id: row.id,
+                                    name: row.name,
+                                    className: row.class_name,
+                                    division: row.division ?? "SCIENCE",
+                                    section: row.section ?? "",
+                                    roll: String(row.roll),
+                                    username: row.username,
+                                    password: "",
+                                    photo_key: row.photo_key,
+                                    fatherName: row.father_name ?? "",
+                                    motherName: row.mother_name ?? "",
+                                    schoolName: row.school_name ?? "",
+                                    phone: row.phone ?? "",
+                                    address: row.address ?? "",
+                                    bloodGroup: row.blood_group ?? "",
+                                    dob: row.dob ?? "",
+                                  });
+                                }}
+                              >
+                                সম্পাদনা
+                              </Button>
+                            )}
+                            {role === "ADMIN" && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="destructive" className="h-7 px-2 rounded shadow-xs">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>বাতিল</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
+                                      মুছে ফেলুন
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* add/edit dialog */}
-      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
+      {/* VIEW 2: APPROVAL REQUESTS */}
+      {mainTab === "requests" && (
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-[16px] font-bold text-slate-800">
+                  {role === "ADMIN" ? "শিক্ষক কর্তৃক প্রেরিত শিক্ষার্থী তালিকা" : "আমার আবেদনের তালিকা"}
+                </h2>
+                <p className="text-[12px] text-muted-foreground mt-0.5">
+                  {role === "ADMIN"
+                    ? "শিক্ষকদের যুক্ত করা তথ্যাদি যাচাই করুন এবং অনুমোদন বা বাতিল করুন।"
+                    : "আপনার পাঠানো আবেদনের বর্তমান অবস্থা ট্র্যাক করুন।"}
+                </p>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs">
+                {(["ALL", "PENDING", "APPROVED", "REJECTED"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setReqFilter(st)}
+                    className={cn(
+                      "rounded px-2.5 py-1 font-medium transition-colors",
+                      reqFilter === st
+                        ? "bg-white text-blue-700 font-bold shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    )}
+                  >
+                    {st === "ALL" && "সবগুলো"}
+                    {st === "PENDING" && `অপেক্ষারত (${bn(pendingCount)})`}
+                    {st === "APPROVED" && "অনুমোদিত"}
+                    {st === "REJECTED" && "বাতিলকৃত"}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {reqLoading ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white py-16 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" /> অনুরোধ লোড হচ্ছে…
+            </div>
+          ) : filteredRequests.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-white py-16 text-center text-muted-foreground">
+              কোনো অনুরোধ পাওয়া যায়নি।
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-border bg-white shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/60 text-left text-[12px] font-semibold text-slate-700">
+                      <th className="px-4 py-3">শিক্ষার্থী ও রোল</th>
+                      <th className="px-4 py-3">শ্রেণি ও বিভাগ</th>
+                      <th className="px-4 py-3">ইউজারনেম</th>
+                      <th className="px-4 py-3">{role === "ADMIN" ? "অনুরোধকারী শিক্ষক" : "আবেদনের তারিখ"}</th>
+                      <th className="px-4 py-3 text-center">স্ট্যাটাস</th>
+                      {role === "ADMIN" && <th className="px-4 py-3 text-right">কার্যক্রম</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-900">{req.name}</p>
+                          <p className="text-[11px] text-slate-500">
+                            রোল: {bn(req.roll)} {req.phone ? `• 📞 ${bn(req.phone)}` : ""}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-semibold text-slate-800">{classLabel(req.class_name)}</span>
+                          {req.division && (
+                            <span className="ml-1 text-[11px] text-slate-500">
+                              ({divisionLabel(req.division)})
+                            </span>
+                          )}
+                          {req.section && (
+                            <p className="text-[11px] text-slate-400">শাখা: {req.section}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[12px] text-slate-600">
+                          @{req.username}
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-slate-600">
+                          {role === "ADMIN" ? (
+                            <div>
+                              <p className="font-semibold text-slate-800">
+                                {req.teacher_name ?? "শিক্ষক"} {req.teacher_short_name ? `(${req.teacher_short_name})` : ""}
+                              </p>
+                              <p className="text-[10px] text-slate-400">{req.created_at?.slice(0, 10)}</p>
+                            </div>
+                          ) : (
+                            <p>{req.created_at?.slice(0, 16)}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {req.status === "PENDING" && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
+                              <Clock className="h-3 w-3" /> অপেক্ষারত
+                            </span>
+                          )}
+                          {req.status === "APPROVED" && (
+                            <div>
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                                <CheckCircle2 className="h-3 w-3" /> অনুমোদিত
+                              </span>
+                              {req.reviewer_name && (
+                                <p className="text-[9px] text-slate-400 mt-0.5">{req.reviewer_name}</p>
+                              )}
+                            </div>
+                          )}
+                          {req.status === "REJECTED" && (
+                            <div>
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-bold text-rose-800">
+                                <XCircle className="h-3 w-3" /> বাতিলকৃত
+                              </span>
+                              {req.admin_notes && (
+                                <p className="text-[10px] text-rose-600 mt-0.5 max-w-[140px] truncate" title={req.admin_notes}>
+                                  নোট: {req.admin_notes}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        {role === "ADMIN" && (
+                          <td className="px-4 py-3 text-right">
+                            {req.status === "PENDING" ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  disabled={approvingId === req.id}
+                                  onClick={() => handleApprove(req.id)}
+                                  className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-2.5 shadow-xs"
+                                >
+                                  {approvingId === req.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5" />
+                                  )}
+                                  অনুমোদন
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={rejectingId === req.id}
+                                  onClick={() => {
+                                    setRejectModalReq(req);
+                                    setRejectNote("");
+                                  }}
+                                  className="h-8 gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 text-xs font-semibold px-2.5"
+                                >
+                                  <X className="h-3.5 w-3.5" /> বাতিল
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">সম্পন্ন</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rejection Reason Dialog for Admin */}
+      <Dialog open={!!rejectModalReq} onOpenChange={(open) => !open && setRejectModalReq(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-rose-600 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" /> আবেদন বাতিলের কারণ
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <p className="text-[13px] text-slate-600">
+              আপনি কি নিশ্চিত যে শিক্ষার্থী <strong>'{rejectModalReq?.name}'</strong> (রোল {bn(rejectModalReq?.roll)}) এর আবেদনটি বাতিল করতে চান?
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-[12px]">বাতিলের কারণ / নোট (শিক্ষককে জানানো হবে):</Label>
+              <Input
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="যেমন: তথ্যে ভুল আছে বা রোল নম্বর ইতোমধ্যে বরাদ্দ করা..."
+                className="h-10"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setRejectModalReq(null)}>
+                ফিরে যান
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRejectConfirm}
+                disabled={rejectingId === rejectModalReq?.id}
+                className="gap-1.5 bg-rose-600 hover:bg-rose-700"
+              >
+                {rejectingId === rejectModalReq?.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                বাতিল নিশ্চিত করুন
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* create / edit dialog */}
+      <Dialog open={!!form} onOpenChange={(open) => !open && setForm(null)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{form?.id ? "শিক্ষার্থী সম্পাদনা" : "নতুন শিক্ষার্থী"}</DialogTitle>
+            <DialogTitle>
+              {form?.id
+                ? "শিক্ষার্থী সম্পাদনা"
+                : role === "TEACHER"
+                ? "নতুন শিক্ষার্থী (অনুমোদনের আবেদন)"
+                : "নতুন শিক্ষার্থী সংযোজন"}
+            </DialogTitle>
           </DialogHeader>
           {form && (
             <div className="grid gap-3">
+              {role === "TEACHER" && !form.id && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900 flex items-start gap-2">
+                  <span className="text-base leading-none">⚠️</span>
+                  <span>
+                    শিক্ষক হিসেবে তথ্য পূরণ করে সাবমিট করলে তা সরাসরি যুক্ত হবে না। তথ্যগুলো প্রশাসনের কাছে অনুমোদনের জন্য যাবে এবং অ্যাডমিন অনুমোদন করলে সিস্টেমে যুক্ত হবে।
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label>শিক্ষার্থীর নাম</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="h-11" placeholder="পূর্ণ নাম" />
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="h-11"
+                  placeholder="পূর্ণ নাম"
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -414,54 +878,108 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                 )}
                 <div className="space-y-1.5">
                   <Label>শাখা (ঐচ্ছিক)</Label>
-                  <Input value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} className="h-11" placeholder="ক / খ" list="sections" />
+                  <Input
+                    value={form.section}
+                    onChange={(e) => setForm({ ...form, section: e.target.value })}
+                    className="h-11"
+                    placeholder="ক / খ"
+                    list="sections"
+                  />
                   <datalist id="sections">
                     {SECTION_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
                   </datalist>
                 </div>
                 <div className="space-y-1.5">
                   <Label>রোল</Label>
-                  <Input type="number" min={1} value={form.roll} onChange={(e) => setForm({ ...form, roll: e.target.value })} className="h-11" placeholder="যেমন: ৭" />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.roll}
+                    onChange={(e) => setForm({ ...form, roll: e.target.value })}
+                    className="h-11"
+                    placeholder="যেমন: ৭"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>ইউজারনেম (লগইন)</Label>
-                  <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="h-11" placeholder="student025" />
+                  <Input
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    className="h-11"
+                    placeholder="student025"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>পাসওয়ার্ড {form.id ? "(খালি রাখলে অপরিবর্তিত)" : ""}</Label>
-                  <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="h-11" placeholder="••••" />
+                  <Input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="h-11"
+                    placeholder="••••"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>পিতার নাম (ঐচ্ছিক)</Label>
-                  <Input value={form.fatherName ?? ""} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} className="h-10" placeholder="পিতার নাম" />
+                  <Input
+                    value={form.fatherName ?? ""}
+                    onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
+                    className="h-10"
+                    placeholder="পিতার নাম"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>মাতার নাম (ঐচ্ছিক)</Label>
-                  <Input value={form.motherName ?? ""} onChange={(e) => setForm({ ...form, motherName: e.target.value })} className="h-10" placeholder="মাতার নাম" />
+                  <Input
+                    value={form.motherName ?? ""}
+                    onChange={(e) => setForm({ ...form, motherName: e.target.value })}
+                    className="h-10"
+                    placeholder="মাতার নাম"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>বিদ্যালয় / প্রতিষ্ঠানের নাম (ঐচ্ছিক)</Label>
-                  <Input value={form.schoolName ?? ""} onChange={(e) => setForm({ ...form, schoolName: e.target.value })} className="h-10" placeholder="বিদ্যালয় বা প্রতিষ্ঠানের নাম" />
+                  <Input
+                    value={form.schoolName ?? ""}
+                    onChange={(e) => setForm({ ...form, schoolName: e.target.value })}
+                    className="h-10"
+                    placeholder="বিদ্যালয় বা প্রতিষ্ঠানের নাম"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>অভিভাবকের ফোন নম্বর (ঐচ্ছিক)</Label>
-                  <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-10" placeholder="০১৭১XXXXXXXX" />
+                  <Input
+                    value={form.phone ?? ""}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className="h-10"
+                    placeholder="০১৭১XXXXXXXX"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>ঠিকানা (ঐচ্ছিক)</Label>
-                  <Input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10" placeholder="গ্রাম/এলাকা, থানা, জেলা" />
+                  <Input
+                    value={form.address ?? ""}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    className="h-10"
+                    placeholder="গ্রাম/এলাকা, থানা, জেলা"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>রক্তের গ্রুপ (ঐচ্ছিক)</Label>
-                  <Input value={form.bloodGroup ?? ""} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} className="h-10" placeholder="A+ / B+ / O+ ইত্যাদি" />
+                  <Input
+                    value={form.bloodGroup ?? ""}
+                    onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}
+                    className="h-10"
+                    placeholder="A+ / B+ / O+ ইত্যাদি"
+                  />
                 </div>
               </div>
               <div className="rounded-lg border border-dashed border-input p-3">
@@ -476,12 +994,19 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                 ) : (
                   <div className="flex items-center gap-4">
                     <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-input bg-muted">
-                      {pendingPreview ? <img src={pendingPreview} alt="শিক্ষার্থীর ছবি" className="h-full w-full object-contain" /> : <span className="text-xs text-muted-foreground">ছবি নেই</span>}
+                      {pendingPreview ? (
+                        <img src={pendingPreview} alt="শিক্ষার্থীর ছবি" className="h-full w-full object-contain" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">ছবি নেই</span>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <p className="text-[13px] font-medium">শিক্ষার্থীর ছবি</p>
                       <p className="text-[12px] text-muted-foreground">JPG / JPEG / PNG — সর্বোচ্চ ৫ MB</p>
-                      <Input type="file" accept="image/jpeg,image/jpg,image/png" onChange={(e) => {
+                      <Input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png"
+                        onChange={(e) => {
                           const f = e.target.files?.[0] ?? null;
                           if (f && f.size > 5 * 1024 * 1024) {
                             toast({ title: "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।", variant: "destructive" });
@@ -490,16 +1015,28 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                             return;
                           }
                           setPendingPhoto(f);
-                        }} className="h-10" />
+                        }}
+                        className="h-10"
+                      />
                     </div>
                   </div>
                 )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" onClick={() => setForm(null)} className="h-11 px-5">বাতিল</Button>
-                <Button onClick={save} disabled={saving} className="h-11 gap-2 px-5">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : form.id ? null : <Plus className="h-4 w-4" />}
-                  {form.id ? "আপডেট করুন" : "তথ্য সংযুক্ত করুন"}
+                <Button variant="outline" onClick={() => setForm(null)} className="h-11 px-5">
+                  বাতিল
+                </Button>
+                <Button onClick={save} disabled={saving} className="h-11 gap-2 px-5 bg-blue-600 hover:bg-blue-700">
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : form.id ? null : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {form.id
+                    ? "আপডেট করুন"
+                    : role === "TEACHER"
+                    ? "অনুমোদনের জন্য পাঠান"
+                    : "তথ্য সংযুক্ত করুন"}
                 </Button>
               </div>
             </div>
@@ -548,194 +1085,147 @@ function StudentViewDialog({
       .then((json) => {
         if (active) setData({ forId: studentId, forYear: year, rows: json.rows ?? [] });
       })
-      .catch(() => {
-        if (active) setData({ forId: studentId, forYear: year, rows: [] });
-      });
+      .catch(() => {});
     return () => {
       active = false;
     };
   }, [studentId, year]);
 
-  const rows = data && data.forId === studentId && data.forYear === year ? data.rows : null;
   const student = students.find((s) => s.id === studentId);
+  if (!studentId || !student) return null;
+
+  const rows = data && data.forId === studentId && data.forYear === year ? data.rows : null;
 
   return (
-    <Dialog open={!!studentId} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl p-6">
+    <Dialog open={studentId !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#142942]">শিক্ষার্থীর সম্পূর্ণ তথ্য</DialogTitle>
+          <div className="flex items-center gap-3">
+            <StudentAvatar photoKey={student.photo_key} name={student.name} size="lg" />
+            <div>
+              <DialogTitle className="text-lg">{student.name}</DialogTitle>
+              <p className="text-[12px] text-muted-foreground">
+                {classLabel(student.class_name)}
+                {student.division ? ` — ${divisionLabel(student.division)}` : ""} • রোল {bn(student.roll)}
+              </p>
+            </div>
+          </div>
         </DialogHeader>
-        {student && (
-          <div className="space-y-4">
-            {/* Header card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#dce6f2] bg-[#f8fafd] p-4 shadow-xs">
-              <div className="flex items-center gap-4">
-                <StudentAvatar photoKey={student.photo_key} name={student.name} size="xl" className="h-16 w-16 ring-2 ring-[#0d6efd]/30" />
-                <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-[#142942]">{student.name}</h3>
-                  <p className="text-[13px] font-semibold text-slate-600">
-                    {classLabel(student.class_name)}
-                    {student.division ? ` — ${divisionLabel(student.division)}` : ""}
-                    {student.section ? ` • শাখা ${student.section}` : ""} • রোল {bn(student.roll)}
-                  </p>
-                  <p className="text-[11px] text-slate-500">লগইন আইডি: @{student.username}</p>
-                </div>
-              </div>
 
-              {/* Tab Selector */}
-              <div className="flex items-center gap-1 rounded-lg border border-[#cfdbe8] bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("profile")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-bold transition-all",
-                    activeTab === "profile"
-                      ? "bg-[#0d6efd] text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  👤 প্রোফাইল তথ্য
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("results")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-bold transition-all",
-                    activeTab === "results"
-                      ? "bg-[#0d6efd] text-white shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  )}
-                >
-                  📊 পরীক্ষার ফলাফল
-                </button>
+        {/* Tab switcher */}
+        <div className="flex gap-2 border-b border-border pb-2 pt-1 text-[13px]">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 font-medium transition-colors",
+              activeTab === "profile" ? "bg-primary text-white" : "hover:bg-accent"
+            )}
+          >
+            ব্যক্তিগত তথ্য
+          </button>
+          <button
+            onClick={() => setActiveTab("results")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 font-medium transition-colors",
+              activeTab === "results" ? "bg-primary text-white" : "hover:bg-accent"
+            )}
+          >
+            ফলাফল হিস্টোরি
+          </button>
+        </div>
+
+        {activeTab === "profile" && (
+          <div className="grid gap-2 text-[13px] pt-2">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3">
+              <div>
+                <span className="text-muted-foreground">ইউজারনেম:</span>
+                <p className="font-mono font-medium">@{student.username}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">শাখা:</span>
+                <p className="font-medium">{student.section ?? "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">পিতার নাম:</span>
+                <p className="font-medium">{student.father_name || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">মাতার নাম:</span>
+                <p className="font-medium">{student.mother_name || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">অভিভাবকের ফোন:</span>
+                <p className="font-medium">{student.phone ? bn(student.phone) : "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">রক্তের গ্রুপ:</span>
+                <p className="font-medium">{student.blood_group || "—"}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground">প্রতিষ্ঠান / স্কুল:</span>
+                <p className="font-medium">{student.school_name || "—"}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground">ঠিকানা:</span>
+                <p className="font-medium">{student.address || "—"}</p>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* TAB 1: Complete Profile Info */}
-            {activeTab === "profile" ? (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xs">
-                  <h4 className="mb-3 text-[14px] font-bold text-[#18314d] border-b border-slate-100 pb-2">
-                    ব্যক্তিগত ও প্রাতিষ্ঠানিক তথ্য
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-[13px]">
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">শিক্ষার্থীর পুরো নাম</span>
-                      <span className="font-bold text-slate-800">{student.name}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">শ্রেণি ও শাখা</span>
-                      <span className="font-semibold text-slate-800">
-                        {classLabel(student.class_name)} {student.section ? `(শাখা: ${student.section})` : ""}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">বিভাগ</span>
-                      <span className="font-semibold text-slate-800">
-                        {student.division ? divisionLabel(student.division) : "প্রযোজ্য নয়"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">রোল নম্বর</span>
-                      <span className="font-bold text-[#0d6efd]">{bn(student.roll)}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">বিদ্যালয় / প্রতিষ্ঠানের নাম</span>
-                      <span className="font-semibold text-slate-800">
-                        {student.school_name || "বিজ্ঞান পণ্ডিত একাডেমি"}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">লগইন ইউজারনেম</span>
-                      <span className="font-mono text-slate-700">@{student.username}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xs">
-                  <h4 className="mb-3 text-[14px] font-bold text-[#18314d] border-b border-slate-100 pb-2">
-                    অভিভাবক ও যোগাযোগের তথ্য
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-[13px]">
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">পিতার নাম</span>
-                      <span className="font-semibold text-slate-800">{student.father_name || "উল্লেখ নেই"}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">মাতার নাম</span>
-                      <span className="font-semibold text-slate-800">{student.mother_name || "উল্লেখ নেই"}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">অভিভাবকের মোবাইল নম্বর</span>
-                      <span className="font-bold text-slate-800">{student.phone ? bn(student.phone) : "উল্লেখ নেই"}</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-slate-500 text-[11px]">রক্তের গ্রুপ</span>
-                      <span className="font-semibold text-rose-600">{student.blood_group || "উল্লেখ নেই"}</span>
-                    </div>
-                    <div className="flex flex-col sm:col-span-2">
-                      <span className="text-slate-500 text-[11px]">বর্তমান ঠিকানা</span>
-                      <span className="font-medium text-slate-700">{student.address || "উল্লেখ নেই"}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* TAB 2: Exam Results */
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[13px] font-semibold text-slate-700">পরীক্ষার তালিকা ({bn(year)})</p>
-                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                    <SelectTrigger className="h-8 w-[110px] bg-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[year + 1, year, year - 1, year - 2].map((y) => (
-                        <SelectItem key={y} value={String(y)}>{bn(y)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/60">
-                        <TableHead className="text-[12px]">বিষয়</TableHead>
-                        <TableHead className="text-[12px]">পরীক্ষা</TableHead>
-                        <TableHead className="text-center text-[12px]">মাস</TableHead>
-                        <TableHead className="text-right text-[12px]">মোট</TableHead>
-                        <TableHead className="text-right text-[12px]">প্রাপ্ত</TableHead>
-                        <TableHead className="text-right text-[12px]">সর্বোচ্চ</TableHead>
-                        <TableHead className="text-center text-[12px]">গ্রেড</TableHead>
+        {activeTab === "results" && (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-muted-foreground">বছর নির্বাচন:</span>
+              <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                <SelectTrigger className="h-8 w-28 text-[12px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[2027, 2026, 2025, 2024].map((y) => (
+                    <SelectItem key={y} value={String(y)}>{bn(y)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/60">
+                    <TableHead className="text-[12px]">বিষয়</TableHead>
+                    <TableHead className="text-[12px]">পরীক্ষা</TableHead>
+                    <TableHead className="text-center text-[12px]">মাস</TableHead>
+                    <TableHead className="text-right text-[12px]">মোট</TableHead>
+                    <TableHead className="text-right text-[12px]">প্রাপ্ত</TableHead>
+                    <TableHead className="text-right text-[12px]">সর্বোচ্চ</TableHead>
+                    <TableHead className="text-center text-[12px]">গ্রেড</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows === null ? (
+                    <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">লোড হচ্ছে…</TableCell></TableRow>
+                  ) : rows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">এই বছরে কোনো ফলাফল নেই।</TableCell></TableRow>
+                  ) : (
+                    rows.map((r, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-[13px] font-medium">{r.subjectName}</TableCell>
+                        <TableCell className="text-[13px]">{r.title}</TableCell>
+                        <TableCell className="text-center text-[13px]">{MONTHS_BN[r.month - 1]}</TableCell>
+                        <TableCell className="text-right text-[13px]">{fmtNum(r.total)}</TableCell>
+                        <TableCell className={cn("text-right text-[13px] font-semibold", r.attendance === "ABSENT" && "text-red-600")}>
+                          {r.attendance === "ABSENT" ? "অনুপস্থিত (০)" : fmtNum(r.obtained)}
+                        </TableCell>
+                        <TableCell className="text-right text-[13px]">{fmtNum(r.highest)}</TableCell>
+                        <TableCell className="text-center text-[13px]">
+                          <span className="inline-block rounded px-2 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700">
+                            {r.grade}
+                          </span>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rows === null ? (
-                        <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">লোড হচ্ছে…</TableCell></TableRow>
-                      ) : rows.length === 0 ? (
-                        <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">এই বছরে কোনো ফলাফল নেই।</TableCell></TableRow>
-                      ) : (
-                        rows.map((r, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="text-[13px] font-medium">{r.subjectName}</TableCell>
-                            <TableCell className="text-[13px]">{r.title}</TableCell>
-                            <TableCell className="text-center text-[13px]">{MONTHS_BN[r.month - 1]}</TableCell>
-                            <TableCell className="text-right text-[13px]">{fmtNum(r.total)}</TableCell>
-                            <TableCell className={cn("text-right text-[13px] font-semibold", r.attendance === "ABSENT" && "text-red-600")}>
-                              {r.attendance === "ABSENT" ? "অনুপস্থিত (০)" : fmtNum(r.obtained)}
-                            </TableCell>
-                            <TableCell className="text-right text-[13px]">{fmtNum(r.highest)}</TableCell>
-                            <TableCell className="text-center text-[13px]">
-                              <span className="inline-block rounded px-2 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700">
-                                {r.grade}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
       </DialogContent>

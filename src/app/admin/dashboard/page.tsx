@@ -17,12 +17,16 @@ export default async function AdminDashboard() {
   const user = await requirePageUser(["ADMIN"]);
   const db = await getDb();
 
-  const [teacherCount, studentCount, subjectCount, examCount, markCount] = await Promise.all([
+  const [teacherCount, studentCount, subjectCount, examCount, markCount, pendingRequestsCount] = await Promise.all([
     countOf(db, "teachers"),
     countOf(db, "students"),
     countOf(db, "subjects"),
     countOf(db, "exams"),
     countOf(db, "marks"),
+    (async () => {
+      const r = await db.prepare("SELECT COUNT(*) as c FROM student_requests WHERE status = 'PENDING'").first<{ c: number }>().catch(() => null);
+      return r?.c ?? 0;
+    })(),
   ]);
 
   const recentExams = (
@@ -65,6 +69,28 @@ export default async function AdminDashboard() {
         <h1 className="text-xl font-bold">{user.name}</h1>
         <p className="text-[13px] text-slate-400">সিস্টেমের সব তথ্য ও নিয়ন্ত্রণ এক জায়গায়।</p>
       </div>
+
+      {pendingRequestsCount > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-[13px] text-amber-950 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-white font-bold">🔔</span>
+            <div>
+              <p className="font-bold text-amber-900">
+                শিক্ষকের পাঠানো {bn(pendingRequestsCount)} টি নতুন শিক্ষার্থীর আবেদন অনুমোদনের অপেক্ষায় আছে!
+              </p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                শিক্ষক কর্তৃক সাবমিট করা শিক্ষার্থীর তথ্য পর্যালোচনা ও অনুমোদন করতে শিক্ষার্থী ব্যবস্থাপনায় যান।
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin/students"
+            className="shrink-0 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
+          >
+            অনুরোধ দেখুন →
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {stats.map((s) => {

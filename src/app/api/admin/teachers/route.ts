@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
     await db.prepare("INSERT INTO teachers (user_id, short_name) VALUES (?, ?)").bind(userId, body.shortName).run();
 
-    const teacher = await db.prepare("SELECT id FROM teachers WHERE user_id = ?").first<{ id: number }>().catch(() => null);
+    const teacher = await db.prepare("SELECT id FROM teachers WHERE user_id = ?").bind(userId).first<{ id: number }>().catch(() => null);
     if (teacher && body.subjectIds.length) {
       const stmts = body.subjectIds.map((sid) =>
         db.prepare("INSERT OR IGNORE INTO teacher_subjects (teacher_id, subject_id) VALUES (?, ?)").bind(teacher.id, sid)

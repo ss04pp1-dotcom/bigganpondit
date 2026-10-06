@@ -10,7 +10,7 @@ import { setSetting } from "@/lib/db";
 import { getBucket } from "@/lib/storage/r2";
 import { teacherClassAllowed } from "@/lib/permissions";
 
-function detectImageType(bytes: Uint8Array): "jpg" | "png" | null {
+function detectImageType(bytes: Uint8Array, mime?: string, name?: string): "jpg" | "png" | "webp" | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
   if (
     bytes.length >= 8 &&
@@ -18,11 +18,23 @@ function detectImageType(bytes: Uint8Array): "jpg" | "png" | null {
     bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a &&
     bytes[6] === 0x1a && bytes[7] === 0x0a
   ) return "png";
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) return "webp";
+  if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  const ext = (name ?? "").split(".").pop()?.toLowerCase();
+  if (ext === "jpg" || ext === "jpeg") return "jpg";
+  if (ext === "png") return "png";
+  if (ext === "webp") return "webp";
   return null;
 }
 
 function extOf(key: string): string {
-  const m = key.toLowerCase().match(/\.(jpg|jpeg|png)$/);
+  const m = key.toLowerCase().match(/\.(jpg|jpeg|png|webp)$/);
   return m ? m[1] : "";
 }
 
@@ -38,8 +50,8 @@ export async function POST(req: Request) {
     if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const detected = detectImageType(bytes);
-    if (!detected) throw new ApiError(400, MSG.invalidFileType + " (শুধু JPG/JPEG/PNG)");
+    const detected = detectImageType(bytes, file.type, file.name);
+    if (!detected) throw new ApiError(400, MSG.invalidFileType + " (শুধু JPG/PNG/WebP)");
     if (!ALLOWED_IMAGE_EXT.includes(detected)) throw new ApiError(400, MSG.invalidFileType);
 
     const bucket = await getBucket();
@@ -63,10 +75,10 @@ export async function POST(req: Request) {
 
     if (type === "signature") {
       let teacherId = user.teacherId ?? null;
-      const target = String(form.get("teacherId") ?? "");
-      if (target && Number(target)) {
+      const target = Number(form.get("teacherId") ?? 0);
+      if (target && target !== user.teacherId) {
         if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
-        teacherId = Number(target);
+        teacherId = target;
       }
       if (!teacherId) throw new ApiError(400, "শিক্ষক নির্বাচন করুন।");
       const teacher = await db
@@ -84,10 +96,10 @@ export async function POST(req: Request) {
 
     if (type === "teacher-photo") {
       let teacherId = user.teacherId ?? null;
-      const target = String(form.get("teacherId") ?? "");
-      if (target && Number(target)) {
+      const target = Number(form.get("teacherId") ?? 0);
+      if (target && target !== user.teacherId) {
         if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
-        teacherId = Number(target);
+        teacherId = target;
       }
       if (!teacherId) throw new ApiError(400, "শিক্ষক নির্বাচন করুন।");
       const teacher = await db

@@ -92,6 +92,13 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
   } catch {
     // Column already exists
   }
+
+  // Ensure storage_files table exists for fallback file persistence
+  try {
+    await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
+  } catch {
+    // Already exists
+  }
   try {
     // 2) seed (idempotent); initial admin comes from environment variables
     const env = cf ?? localEnv();

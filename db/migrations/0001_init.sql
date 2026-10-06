@@ -131,3 +131,9 @@ CREATE INDEX IF NOT EXISTS idx_marks_exam    ON marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
 CREATE INDEX IF NOT EXISTS idx_exams_lookup  ON exams(subject_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_teacher_subjects_subject ON teacher_subjects(subject_id);
+
+CREATE TABLE IF NOT EXISTS storage_files (
+  key        TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

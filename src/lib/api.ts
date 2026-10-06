@@ -37,8 +37,8 @@ export function assertSameOrigin(req: Request): void {
   if (!origin) return; // classic same-origin form posts may omit Origin
   try {
     const o = new URL(origin);
-    const host = req.headers.get("host");
-    if (host && o.host !== host) {
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+    if (host && o.host !== host && o.hostname !== host) {
       throw new ApiError(403, "অননুমোদিত অনুরোধ।");
     }
   } catch (e) {

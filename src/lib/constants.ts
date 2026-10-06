@@ -156,8 +156,8 @@ export const MSG = {
 } as const;
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
-export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/jpg", "image/png"];
-export const ALLOWED_IMAGE_EXT = ["jpg", "jpeg", "png"];
+export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+export const ALLOWED_IMAGE_EXT = ["jpg", "jpeg", "png", "webp"];
 
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL_DAYS = 7;

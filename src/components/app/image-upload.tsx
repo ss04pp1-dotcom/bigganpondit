@@ -75,11 +75,11 @@ export function ImageUpload({
       </div>
       <div className="space-y-2">
         <p className="text-[13px] font-medium">{label}</p>
-        <p className="text-[12px] text-muted-foreground">JPG / JPEG / PNG — সর্বোচ্চ ৫ MB</p>
+        <p className="text-[12px] text-muted-foreground">JPG / PNG / WebP — সর্বোচ্চ ৫ MB</p>
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/jpg,image/png"
+          accept="image/jpeg,image/jpg,image/png,image/webp"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

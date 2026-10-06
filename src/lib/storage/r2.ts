@@ -6,6 +6,7 @@
 import path from "node:path";
 import fs from "node:fs";
 import { getCloudflareEnv } from "@/lib/cloudflare";
+import { getDb } from "@/lib/db";
 
 export interface StoredObject {
   key: string;
@@ -31,55 +32,63 @@ interface R2BucketLike {
   delete(key: string): Promise<void>;
 }
 
-const g = globalThis as unknown as { __academyBucket?: StorageBucket };
+const g = globalThis as unknown as {
+  __academyBucket?: StorageBucket;
+  __academyMemoryStore?: Map<string, Uint8Array>;
+};
 
-// ---------------- local filesystem implementation ----------------
+if (!g.__academyMemoryStore) {
+  g.__academyMemoryStore = new Map<string, Uint8Array>();
+}
+
+// ---------------- local filesystem helper ----------------
 const LOCAL_ROOT = path.join(process.cwd(), ".storage", "r2");
 
-class LocalBucket implements StorageBucket {
-  private safePath(key: string): string {
-    const p = path.normalize(path.join(LOCAL_ROOT, key));
-    if (!p.startsWith(LOCAL_ROOT)) throw new Error("Invalid storage key");
-    return p;
-  }
+function localSafePath(key: string): string {
+  const p = path.normalize(path.join(LOCAL_ROOT, key));
+  if (!p.startsWith(LOCAL_ROOT)) throw new Error("Invalid storage key");
+  return p;
+}
 
-  async put(key: string, data: Uint8Array): Promise<void> {
-    const p = this.safePath(key);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, data);
-  }
-
-  async get(key: string): Promise<StoredObject | null> {
-    const p = this.safePath(key);
-    try {
-      const buf = fs.readFileSync(p);
-      return { key, data: new Uint8Array(buf), size: buf.length };
-    } catch {
-      return null;
-    }
-  }
-
-  async delete(key: string): Promise<void> {
-    const p = this.safePath(key);
-    try {
-      fs.unlinkSync(p);
-    } catch {
-      /* already gone */
-    }
+async function saveToD1(key: string, data: Uint8Array): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
+    const base64 = Buffer.from(data).toString("base64");
+    await db
+      .prepare("INSERT OR REPLACE INTO storage_files (key, data, updated_at) VALUES (?, ?, datetime('now'))")
+      .bind(key, base64)
+      .run();
+  } catch (err) {
+    console.warn("Storage fallback save to D1 notice:", err);
   }
 }
 
-class MemoryBucket implements StorageBucket {
-  private store = new Map<string, Uint8Array>();
-  async put(key: string, data: Uint8Array): Promise<void> {
-    this.store.set(key, data);
+async function getFromD1(key: string): Promise<StoredObject | null> {
+  try {
+    const db = await getDb();
+    const row = await db
+      .prepare("SELECT data FROM storage_files WHERE key = ?")
+      .bind(key)
+      .first<{ data: string }>(undefined as never)
+      .catch(() => null);
+    if (row?.data) {
+      const buf = Buffer.from(row.data, "base64");
+      const u8 = new Uint8Array(buf);
+      return { key, data: u8, size: u8.length };
+    }
+  } catch {
+    // table or row doesn't exist
   }
-  async get(key: string): Promise<StoredObject | null> {
-    const data = this.store.get(key);
-    return data ? { key, data, size: data.length } : null;
-  }
-  async delete(key: string): Promise<void> {
-    this.store.delete(key);
+  return null;
+}
+
+async function deleteFromD1(key: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run();
+  } catch {
+    // ignore
   }
 }
 
@@ -87,28 +96,98 @@ class MemoryBucket implements StorageBucket {
 export async function getBucket(): Promise<StorageBucket> {
   if (g.__academyBucket) return g.__academyBucket;
   const cf = await getCloudflareEnv();
-  if (cf?.BUCKET) {
-    const raw = cf.BUCKET as unknown as R2BucketLike;
-    g.__academyBucket = {
-      async put(key, data) {
-        await raw.put(key, data);
-      },
-      async get(key) {
-        const obj = await raw.get(key);
-        if (!obj) return null;
-        const buf = new Uint8Array(await obj.arrayBuffer());
-        return { key, data: buf, size: buf.length };
-      },
-      async delete(key) {
-        await raw.delete(key);
-      },
-    };
-  } else {
-    try {
-      g.__academyBucket = new LocalBucket();
-    } catch {
-      g.__academyBucket = new MemoryBucket();
-    }
-  }
+  const raw = (cf?.BUCKET as unknown as R2BucketLike) || null;
+  const mem = g.__academyMemoryStore!;
+
+  g.__academyBucket = {
+    async put(key: string, data: Uint8Array): Promise<void> {
+      mem.set(key, data);
+
+      let r2Success = false;
+      if (raw) {
+        try {
+          await raw.put(key, data);
+          r2Success = true;
+        } catch (err) {
+          console.warn("Cloudflare R2 put failed, will use D1 storage fallback:", err);
+        }
+      }
+
+      // Always save to D1 fallback to guarantee persistent availability across workers
+      if (!r2Success) {
+        await saveToD1(key, data);
+      }
+
+      // Local disk for local dev (if filesystem writable)
+      try {
+        const p = localSafePath(key);
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, data);
+      } catch {
+        // Read-only filesystem in cloudflare worker, ignore
+      }
+    },
+
+    async get(key: string): Promise<StoredObject | null> {
+      // 1) Try Cloudflare R2
+      if (raw) {
+        try {
+          const obj = await raw.get(key);
+          if (obj) {
+            const buf = new Uint8Array(await obj.arrayBuffer());
+            mem.set(key, buf);
+            return { key, data: buf, size: buf.length };
+          }
+        } catch (err) {
+          console.warn("Cloudflare R2 get error, checking D1 storage fallback:", err);
+        }
+      }
+
+      // 2) Try in-memory store
+      const inMem = mem.get(key);
+      if (inMem) return { key, data: inMem, size: inMem.length };
+
+      // 3) Try D1 database storage
+      const fromD1 = await getFromD1(key);
+      if (fromD1) {
+        mem.set(key, fromD1.data);
+        return fromD1;
+      }
+
+      // 4) Try local filesystem
+      try {
+        const p = localSafePath(key);
+        if (fs.existsSync(p)) {
+          const buf = fs.readFileSync(p);
+          const u8 = new Uint8Array(buf);
+          mem.set(key, u8);
+          return { key, data: u8, size: u8.length };
+        }
+      } catch {
+        // Ignore
+      }
+
+      return null;
+    },
+
+    async delete(key: string): Promise<void> {
+      if (raw) {
+        try {
+          await raw.delete(key);
+        } catch {
+          // ignore
+        }
+      }
+      mem.delete(key);
+      await deleteFromD1(key);
+      try {
+        const p = localSafePath(key);
+        fs.unlinkSync(p);
+      } catch {
+        // ignore
+      }
+    },
+  };
+
   return g.__academyBucket;
 }

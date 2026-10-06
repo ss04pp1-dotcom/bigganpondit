@@ -106,6 +106,7 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
       out.teacherId = t.id;
       out.shortName = t.short_name;
       out.signatureKey = t.signature_key;
+      out.photoKey = t.photo_key;
     }
   } else if (user.role === "STUDENT") {
     const s = await db

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ImageUpload } from "@/components/app/image-upload";
 import { classLabel } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ interface TeacherRowT {
   id: number;
   user_id: number;
   short_name: string;
+  photo_key: string | null;
   signature_key: string | null;
   name: string;
   username: string;
@@ -45,9 +47,11 @@ interface FormState {
   password: string;
   shortName: string;
   subjectIds: Set<number>;
+  photo_key?: string | null;
+  signature_key?: string | null;
 }
 
-const empty: FormState = { name: "", username: "", password: "", shortName: "", subjectIds: new Set() };
+const empty: FormState = { name: "", username: "", password: "", shortName: "", subjectIds: new Set(), photo_key: null, signature_key: null };
 
 export function TeacherManager() {
   const [teachers, setTeachers] = useState<TeacherRowT[]>([]);
@@ -159,9 +163,17 @@ export function TeacherManager() {
               <Card key={t.id} className="print-avoid-break">
                 <CardContent className="pt-4">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <GraduationCap className="h-6 w-6" />
-                    </span>
+                    {t.photo_key ? (
+                      <img
+                        src={`/api/files/${t.photo_key}`}
+                        alt={t.name}
+                        className="h-11 w-11 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                        <GraduationCap className="h-6 w-6" />
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="text-[15px] font-bold">{t.name}</p>
                       <p className="text-[12px] text-muted-foreground">
@@ -185,6 +197,8 @@ export function TeacherManager() {
                             shortName: t.short_name,
                             password: "",
                             subjectIds: new Set(tl.map((l) => l.subject_id)),
+                            photo_key: t.photo_key,
+                            signature_key: t.signature_key,
                           })
                         }
                       >
@@ -259,6 +273,31 @@ export function TeacherManager() {
                   <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="h-11" />
                 </div>
               </div>
+
+              {form.id ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-border p-3 bg-muted/20">
+                  <ImageUpload
+                    type="teacher-photo"
+                    teacherId={form.id}
+                    label="শিক্ষকের ছবি"
+                    currentUrl={form.photo_key ? `/api/files/${form.photo_key}` : null}
+                    onUploaded={(key) => {
+                      setForm({ ...form, photo_key: key });
+                      load();
+                    }}
+                  />
+                  <ImageUpload
+                    type="signature"
+                    teacherId={form.id}
+                    label="শিক্ষকের স্বাক্ষর"
+                    currentUrl={form.signature_key ? `/api/files/${form.signature_key}` : null}
+                    onUploaded={(key) => {
+                      setForm({ ...form, signature_key: key });
+                      load();
+                    }}
+                  />
+                </div>
+              ) : null}
 
               <div className="rounded-xl border border-border p-3">
                 <p className="mb-2 text-[13px] font-semibold">বিষয়ের অনুমতি (শ্রেণি অনুযায়ী)</p>

@@ -82,6 +82,27 @@ export async function POST(req: Request) {
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
 
+    if (type === "teacher-photo") {
+      let teacherId = user.teacherId ?? null;
+      const target = String(form.get("teacherId") ?? "");
+      if (target && Number(target)) {
+        if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
+        teacherId = Number(target);
+      }
+      if (!teacherId) throw new ApiError(400, "শিক্ষক নির্বাচন করুন।");
+      const teacher = await db
+        .prepare("SELECT id, photo_key FROM teachers WHERE id = ?")
+        .bind(teacherId)
+        .first<{ id: number; photo_key: string | null }>(undefined as never)
+        .catch(() => null);
+      if (!teacher) throw new ApiError(404, MSG.notFound);
+      const key = `academy/teachers/photo-${teacherId}-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await db.prepare("UPDATE teachers SET photo_key = ?, updated_at = datetime('now') WHERE id = ?").bind(key, teacherId).run();
+      if (teacher.photo_key) await bucket.delete(teacher.photo_key).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
     if (type === "student-photo") {
       const studentId = Number(form.get("studentId") ?? 0);
       if (!studentId) throw new ApiError(400, "শিক্ষার্থী নির্বাচন করুন।");

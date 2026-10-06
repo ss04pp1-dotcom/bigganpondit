@@ -22,6 +22,7 @@ export interface ShellUser {
   name: string;
   role: Role;
   shortName?: string;
+  photoUrl?: string | null;
 }
 
 export function AppShell({
@@ -101,9 +102,17 @@ export function AppShell({
   const userCard = (
     <div className="border-t border-white/10 p-4">
       <div className="mb-3 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-[13px] font-semibold text-blue-200">
-          {user.shortName ?? user.name.slice(0, 2)}
-        </div>
+        {user.photoUrl ? (
+          <img
+            src={user.photoUrl}
+            alt={user.name}
+            className="h-9 w-9 rounded-full object-cover border border-white/20 shrink-0"
+          />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[13px] font-semibold text-blue-200">
+            {user.shortName ?? user.name.slice(0, 2)}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-white">{user.name}</p>
           <p className="text-[11px] text-slate-400">{ROLE_LABELS[user.role]}</p>

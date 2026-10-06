@@ -85,6 +85,13 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       // Column already exists
     }
   }
+
+  // Ensure teacher photo_key column exists in existing databases
+  try {
+    await db.exec("ALTER TABLE teachers ADD COLUMN photo_key TEXT;");
+  } catch {
+    // Column already exists
+  }
   try {
     // 2) seed (idempotent); initial admin comes from environment variables
     const env = cf ?? localEnv();

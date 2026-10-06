@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS teachers (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id      INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   short_name   TEXT NOT NULL DEFAULT '',
+  photo_key    TEXT,
   signature_key TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))

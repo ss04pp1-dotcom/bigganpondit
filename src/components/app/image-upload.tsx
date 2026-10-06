@@ -19,7 +19,7 @@ export function ImageUpload({
   compact = false,
   disabled = false,
 }: {
-  type: "logo" | "signature" | "student-photo";
+  type: "logo" | "signature" | "student-photo" | "teacher-photo";
   studentId?: number;
   teacherId?: number;
   currentUrl?: string | null;

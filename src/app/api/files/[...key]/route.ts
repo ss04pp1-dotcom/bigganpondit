@@ -68,6 +68,13 @@ export async function GET(req: Request, ctx: Ctx) {
       });
     }
 
+    // ---- teacher photos: accessible to logged in users ----
+    if (key.startsWith("academy/teachers/")) {
+      return new Response(obj.data as unknown as BodyInit, {
+        headers: { "Content-Type": contentTypeFor(key), "Cache-Control": "private, max-age=300" },
+      });
+    }
+
     // ---- student photos: admin, teacher of that class, or the student themself ----
     if (key.startsWith("academy/students/")) {
       const m = key.match(/^academy\/students\/(\d+)\//);

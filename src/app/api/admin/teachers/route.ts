@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const teachers = (
       await db
         .prepare(
-          `SELECT t.id, t.user_id, t.short_name, t.signature_key, u.name, u.username
+          `SELECT t.id, t.user_id, t.short_name, t.photo_key, t.signature_key, u.name, u.username
            FROM teachers t JOIN users u ON u.id = t.user_id ORDER BY u.id`
         )
         .all<Record<string, unknown>>()

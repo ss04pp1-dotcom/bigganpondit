@@ -15,7 +15,11 @@ export default async function StudentLayout({
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   return (
     <AppShell
-      user={{ name: user.name, role: user.role }}
+      user={{
+        name: user.name,
+        role: user.role,
+        photoUrl: user.photoKey ? `/api/files/${user.photoKey}` : null,
+      }}
       academyName={academyName}
       logoUrl={logoKey ? `/api/files/${logoKey}` : null}
     >

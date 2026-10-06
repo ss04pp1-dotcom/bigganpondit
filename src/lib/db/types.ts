@@ -37,6 +37,7 @@ export interface TeacherRow {
   id: number;
   user_id: number;
   short_name: string;
+  photo_key: string | null;
   signature_key: string | null;
 }
 

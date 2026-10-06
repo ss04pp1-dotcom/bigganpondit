@@ -132,9 +132,13 @@ export async function POST(req: Request) {
 
       const TABLE_COLUMNS: Record<string, readonly string[]> = {
         users: ["id", "name", "username", "password_hash", "role", "created_at", "updated_at"],
-        teachers: ["id", "user_id", "short_name", "signature_key", "created_at", "updated_at"],
+        teachers: ["id", "user_id", "short_name", "photo_key", "signature_key", "created_at", "updated_at"],
         classes: ["id", "name", "sort_order", "created_at", "updated_at"],
-        students: ["id", "user_id", "name", "class_id", "division", "section", "roll", "photo_key", "created_at", "updated_at"],
+        students: [
+          "id", "user_id", "name", "class_id", "division", "section", "roll", "photo_key",
+          "father_name", "mother_name", "school_name", "phone", "address", "blood_group", "dob",
+          "created_at", "updated_at"
+        ],
         subjects: ["id", "name", "class_id", "division", "is_fourth_subject", "created_at", "updated_at"],
         teacher_subjects: ["id", "teacher_id", "subject_id", "created_at", "updated_at"],
         exams: ["id", "class_id", "division", "subject_id", "month", "year", "exam_date", "title", "total_marks", "created_by", "created_at", "updated_at"],

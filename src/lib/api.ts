@@ -34,11 +34,28 @@ export function assertSameOrigin(req: Request): void {
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
   const origin = req.headers.get("origin");
-  if (!origin) return; // classic same-origin form posts may omit Origin
+  const referer = req.headers.get("referer");
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+
   try {
-    const o = new URL(origin);
-    const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
-    if (host && o.host !== host && o.hostname !== host) {
+    if (origin) {
+      const o = new URL(origin);
+      if (host && o.host !== host && o.hostname !== host) {
+        throw new ApiError(403, "অননুমোদিত অনুরোধ।");
+      }
+      return;
+    }
+
+    if (referer) {
+      const r = new URL(referer);
+      if (host && r.host !== host && r.hostname !== host) {
+        throw new ApiError(403, "অননুমোদিত অনুরোধ।");
+      }
+      return;
+    }
+
+    const secFetchSite = req.headers.get("sec-fetch-site");
+    if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "none") {
       throw new ApiError(403, "অননুমোদিত অনুরোধ।");
     }
   } catch (e) {

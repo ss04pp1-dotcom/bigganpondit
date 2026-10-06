@@ -63,25 +63,21 @@ export async function destroySession(db: D1Database, token: string | undefined):
 }
 
 async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentUser | null> {
-  const session = await db
+  const row = await db
     .prepare(
-      `SELECT s.id as sid, s.expires_at, s.token_hash
-       FROM sessions s WHERE s.token_hash = ? AND s.expires_at > datetime('now') LIMIT 1`
+      `SELECT u.*, s.id as sid, s.expires_at, s.token_hash
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.expires_at > datetime('now')
+       LIMIT 1`
     )
     .bind(hashSessionToken(token))
-    .first<{ sid: string; expires_at: string }>()
+    .first<UserRow & { sid: string; expires_at: string }>()
     .catch(() => null);
-  if (!session) return null;
-
-  const user = await db
-    .prepare("SELECT * FROM users WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ?)")
-    .bind(hashSessionToken(token))
-    .first<UserRow>()
-    .catch(() => null);
-  if (!user) return null;
+  if (!row) return null;
 
   // Sliding renewal: extend when less than 2 days remain.
-  const expiresMs = new Date(session.expires_at.replace(" ", "T") + "Z").getTime();
+  const expiresMs = new Date(row.expires_at.replace(" ", "T") + "Z").getTime();
   if (expiresMs - Date.now() < 2 * 86400_000) {
     await db
       .prepare("UPDATE sessions SET expires_at = ?, updated_at = datetime('now') WHERE token_hash = ?")
@@ -90,10 +86,10 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
   }
 
   const out: CurrentUser = {
-    id: user.id,
-    name: user.name,
-    username: user.username,
-    role: user.role,
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    role: row.role,
   };
 
   if (user.role === "TEACHER") {

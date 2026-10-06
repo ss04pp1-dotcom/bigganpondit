@@ -42,11 +42,12 @@ if (!g.__academyMemoryStore) {
 }
 
 // ---------------- local filesystem helper ----------------
-const LOCAL_ROOT = path.join(process.cwd(), ".storage", "r2");
+const LOCAL_ROOT = path.resolve(process.cwd(), ".storage", "r2");
 
 function localSafePath(key: string): string {
-  const p = path.normalize(path.join(LOCAL_ROOT, key));
-  if (!p.startsWith(LOCAL_ROOT)) throw new Error("Invalid storage key");
+  const p = path.resolve(LOCAL_ROOT, key);
+  const rootWithSep = LOCAL_ROOT.endsWith(path.sep) ? LOCAL_ROOT : LOCAL_ROOT + path.sep;
+  if (p !== LOCAL_ROOT && !p.startsWith(rootWithSep)) throw new Error("Invalid storage key");
   return p;
 }
 

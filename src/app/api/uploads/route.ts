@@ -10,7 +10,7 @@ import { setSetting } from "@/lib/db";
 import { getBucket } from "@/lib/storage/r2";
 import { teacherClassAllowed } from "@/lib/permissions";
 
-function detectImageType(bytes: Uint8Array, mime?: string, name?: string): "jpg" | "png" | "webp" | null {
+function detectImageType(bytes: Uint8Array): "jpg" | "png" | "webp" | null {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
   if (
     bytes.length >= 8 &&
@@ -23,13 +23,6 @@ function detectImageType(bytes: Uint8Array, mime?: string, name?: string): "jpg"
     bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
     bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
   ) return "webp";
-  if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
-  if (mime === "image/png") return "png";
-  if (mime === "image/webp") return "webp";
-  const ext = (name ?? "").split(".").pop()?.toLowerCase();
-  if (ext === "jpg" || ext === "jpeg") return "jpg";
-  if (ext === "png") return "png";
-  if (ext === "webp") return "webp";
   return null;
 }
 
@@ -50,7 +43,7 @@ export async function POST(req: Request) {
     if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const detected = detectImageType(bytes, file.type, file.name);
+    const detected = detectImageType(bytes);
     if (!detected) throw new ApiError(400, MSG.invalidFileType + " (শুধু JPG/PNG/WebP)");
     if (!ALLOWED_IMAGE_EXT.includes(detected)) throw new ApiError(400, MSG.invalidFileType);
 

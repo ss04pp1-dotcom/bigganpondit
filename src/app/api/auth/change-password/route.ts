@@ -35,6 +35,13 @@ export async function POST(req: Request) {
       throw new ApiError(400, "বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
     }
 
+    if (user.role !== "ADMIN") {
+      throw new ApiError(
+        403,
+        "শিক্ষক ও শিক্ষার্থীদের সরাসরি পাসওয়ার্ড পরিবর্তন নিষিদ্ধ। অ্যাডমিনের অনুমোদনের জন্য পাসওয়ার্ড পরিবর্তনের অনুরোধ পাঠান।"
+      );
+    }
+
     const newHash = await hashPassword(body.newPassword);
     await db
       .prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")

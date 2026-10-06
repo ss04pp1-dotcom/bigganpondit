@@ -17,7 +17,7 @@ export default async function AdminDashboard() {
   const user = await requirePageUser(["ADMIN"]);
   const db = await getDb();
 
-  const [teacherCount, studentCount, subjectCount, examCount, markCount, pendingRequestsCount] = await Promise.all([
+  const [teacherCount, studentCount, subjectCount, examCount, markCount, pendingRequestsCount, pendingPasswordRequestsCount] = await Promise.all([
     countOf(db, "teachers"),
     countOf(db, "students"),
     countOf(db, "subjects"),
@@ -25,6 +25,10 @@ export default async function AdminDashboard() {
     countOf(db, "marks"),
     (async () => {
       const r = await db.prepare("SELECT COUNT(*) as c FROM student_requests WHERE status = 'PENDING'").first<{ c: number }>().catch(() => null);
+      return r?.c ?? 0;
+    })(),
+    (async () => {
+      const r = await db.prepare("SELECT COUNT(*) as c FROM password_change_requests WHERE status = 'PENDING'").first<{ c: number }>().catch(() => null);
       return r?.c ?? 0;
     })(),
   ]);
@@ -88,6 +92,28 @@ export default async function AdminDashboard() {
             className="shrink-0 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
           >
             অনুরোধ দেখুন →
+          </Link>
+        </div>
+      )}
+
+      {pendingPasswordRequestsCount > 0 && (
+        <div className="rounded-xl border border-blue-300 bg-blue-50 p-4 text-[13px] text-blue-950 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-sm">🔑</span>
+            <div>
+              <p className="font-bold text-blue-900">
+                শিক্ষক/শিক্ষার্থীদের পাঠানো {bn(pendingPasswordRequestsCount)} টি পাসওয়ার্ড পরিবর্তনের অনুরোধ অনুমোদনের অপেক্ষায় আছে!
+              </p>
+              <p className="text-[11px] text-blue-700 mt-0.5">
+                ব্যবহারকারীর নতুন পাসওয়ার্ড পর্যালোচনা ও অনুমোদন করতে সেটিংসের পাসওয়ার্ড অনুরোধ তালিকায় যান।
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin/settings#password-requests"
+            className="shrink-0 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs"
+          >
+            অনুরোধ পর্যালোচনা করুন →
           </Link>
         </div>
       )}

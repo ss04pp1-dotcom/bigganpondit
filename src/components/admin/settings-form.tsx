@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/app/image-upload";
+import { PasswordRequestsManager } from "@/components/admin/password-requests-manager";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -343,6 +344,9 @@ export function AdminSettingsForm({
           </form>
         </CardContent>
       </Card>
+
+      {/* Password Change Requests Manager (Teacher/Student -> Admin Approval) */}
+      <PasswordRequestsManager />
 
       {/* Fresh Start / Demo Data Wipe Card */}
       <Card className="border-amber-200 bg-amber-50/30 shadow-xs">

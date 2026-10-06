@@ -15,6 +15,10 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
@@ -60,10 +64,39 @@ export function AppShell({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [requestReason, setRequestReason] = useState("");
+  const [userRequest, setUserRequest] = useState<{
+    id: number;
+    status: string;
+    reason?: string | null;
+    admin_notes?: string | null;
+    created_at: string;
+    reviewed_at?: string | null;
+  } | null>(null);
   const [savingPass, setSavingPass] = useState(false);
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const { toast } = useToast();
+
+  async function loadUserRequest() {
+    if (user.role === "ADMIN") return;
+    try {
+      const res = await fetch("/api/auth/password-request");
+      const json = await res.json();
+      if (json.ok) {
+        setUserRequest(json.request || null);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleOpenPasswordModal() {
+    setPasswordModalOpen(true);
+    if (user.role !== "ADMIN") {
+      loadUserRequest();
+    }
+  }
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -81,21 +114,46 @@ export function AppShell({
     }
     setSavingPass(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        toast({ title: json.error ?? "পাসওয়ার্ড পরিবর্তন করা যায়নি।", variant: "destructive" });
-        return;
+      if (user.role === "ADMIN") {
+        // Admin changes directly
+        const res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          toast({ title: json.error ?? "পাসওয়ার্ড পরিবর্তন করা যায়নি।", variant: "destructive" });
+          return;
+        }
+        toast({ title: json.message });
+        setPasswordModalOpen(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        // Teacher/Student sends request for Admin approval
+        const res = await fetch("/api/auth/password-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPassword,
+            newPassword,
+            reason: requestReason,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          toast({ title: json.error ?? "অনুরোধ পাঠানো যায়নি।", variant: "destructive" });
+          return;
+        }
+        toast({ title: json.message });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setRequestReason("");
+        await loadUserRequest();
       }
-      toast({ title: json.message });
-      setPasswordModalOpen(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
     } finally {
@@ -183,8 +241,8 @@ export function AppShell({
           size="icon"
           variant="ghost"
           className="h-9 w-9 text-slate-400 hover:bg-white/10 hover:text-amber-300"
-          onClick={() => setPasswordModalOpen(true)}
-          title="পাসওয়ার্ড পরিবর্তন"
+          onClick={handleOpenPasswordModal}
+          title={user.role === "ADMIN" ? "পাসওয়ার্ড পরিবর্তন" : "পাসওয়ার্ড পরিবর্তনের অনুরোধ"}
         >
           <KeyRound className="h-4 w-4" />
         </Button>
@@ -257,11 +315,13 @@ export function AppShell({
                 variant="ghost"
                 size="sm"
                 className="h-8 gap-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                onClick={() => setPasswordModalOpen(true)}
-                title="পাসওয়ার্ড পরিবর্তন করুন"
+                onClick={handleOpenPasswordModal}
+                title={user.role === "ADMIN" ? "পাসওয়ার্ড পরিবর্তন করুন" : "পাসওয়ার্ড পরিবর্তনের অনুরোধ"}
               >
                 <KeyRound className="h-3.5 w-3.5 text-amber-600" />
-                <span className="hidden sm:inline">পাসওয়ার্ড</span>
+                <span className="hidden sm:inline">
+                  {user.role === "ADMIN" ? "পাসওয়ার্ড" : "পাসওয়ার্ড অনুরোধ"}
+                </span>
               </Button>
               <Button
                 variant="ghost"
@@ -280,20 +340,61 @@ export function AppShell({
         <main className="app-main mx-auto w-full max-w-[1180px] px-4 py-5 sm:px-6 lg:py-6">{children}</main>
       </div>
 
-      {/* Password Change Dialog for Logged-in User */}
+      {/* Password Change / Request Dialog */}
       <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
               <KeyRound className="h-5 w-5 text-amber-600" />
-              পাসওয়ার্ড পরিবর্তন করুন
+              {user.role === "ADMIN" ? "অ্যাডমিন পাসওয়ার্ড পরিবর্তন করুন" : "পাসওয়ার্ড পরিবর্তনের অনুরোধ"}
             </DialogTitle>
             <DialogDescription className="text-[12px] text-slate-500">
-              আপনার অ্যাকাউন্টের নিরাপত্তা বজায় রাখতে বর্তমান পাসওয়ার্ড নিশ্চিত করে নতুন পাসওয়ার্ড দিন।
+              {user.role === "ADMIN"
+                ? "বর্তমান পাসওয়ার্ড যাচাই সাপেক্ষে আপনার নতুন পাসওয়ার্ড নির্ধারণ করুন।"
+                : "সাধারণ ব্যবহারকারীদের (শিক্ষক/শিক্ষার্থী) পাসওয়ার্ড পরিবর্তনের অনুরোধ অ্যাডমিন অনুমোদন করার পর কার্যকর হবে।"}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleChangePassword} className="space-y-4 pt-2">
+          {/* Teacher/Student Status Notifications */}
+          {user.role !== "ADMIN" && userRequest && (
+            <div className="pt-1">
+              {userRequest.status === "PENDING" && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-[12px] text-amber-900">
+                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">অনুরোধ অপেক্ষমাণ আছে</p>
+                    <p className="text-amber-700 mt-0.5">
+                      আপনার একটি পাসওয়ার্ড পরিবর্তনের অনুরোধ বর্তমানে অ্যাডমিনের অনুমোদনের অপেক্ষায় আছে। আপনি চাইলে নিচের ফর্মে নতুন অনুরোধ পাঠাতে পারেন।
+                    </p>
+                  </div>
+                </div>
+              )}
+              {userRequest.status === "REJECTED" && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50/80 p-3 text-[12px] text-rose-900">
+                  <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">পূর্ববর্তী অনুরোধ প্রত্যাখ্যান করা হয়েছে</p>
+                    <p className="text-rose-700 mt-0.5">
+                      মন্তব্য: {userRequest.admin_notes || "অনুরোধটি বাতিল করা হয়েছে।"}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {userRequest.status === "APPROVED" && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-[12px] text-emerald-900">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">অনুরোধ অনুমোদিত হয়েছিল</p>
+                    <p className="text-emerald-700 mt-0.5">
+                      আপনার সর্বশেষ পাসওয়ার্ড পরিবর্তনের অনুরোধটি অ্যাডমিন অনুমোদন করেছেন।
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="space-y-4 pt-1">
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-slate-700">
                 বর্তমান পাসওয়ার্ড <span className="text-red-500">*</span>
@@ -319,7 +420,7 @@ export function AppShell({
 
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-slate-700">
-                নতুন পাসওয়ার্ড <span className="text-red-500">*</span>
+                {user.role === "ADMIN" ? "নতুন পাসওয়ার্ড" : "কাঙ্ক্ষিত নতুন পাসওয়ার্ড"} <span className="text-red-500">*</span>
               </Label>
               <div className="relative">
                 <Input
@@ -354,6 +455,20 @@ export function AppShell({
               />
             </div>
 
+            {user.role !== "ADMIN" && (
+              <div className="space-y-1.5">
+                <Label className="text-[12px] font-medium text-slate-700">
+                  পরিবর্তনের কারণ / নোট (ঐচ্ছিক)
+                </Label>
+                <Input
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                  placeholder="যেমন: পাসওয়ার্ড ভুলে যাওয়ার আশঙ্কা / ফোন নম্বর"
+                  className="h-10 text-[13px]"
+                />
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
@@ -366,10 +481,10 @@ export function AppShell({
               <Button
                 type="submit"
                 disabled={savingPass}
-                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                className={user.role === "ADMIN" ? "bg-blue-600 hover:bg-blue-700 text-white gap-2" : "bg-amber-600 hover:bg-amber-700 text-white gap-2"}
               >
                 {savingPass ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                পাসওয়ার্ড পরিবর্তন করুন
+                {user.role === "ADMIN" ? "পাসওয়ার্ড পরিবর্তন করুন" : "অ্যাডমিনের কাছে অনুরোধ পাঠান"}
               </Button>
             </div>
           </form>

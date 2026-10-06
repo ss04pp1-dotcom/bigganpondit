@@ -7,6 +7,7 @@ import { ApiError, assertSameOrigin, fail, handleError, ok } from "@/lib/api";
 import { MSG } from "@/lib/constants";
 import { parseJson, studentUpdateSchema } from "@/lib/validation";
 import { teacherClassAllowed } from "@/lib/permissions";
+import { getBucket } from "@/lib/storage/r2";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -162,6 +163,10 @@ export async function DELETE(req: Request, ctx: Ctx) {
       if (!allowed) throw new ApiError(403, MSG.noPermissionSubject);
     }
 
+    if (st.photo_key && typeof st.photo_key === "string") {
+      const bucket = await getBucket();
+      await bucket.delete(st.photo_key).catch(() => {});
+    }
     // Deleting the user cascades: students row, marks, sessions — no orphans.
     await db.prepare("DELETE FROM users WHERE id = ?").bind(st.user_id).run();
     return ok({ message: MSG.deleted });

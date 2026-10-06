@@ -2,6 +2,7 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+import { teacherClassAllowed } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
@@ -14,7 +15,6 @@ export async function GET(req: Request) {
     if (!classIdStr) {
       throw new ApiError(400, "শ্রেণি নির্বাচন করুন।");
     }
-
     const classId = Number(classIdStr);
 
     // Get all students of this class
@@ -77,7 +77,6 @@ export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
     const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
-
     const body = (await req.json().catch(() => ({}))) as {
       classId?: number;
       date?: string;
@@ -95,25 +94,40 @@ export async function POST(req: Request) {
     const date = body.date.trim();
     const classId = Number(body.classId);
 
+    // Authorization check for teachers
+    if (user.role === "TEACHER" && user.teacherId) {
+      const allowed = await teacherClassAllowed(db, user.teacherId, classId);
+      if (!allowed) {
+        throw new ApiError(403, "আপনার এই শ্রেণির হাজিরা প্রদানের অনুমতি নেই।");
+      }
+    }
+
+    // High performance batching: convert N+1 sequential queries into batched chunk executions
+    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
     for (const entry of body.entries) {
       const studentId = Number(entry.studentId);
       const status = entry.status || "PRESENT";
       const remarks = entry.remarks?.trim() || null;
 
-      await db
-        .prepare(
+      stmts.push(
+        db.prepare(
           `INSERT INTO attendance (student_id, class_id, date, status, remarks, recorded_by)
            VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(student_id, date) DO UPDATE SET
              status = excluded.status,
              remarks = excluded.remarks,
              recorded_by = excluded.recorded_by`
-        )
-        .bind(studentId, classId, date, status, remarks, user.id)
-        .run();
+        ).bind(studentId, classId, date, status, remarks, user.id)
+      );
     }
 
-    return ok({ message: "হাজিরা সফলভাবে সংরক্ষণ করা হয়েছে।" });
+    // Cloudflare D1 max batch statement limit is 100
+    const CHUNK_SIZE = 80;
+    for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
+      await db.batch(stmts.slice(i, i + CHUNK_SIZE));
+    }
+
+    return ok({ message: "হাজিরা সফলভাবে সংরক্ষণ করা হয়েছে।", count: stmts.length });
   } catch (e) {
     return handleError(e);
   }

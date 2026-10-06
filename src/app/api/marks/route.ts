@@ -75,16 +75,40 @@ export async function POST(req: Request) {
       .catch(() => null);
 
     if (!exam) {
-      const res = await db
-        .prepare(
-          `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id)
-        .run();
-      const examId = Number(res.meta.last_row_id ?? 0);
-      if (!examId) throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
-      exam = { id: examId } as { id: number };
+      try {
+        const res = await db
+          .prepare(
+            `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id)
+          .run();
+        const examId = Number(res.meta.last_row_id ?? 0);
+        if (examId) {
+          exam = { id: examId } as { id: number };
+        }
+      } catch {
+        // Handled by concurrency recheck below
+      }
+
+      if (!exam) {
+        // Concurrent race mitigation: re-fetch exam if already inserted by a parallel request
+        const recheck = await db
+          .prepare(
+            `SELECT id, total_marks FROM exams
+             WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
+               AND subject_id = ? AND month = ? AND year = ?
+               AND exam_date = ? AND title = ? AND total_marks = ?`
+          )
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks)
+          .first<{ id: number }>()
+          .catch(() => null);
+        if (recheck) {
+          exam = { id: recheck.id };
+        } else {
+          throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
+        }
+      }
     }
 
     // ---- duplicate prevention (UNIQUE exam_id + student_id) ----

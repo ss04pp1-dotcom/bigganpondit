@@ -53,6 +53,12 @@ function localSafePath(key: string): string {
 
 async function saveToD1(key: string, data: Uint8Array): Promise<void> {
   try {
+    // Cloudflare D1 statement payload limit is 1MB. Base64 expands by ~33%.
+    // Exclude large binaries (> 700 KB) to prevent worker unhandled exceptions.
+    if (data.length > 700 * 1024) {
+      console.warn();
+      return;
+    }
     const db = await getDb();
     await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
     const base64 = Buffer.from(data).toString("base64");

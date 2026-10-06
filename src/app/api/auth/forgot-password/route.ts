@@ -36,8 +36,10 @@ export async function POST(req: Request) {
       .catch(() => null);
 
     if (!user) {
-      // Ambiguous error to prevent username enumeration if desired, but clear for school admins
-      throw new ApiError(404, `ইউজারনেম '${target}' পাওয়া যায়নি।`);
+      // Timing-safe mitigation against username enumeration
+      return ok({
+        message: "যদি অ্যাকাউন্টের তথ্য সঠিক হয়, তবে রিকভারি মাধ্যমে নির্দেশনা পাঠানো হয়েছে।",
+      });
     }
 
     // 2) Find email address for user

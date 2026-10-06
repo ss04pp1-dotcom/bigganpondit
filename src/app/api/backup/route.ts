@@ -36,12 +36,16 @@ async function writeRegistry(items: RegistryItem[]): Promise<void> {
 const TABLES = [
   "users",
   "teachers",
+  "directors",
   "classes",
   "subjects",
   "teacher_subjects",
   "students",
   "exams",
   "marks",
+  "attendance",
+  "notices",
+  "notebooks",
   "settings",
   "webauthn_credentials",
   "student_requests",
@@ -125,10 +129,14 @@ export async function POST(req: Request) {
         "subjects",
         "users",
         "teachers",
+        "directors",
         "teacher_subjects",
         "students",
         "exams",
         "marks",
+        "attendance",
+        "notices",
+        "notebooks",
         "settings",
         "student_requests",
         "webauthn_credentials",
@@ -148,6 +156,11 @@ export async function POST(req: Request) {
         exams: ["id", "class_id", "division", "subject_id", "month", "year", "exam_date", "title", "total_marks", "created_by", "created_at", "updated_at"],
         marks: ["id", "exam_id", "student_id", "attendance", "obtained_marks", "created_at", "updated_at"],
         settings: ["id", "key", "value", "updated_at"],
+        directors: ["id", "user_id", "institution", "photo_key", "signature_key", "remarks", "created_at", "updated_at"],
+        notices: ["id", "title", "content", "author_id", "author_name", "author_role", "status", "is_ticker", "created_at", "approved_at"],
+        notebooks: ["id", "title", "class_id", "subject_id", "file_key", "file_name", "file_size", "uploaded_by", "uploader_name", "description", "created_at"],
+        attendance: ["id", "student_id", "class_id", "date", "status", "remarks", "recorded_by", "created_at"],
+
         webauthn_credentials: ["id", "user_id", "credential_id", "public_key", "counter", "device_name", "created_at", "updated_at"],
         student_requests: [
           "id", "teacher_id", "name", "class_id", "division", "section", "roll", "username",
@@ -160,7 +173,7 @@ export async function POST(req: Request) {
       // statements are executed safely in batches
       const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
       // delete in reverse dependency order (FK-safe)
-      for (const t of ["sessions", "marks", "exams", "teacher_subjects", "student_requests", "students", "teachers", "subjects", "settings", "classes", "users", "webauthn_credentials", "webauthn_challenges"]) {
+      for (const t of ["sessions", "attendance", "notebooks", "notices", "marks", "exams", "teacher_subjects", "student_requests", "directors", "students", "teachers", "subjects", "settings", "classes", "users", "webauthn_credentials", "webauthn_challenges"]) {
         stmts.push(db.prepare(`DELETE FROM ${t}`));
       }
       for (const t of insertOrder) {

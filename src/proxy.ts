@@ -7,6 +7,7 @@ const SESSION_COOKIE = "sid";
 
 const PROTECTED_PREFIXES = [
   "/admin",
+  "/director",
   "/teacher",
   "/student",
   "/api/students",
@@ -16,6 +17,8 @@ const PROTECTED_PREFIXES = [
   "/api/backup",
   "/api/settings",
   "/api/admin",
+  "/api/attendance",
+  "/api/notebooks",
 ];
 
 export default function proxy(req: NextRequest) {
@@ -47,6 +50,7 @@ export default function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     "/admin/:path*",
+    "/director/:path*",
     "/teacher/:path*",
     "/student/:path*",
     "/api/:path*",

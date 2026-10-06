@@ -101,7 +101,19 @@ export async function GET(req: Request, ctx: Ctx) {
       let allowed = false;
       if (studentId) {
         if (user.role === "ADMIN" || user.role === "DIRECTOR") allowed = true;
-        else if (user.role === "STUDENT") allowed = user.studentId === studentId;
+        else if (user.role === "STUDENT") {
+          if (user.studentId === studentId) {
+            allowed = true;
+          } else {
+            const st = await db
+              .prepare("SELECT hide_photo_from_students FROM students WHERE id = ?")
+              .bind(studentId)
+              .first<{ hide_photo_from_students: number }>()
+              .catch(() => null);
+            // Allow if privacy flag is not active (public merit board / directory)
+            allowed = !st || st.hide_photo_from_students === 0;
+          }
+        }
         else if (user.role === "TEACHER" && user.teacherId) {
           const st = await db
             .prepare("SELECT class_id FROM students WHERE id = ?")

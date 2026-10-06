@@ -70,19 +70,30 @@ export async function POST(req: Request) {
       return fail(400, "বায়োমেট্রিক আইডি পাওয়া যায়নি।");
     }
 
-    // Verify challenge
-    if (rawClientData) {
-      try {
-        const clientData = JSON.parse(rawClientData);
-        if (clientData.challenge) {
-          const valid = await verifyAndConsumeChallenge(db, clientData.challenge);
-          if (!valid) {
-            return fail(400, "বায়োমেট্রিক সেশনের মেয়াদ শেষ হয়েছে। আবার চেষ্টা করুন।");
-          }
-        }
-      } catch {
-        // Fallback
+    // Strict WebAuthn Security: ClientData and Challenge validation is mandatory (no bypass)
+    if (!rawClientData) {
+      return fail(401, "বায়োমেট্রিক প্রমাণীকরণ উপাত্ত অসম্পূর্ণ।");
+    }
+
+    let clientChallenge = "";
+    try {
+      const clientData = JSON.parse(rawClientData);
+      clientChallenge = String(clientData.challenge || "");
+      const reqUrl = new URL(req.url);
+      if (clientData.origin && !clientData.origin.includes(reqUrl.hostname)) {
+        return fail(403, "বায়োমেট্রিক অরিজিন মিসম্যাচ সনাক্ত হয়েছে।");
       }
+    } catch {
+      return fail(400, "অবৈধ ক্লায়েন্ট ডেটা ফরম্যাট।");
+    }
+
+    if (!clientChallenge) {
+      return fail(401, "বায়োমেট্রিক চ্যালেঞ্জ পাওয়া যায়নি।");
+    }
+
+    const validChallenge = await verifyAndConsumeChallenge(db, clientChallenge);
+    if (!validChallenge) {
+      return fail(401, "বায়োমেট্রিক সেশনের মেয়াদ শেষ হয়েছে অথবা রি-প্লে অ্যাটাক সনাক্ত হয়েছে।");
     }
 
     // Find user by credential_id

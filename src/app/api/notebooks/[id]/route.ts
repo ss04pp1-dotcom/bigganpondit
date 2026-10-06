@@ -2,6 +2,7 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+import { getBucket } from "@/lib/storage/r2";
 
 export async function DELETE(
   req: Request,

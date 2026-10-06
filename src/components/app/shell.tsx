@@ -312,7 +312,27 @@ export function AppShell({
                   {user.name} {user.shortName ? `(${user.shortName})` : ""}
                 </span>
               </div>
-
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                onClick={handleOpenPasswordModal}
+                title={user.role === "ADMIN" ? "পাসওয়ার্ড পরিবর্তন করুন" : "পাসওয়ার্ড পরিবর্তনের অনুরোধ"}
+              >
+                <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+                <span className="hidden sm:inline">
+                  {user.role === "ADMIN" ? "পাসওয়ার্ড" : "পাসওয়ার্ড অনুরোধ"}
+                </span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-[12px] font-semibold text-[#0d6efd] hover:bg-[#eef5fc] hover:text-[#0b5ed7]"
+                onClick={logout}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>লগআউট</span>
+              </Button>
             </div>
           </div>
         </header>

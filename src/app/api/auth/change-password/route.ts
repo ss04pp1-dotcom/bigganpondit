@@ -1,0 +1,50 @@
+// POST /api/auth/change-password — User changes their own password
+import { requireApiUser } from "@/lib/auth/guards";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+
+export async function POST(req: Request) {
+  try {
+    assertSameOrigin(req);
+    const { user, db } = await requireApiUser();
+
+    const body = (await req.json().catch(() => ({}))) as {
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    if (!body.currentPassword || !body.newPassword) {
+      throw new ApiError(400, "বর্তমান পাসওয়ার্ড ও নতুন পাসওয়ার্ড উভয়টি আবশ্যক।");
+    }
+
+    if (body.newPassword.length < 4) {
+      throw new ApiError(400, "নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।");
+    }
+
+    // Verify current password
+    const userRow = await db
+      .prepare("SELECT password_hash FROM users WHERE id = ?")
+      .bind(user.id)
+      .first<{ password_hash: string }>()
+      .catch(() => null);
+
+    if (!userRow) throw new ApiError(404, "ইউজার পাওয়া যায়নি।");
+
+    const valid = await verifyPassword(body.currentPassword, userRow.password_hash);
+    if (!valid) {
+      throw new ApiError(400, "বর্তমান পাসওয়ার্ডটি সঠিক নয়।");
+    }
+
+    const newHash = await hashPassword(body.newPassword);
+    await db
+      .prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(newHash, user.id)
+      .run();
+
+    return ok({ message: "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" });
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+export const dynamic = "force-dynamic";

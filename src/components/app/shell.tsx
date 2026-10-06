@@ -11,9 +11,23 @@ import {
   GraduationCap,
   LogOut,
   Menu,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE } from "./nav";
 import { ROLE_LABELS, type Role, bn, APP_TITLE } from "@/lib/constants";
@@ -40,6 +54,54 @@ export function AppShell({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const nav = NAV_BY_ROLE[user.role] ?? [];
+
+  // Change password modal state
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPass, setSavingPass] = useState(false);
+  const [showOldPass, setShowOldPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const { toast } = useToast();
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast({ title: "বর্তমান পাসওয়ার্ড দিন।", variant: "destructive" });
+      return;
+    }
+    if (!newPassword || newPassword.length < 4) {
+      toast({ title: "নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "নতুন পাসওয়ার্ড ও নিশ্চিতকরণ পাসওয়ার্ড মিলছে না।", variant: "destructive" });
+      return;
+    }
+    setSavingPass(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "পাসওয়ার্ড পরিবর্তন করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: json.message });
+      setPasswordModalOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch {
+      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } finally {
+      setSavingPass(false);
+    }
+  }
 
   async function logout() {
     try {
@@ -120,6 +182,15 @@ export function AppShell({
         <Button
           size="icon"
           variant="ghost"
+          className="h-9 w-9 text-slate-400 hover:bg-white/10 hover:text-amber-300"
+          onClick={() => setPasswordModalOpen(true)}
+          title="পাসওয়ার্ড পরিবর্তন"
+        >
+          <KeyRound className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
           className="h-9 w-9 text-slate-400 hover:bg-white/10 hover:text-white"
           onClick={logout}
           title="লগআউট"
@@ -185,6 +256,16 @@ export function AppShell({
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-8 gap-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => setPasswordModalOpen(true)}
+                title="পাসওয়ার্ড পরিবর্তন করুন"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-amber-600" />
+                <span className="hidden sm:inline">পাসওয়ার্ড</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 className="h-8 gap-1.5 text-[12px] font-semibold text-[#0d6efd] hover:bg-[#eef5fc] hover:text-[#0b5ed7]"
                 onClick={logout}
               >
@@ -198,6 +279,102 @@ export function AppShell({
         {/* Content */}
         <main className="app-main mx-auto w-full max-w-[1180px] px-4 py-5 sm:px-6 lg:py-6">{children}</main>
       </div>
+
+      {/* Password Change Dialog for Logged-in User */}
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
+              <KeyRound className="h-5 w-5 text-amber-600" />
+              পাসওয়ার্ড পরিবর্তন করুন
+            </DialogTitle>
+            <DialogDescription className="text-[12px] text-slate-500">
+              আপনার অ্যাকাউন্টের নিরাপত্তা বজায় রাখতে বর্তমান পাসওয়ার্ড নিশ্চিত করে নতুন পাসওয়ার্ড দিন।
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleChangePassword} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-700">
+                বর্তমান পাসওয়ার্ড <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  type={showOldPass ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="আপনার বর্তমান পাসওয়ার্ড দিন"
+                  className="h-10 pr-9 text-[13px]"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOldPass(!showOldPass)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showOldPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-700">
+                নতুন পাসওয়ার্ড <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <Input
+                  type={showNewPass ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="কমপক্ষে ৪ অক্ষরের নতুন পাসওয়ার্ড"
+                  className="h-10 pr-9 text-[13px]"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPass(!showNewPass)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-700">
+                নতুন পাসওয়ার্ড পুনরায় লিখুন <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="একই পাসওয়ার্ড পুনরায় লিখুন"
+                className="h-10 text-[13px]"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPasswordModalOpen(false)}
+                disabled={savingPass}
+              >
+                বাতিল
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingPass}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                {savingPass ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                পাসওয়ার্ড পরিবর্তন করুন
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

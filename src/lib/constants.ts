@@ -7,6 +7,9 @@ export const SETTING_ACADEMY_NAME = "academy_name";
 export const SETTING_ACADEMY_LOGO = "academy_logo_key";
 export const SETTING_SCHEMA_VERSION = "schema_version";
 export const SETTING_BACKUP_REGISTRY = "backup_registry";
+export const SETTING_ADMIN_EMAIL = "admin_recovery_email";
+export const SETTING_RESEND_API_KEY = "resend_api_key";
+export const SETTING_RESEND_FROM = "resend_from_email";
 
 export type Role = "ADMIN" | "TEACHER" | "STUDENT";
 export const ROLE_LABELS: Record<Role, string> = {

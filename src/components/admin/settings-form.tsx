@@ -3,9 +3,9 @@
 // Academy settings form (admin).
 
 import { useState } from "react";
-import { Loader2, Save, Trash2, AlertTriangle, Sparkles } from "lucide-react";
+import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/app/image-upload";
@@ -25,13 +25,35 @@ import { useToast } from "@/hooks/use-toast";
 export function AdminSettingsForm({
   initialName,
   logoKey,
+  adminUser,
+  initialAdminEmail = "",
+  hasResendKey = false,
+  initialResendFrom = "",
 }: {
   initialName: string;
   logoKey: string | null;
+  adminUser?: { name: string; username: string };
+  initialAdminEmail?: string;
+  hasResendKey?: boolean;
+  initialResendFrom?: string;
 }) {
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  // Admin credentials state
+  const [adminName, setAdminName] = useState(adminUser?.name ?? "প্রশাসক");
+  const [adminUsername, setAdminUsername] = useState(adminUser?.username ?? "admin");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [adminEmail, setAdminEmail] = useState(initialAdminEmail);
+  const [resendApiKey, setResendApiKey] = useState("");
+  const [resendFrom, setResendFrom] = useState(initialResendFrom);
+  const [savingCreds, setSavingCreds] = useState(false);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+
   const { toast } = useToast();
 
   async function save() {
@@ -54,6 +76,52 @@ export function AdminSettingsForm({
       toast({ title: json.message });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast({ title: "বর্তমান পাসওয়ার্ড প্রদান আবশ্যক।", variant: "destructive" });
+      return;
+    }
+    if (newPassword && newPassword !== confirmPassword) {
+      toast({ title: "নতুন পাসওয়ার্ড ও কনফার্ম পাসওয়ার্ড মিলছে না।", variant: "destructive" });
+      return;
+    }
+    if (newPassword && newPassword.length < 4) {
+      toast({ title: "নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।", variant: "destructive" });
+      return;
+    }
+
+    setSavingCreds(true);
+    try {
+      const res = await fetch("/api/admin/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          name: adminName,
+          username: adminUsername,
+          newPassword: newPassword || undefined,
+          adminEmail,
+          resendApiKey: resendApiKey || undefined,
+          resendFromEmail: resendFrom || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "আপডেট করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: json.message });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch {
+      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } finally {
+      setSavingCreds(false);
     }
   }
 
@@ -113,6 +181,168 @@ export function AdminSettingsForm({
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Account & Security Settings Card */}
+      <Card className="border-blue-200 bg-white shadow-xs">
+        <CardHeader className="border-b border-border pb-3 bg-slate-50/60 rounded-t-xl">
+          <CardTitle className="text-[16px] text-slate-900 flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-blue-600" />
+            অ্যাডমিন ক্রেডেনশিয়াল ও সিকিউরিটি ব্যবস্থাপনা
+          </CardTitle>
+          <CardDescription className="text-[12px] text-slate-500">
+            অ্যাডমিনের ইউজারনেম, পাসওয়ার্ড পরিবর্তন এবং Resend ইমেইলের মাধ্যমে পাসওয়ার্ড রিকভারি সেটআপ করুন।
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <form onSubmit={saveCredentials} className="space-y-6">
+            {/* Account identity & password change */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium text-slate-700">অ্যাডমিনের নাম</Label>
+                <Input
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  className="h-10 text-[13px]"
+                  placeholder="প্রশাসক"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium text-slate-700">অ্যাডমিন ইউজারনেম (লগইন আইডি)</Label>
+                <Input
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  className="h-10 text-[13px]"
+                  placeholder="admin"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+              <div className="flex items-center gap-2 text-slate-800 font-semibold text-[13px]">
+                <Key className="h-4 w-4 text-amber-600" />
+                পাসওয়ার্ড পরিবর্তন (নতুন পাসওয়ার্ড দিতে চাইলে পূরণ করুন)
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-slate-600">
+                    বর্তমান পাসওয়ার্ড <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPass ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="বর্তমান পাসওয়ার্ড দিন"
+                      className="h-10 pr-9 text-[13px]"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPass(!showCurrentPass)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showCurrentPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-slate-600">নতুন পাসওয়ার্ড (ঐচ্ছিক)</Label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPass ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="কমপক্ষে ৪ অক্ষর"
+                      className="h-10 pr-9 text-[13px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[12px] text-slate-600">নতুন পাসওয়ার্ড পুনরায় লিখুন</Label>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="একই পাসওয়ার্ড লিখুন"
+                    className="h-10 text-[13px]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Resend Email & Recovery Configuration */}
+            <div className="rounded-lg border border-blue-200/80 bg-blue-50/30 p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-800 font-semibold text-[13px]">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  Resend ইমেইল ও পাসওয়ার্ড রিকভারি সেটিংস
+                </div>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${hasResendKey || resendApiKey ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                  {hasResendKey || resendApiKey ? "✓ Resend কনফিগার করা আছে" : "⚠️ Resend কী সংযুক্ত নেই"}
+                </span>
+              </div>
+              <p className="text-[12px] text-slate-600">
+                পাসওয়ার্ড ভুলে গেলে লগইন পৃষ্ঠা থেকে এই ইমেইলে একটি <strong>৬-সংখ্যার স্বয়ংক্রিয় ওটিপি (OTP) কোড</strong> যাবে, যার মাধ্যমে অ্যাডমিন নিরাপদে পাসওয়ার্ড রিসেট করতে পারবেন।
+              </p>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-1">
+                  <Label className="text-[12px] text-slate-600">
+                    অ্যাডমিন রিকভারি ইমেইল (Recovery Email)
+                  </Label>
+                  <Input
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@school.com"
+                    className="h-10 text-[13px]"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-1">
+                  <Label className="text-[12px] text-slate-600">
+                    Resend API Key (re_...)
+                  </Label>
+                  <Input
+                    type="password"
+                    value={resendApiKey}
+                    onChange={(e) => setResendApiKey(e.target.value)}
+                    placeholder={hasResendKey ? "•••••••••••••••• (সংরক্ষিত আছে)" : "re_xxxxxxxxxxxx"}
+                    className="h-10 text-[13px]"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-1">
+                  <Label className="text-[12px] text-slate-600">
+                    ইমেইল প্রেরক (From Email)
+                  </Label>
+                  <Input
+                    value={resendFrom}
+                    onChange={(e) => setResendFrom(e.target.value)}
+                    placeholder="onboarding@resend.dev"
+                    className="h-10 text-[13px]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={savingCreds}
+              className="h-11 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+            >
+              {savingCreds ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              ক্রেডেনশিয়াল ও সিকিউরিটি সংরক্ষণ করুন
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Fresh Start / Demo Data Wipe Card */}
       <Card className="border-amber-200 bg-amber-50/30 shadow-xs">

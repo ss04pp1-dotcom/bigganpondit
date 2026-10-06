@@ -160,6 +160,25 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
   } catch {
     // Already exists
   }
+  // Ensure password_resets table exists for Resend email recovery
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        otp_hash    TEXT NOT NULL,
+        email       TEXT NOT NULL,
+        expires_at  TEXT NOT NULL,
+        used        INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON password_resets(user_id);
+      CREATE INDEX IF NOT EXISTS idx_pwd_reset_expires ON password_resets(expires_at);
+    `);
+  } catch {
+    // Already exists
+  }
+
   try {
     // 2) seed (idempotent); initial admin comes from environment variables
     const env = cf ?? localEnv();

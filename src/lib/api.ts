@@ -84,7 +84,10 @@ export function loginRateClear(key: string): void {
 }
 
 export function loginRateKey(req: Request, username: string): string {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const ip =
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "local";
   return `${ip}:${username}`;
 }
 

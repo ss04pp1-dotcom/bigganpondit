@@ -103,49 +103,42 @@ export async function PATCH(req: Request, ctx: Ctx) {
       if (dup) throw new ApiError(400, "এই রোল নম্বর ইতোমধ্যে ব্যবহৃত হয়েছে।");
     }
 
-    if (body.name !== undefined) {
-      await db.prepare("UPDATE students SET name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.name, id).run();
-      await db.prepare("UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.name, st.user_id).run();
-    }
-    if (body.className !== undefined && targetClassId) {
-      await db.prepare("UPDATE students SET class_id = ?, updated_at = datetime('now') WHERE id = ?").bind(targetClassId, id).run();
-    }
-    if (body.division !== undefined || body.section !== undefined) {
-      await db
-        .prepare("UPDATE students SET division = ?, section = ?, updated_at = datetime('now') WHERE id = ?")
-        .bind(targetDivision, body.section !== undefined ? (body.section ?? null) : st.section, id)
-        .run();
-    }
-    if (body.roll !== undefined) {
-      await db.prepare("UPDATE students SET roll = ?, updated_at = datetime('now') WHERE id = ?").bind(body.roll, id).run();
-    }
-    if (body.fatherName !== undefined) {
-      await db.prepare("UPDATE students SET father_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.fatherName ?? null, id).run();
-    }
-    if (body.motherName !== undefined) {
-      await db.prepare("UPDATE students SET mother_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.motherName ?? null, id).run();
-    }
-    if (body.schoolName !== undefined) {
-      await db.prepare("UPDATE students SET school_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.schoolName ?? null, id).run();
-    }
-    if (body.phone !== undefined) {
-      await db.prepare("UPDATE students SET phone = ?, updated_at = datetime('now') WHERE id = ?").bind(body.phone ?? null, id).run();
-    }
-    if (body.address !== undefined) {
-      await db.prepare("UPDATE students SET address = ?, updated_at = datetime('now') WHERE id = ?").bind(body.address ?? null, id).run();
-    }
-    if (body.bloodGroup !== undefined) {
-      await db.prepare("UPDATE students SET blood_group = ?, updated_at = datetime('now') WHERE id = ?").bind(body.bloodGroup ?? null, id).run();
-    }
-    if (body.dob !== undefined) {
-      await db.prepare("UPDATE students SET dob = ?, updated_at = datetime('now') WHERE id = ?").bind(body.dob ?? null, id).run();
-    }
-    if (body.username) {
-      await db.prepare("UPDATE users SET username = ?, updated_at = datetime('now') WHERE id = ?").bind(body.username, st.user_id).run();
-    }
+    const studentCols: string[] = [];
+    const studentVals: unknown[] = [];
+    if (body.name !== undefined) { studentCols.push("name = ?"); studentVals.push(body.name); }
+    if (body.className !== undefined && targetClassId) { studentCols.push("class_id = ?"); studentVals.push(targetClassId); }
+    if (body.division !== undefined) { studentCols.push("division = ?"); studentVals.push(targetDivision); }
+    if (body.section !== undefined) { studentCols.push("section = ?"); studentVals.push(body.section ?? null); }
+    if (body.roll !== undefined) { studentCols.push("roll = ?"); studentVals.push(body.roll); }
+    if (body.fatherName !== undefined) { studentCols.push("father_name = ?"); studentVals.push(body.fatherName ?? null); }
+    if (body.motherName !== undefined) { studentCols.push("mother_name = ?"); studentVals.push(body.motherName ?? null); }
+    if (body.schoolName !== undefined) { studentCols.push("school_name = ?"); studentVals.push(body.schoolName ?? null); }
+    if (body.phone !== undefined) { studentCols.push("phone = ?"); studentVals.push(body.phone ?? null); }
+    if (body.address !== undefined) { studentCols.push("address = ?"); studentVals.push(body.address ?? null); }
+    if (body.bloodGroup !== undefined) { studentCols.push("blood_group = ?"); studentVals.push(body.bloodGroup ?? null); }
+    if (body.dob !== undefined) { studentCols.push("dob = ?"); studentVals.push(body.dob ?? null); }
+
+    const userCols: string[] = [];
+    const userVals: unknown[] = [];
+    if (body.name !== undefined) { userCols.push("name = ?"); userVals.push(body.name); }
+    if (body.username) { userCols.push("username = ?"); userVals.push(body.username); }
     if (body.password) {
       const hash = await hashPassword(body.password);
-      await db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").bind(hash, st.user_id).run();
+      userCols.push("password_hash = ?");
+      userVals.push(hash);
+    }
+
+    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+    if (studentCols.length > 0) {
+      studentCols.push("updated_at = datetime('now')");
+      stmts.push(db.prepare(`UPDATE students SET ${studentCols.join(", ")} WHERE id = ?`).bind(...studentVals, id));
+    }
+    if (userCols.length > 0) {
+      userCols.push("updated_at = datetime('now')");
+      stmts.push(db.prepare(`UPDATE users SET ${userCols.join(", ")} WHERE id = ?`).bind(...userVals, st.user_id));
+    }
+    if (stmts.length > 0) {
+      await db.batch(stmts);
     }
 
     return ok({ message: MSG.updated });

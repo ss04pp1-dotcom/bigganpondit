@@ -31,22 +31,33 @@ async function openLocalSqlite(): Promise<SqliteDatabase> {
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
   const dbPath = path.join(dbDir, "academy.db");
 
+  // Dynamic import helper that bypasses bundler static analysis (Turbopack/esbuild)
+  const dynamicImport = (name: string): Promise<any> => {
+    try {
+      const fn = new Function("n", "return import(n)");
+      return fn(name);
+    } catch {
+      return Promise.reject(new Error("Dynamic import unsupported"));
+    }
+  };
+
   // 1) Bun built-in SQLite
   try {
-    // @ts-ignore — runtime fallback, present when running under bun
-    const mod: any = await import("bun:sqlite");
-    const raw: SqliteDatabase = new mod.Database(dbPath);
-    raw.exec("PRAGMA foreign_keys = ON");
-    raw.exec("PRAGMA journal_mode = WAL");
-    cachedRaw = raw;
-    return raw;
+    if (typeof (globalThis as any).Bun !== "undefined") {
+      const mod: any = await dynamicImport("bun:sqlite");
+      const raw: SqliteDatabase = new mod.Database(dbPath);
+      raw.exec("PRAGMA foreign_keys = ON");
+      raw.exec("PRAGMA journal_mode = WAL");
+      cachedRaw = raw;
+      return raw;
+    }
   } catch {
     /* not on bun */
   }
 
   // 2) Node built-in SQLite (node:sqlite, Node >= 22.5)
   try {
-    const mod: any = await import("node:sqlite");
+    const mod: any = await dynamicImport("node:sqlite");
     const raw: SqliteDatabase = new mod.DatabaseSync(dbPath);
     raw.exec("PRAGMA foreign_keys = ON");
     raw.exec("PRAGMA journal_mode = WAL");
@@ -58,8 +69,7 @@ async function openLocalSqlite(): Promise<SqliteDatabase> {
 
   // 3) better-sqlite3 fallback
   try {
-    // @ts-ignore — optional runtime fallback (not installed by default)
-    const mod: any = await import("better-sqlite3");
+    const mod: any = await dynamicImport("better-sqlite3");
     const raw: SqliteDatabase = new mod.default(dbPath);
     raw.exec("PRAGMA foreign_keys = ON");
     raw.exec("PRAGMA journal_mode = WAL");

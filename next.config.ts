@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
   //  - Cloudflare Workers (@opennextjs/cloudflare provides real D1/R2 bindings)
   serverExternalPackages: [
     "@opennextjs/cloudflare",
-    "bun:sqlite",
-    "node:sqlite",
-    "better-sqlite3",
   ],
 };
 

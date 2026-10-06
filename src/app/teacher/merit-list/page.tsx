@@ -1,10 +1,11 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses } from "@/lib/permissions";
-import { buildMonthlyClassSummary } from "@/lib/results/reports";
+import { buildMonthlyClassSummary, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { MeritPodium } from "@/components/app/merit-podium";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,7 @@ export default async function MeritListPage({ searchParams }: { searchParams: SP
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   return (
     <div className="space-y-4">
@@ -176,6 +178,15 @@ export default async function MeritListPage({ searchParams }: { searchParams: SP
                 </tbody>
               </table>
             </div>
+
+            {/* Point 08: Director signature on printed merit list */}
+            <PrintSignatures
+              directorName={dirInfo.name}
+              directorSignatureUrl={dirInfo.signatureUrl}
+              directorInstitution={dirInfo.institution}
+              isSingleTeacher={false}
+              showGuardian={false}
+            />
           </div>
         </CardContent>
       </Card>

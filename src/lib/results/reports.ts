@@ -2,6 +2,7 @@
 // on top of the shared result engine (never duplicated formulas).
 
 import type { D1Database } from "@/lib/db/types";
+import { SETTING_DIRECTOR_SIGNATURE } from "@/lib/constants";
 import {
   aggregate,
   buildAnnualResult,
@@ -432,4 +433,30 @@ export async function buildStudentAnnualReport(
     byMonth.get(r.month)!.push({ total: r.total_marks, obtained: r.obtained_marks });
   }
   return { student, annual: buildAnnualResult(byMonth) };
+}
+
+export async function getDirectorSignatureInfo(db: D1Database) {
+  const d = await db
+    .prepare(
+      `SELECT d.signature_key, u.name, d.institution
+       FROM directors d
+       JOIN users u ON u.id = d.user_id
+       ORDER BY (d.signature_key IS NOT NULL) DESC, d.id ASC
+       LIMIT 1`
+    )
+    .first<{ signature_key: string | null; name: string; institution: string | null }>()
+    .catch(() => null);
+
+  const fallbackKey = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_DIRECTOR_SIGNATURE)
+    .first<{ value: string | null }>()
+    .catch(() => null);
+
+  const key = d?.signature_key || fallbackKey?.value || null;
+  return {
+    signatureUrl: key ? `/api/files/${key}` : null,
+    name: d?.name || "পরিচালক",
+    institution: d?.institution || null,
+  };
 }

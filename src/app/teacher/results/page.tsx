@@ -1,10 +1,11 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db";
 import { getTeacherClasses, getTeacherSubjects } from "@/lib/permissions";
-import { getStudentExamRows, getStudentInfo } from "@/lib/results/reports";
+import { getStudentExamRows, getStudentInfo, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -79,6 +80,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: SP }
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   return (
     <div className="space-y-4">
@@ -239,6 +241,18 @@ export default async function ResultsPage({ searchParams }: { searchParams: SP }
                   </tbody>
                 </table>
               </div>
+
+              {/* Point 08: Single teacher result print -> Both Teacher + Director signatures */}
+              <PrintSignatures
+                directorName={dirInfo.name}
+                directorSignatureUrl={dirInfo.signatureUrl}
+                directorInstitution={dirInfo.institution}
+                teacherName={user.name}
+                teacherSignatureUrl={user.signatureKey ? `/api/files/${user.signatureKey}` : null}
+                teacherSubject="বিষয় শিক্ষক"
+                isSingleTeacher={true}
+                showGuardian={true}
+              />
 
               <p className="mt-3 text-right text-[11px] text-muted-foreground print:block hidden">
                 স্বয়ংক্রিয়ভাবে তৈরি — {APP_TITLE_LINE()}

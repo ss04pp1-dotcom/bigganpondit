@@ -1,10 +1,11 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses, getTeacherSubjects } from "@/lib/permissions";
-import { buildMonthlyClassSummary, buildMonthlyReport } from "@/lib/results/reports";
+import { buildMonthlyClassSummary, buildMonthlyReport, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { CommentBox } from "@/components/reports/comment-box";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -71,6 +72,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   const report = studentId && classId
     ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted })
@@ -273,22 +275,17 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
 
                 <CommentBox />
 
-                {/* signature */}
-                <div className="print-avoid-break mt-6 flex items-end justify-between">
-                  <div className="w-40 text-center text-[12px] text-muted-foreground">
-                    <div className="mb-10" />
-                    অভিভাবকের স্বাক্ষর
-                  </div>
-                  <div className="w-48 text-center">
-                    {user.signatureKey ? (
-                      <img src={`/api/files/${user.signatureKey}`} alt="শিক্ষকের স্বাক্ষর" className="mx-auto mb-1 h-14 object-contain" />
-                    ) : (
-                      <div className="mb-10" />
-                    )}
-                    <p className="border-t border-border pt-1 text-[13px] font-semibold">{user.name}</p>
-                    <p className="text-[11px] text-muted-foreground">শিক্ষক — {classLabel(className)} {division ? divisionLabel(division) : ""}</p>
-                  </div>
-                </div>
+                {/* Point 08: Single teacher result print -> Both Teacher + Director signatures */}
+                <PrintSignatures
+                  directorName={dirInfo.name}
+                  directorSignatureUrl={dirInfo.signatureUrl}
+                  directorInstitution={dirInfo.institution}
+                  teacherName={user.name}
+                  teacherSignatureUrl={user.signatureKey ? `/api/files/${user.signatureKey}` : null}
+                  teacherSubject={`${classLabel(className)} ${division ? divisionLabel(division) : ""}`}
+                  isSingleTeacher={true}
+                  showGuardian={true}
+                />
               </div>
             </CardContent>
           </Card>
@@ -340,6 +337,15 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Point 08: All subjects/teachers summary -> Director signature only */}
+                    <PrintSignatures
+                      directorName={dirInfo.name}
+                      directorSignatureUrl={dirInfo.signatureUrl}
+                      directorInstitution={dirInfo.institution}
+                      isSingleTeacher={false}
+                      showGuardian={false}
+                    />
                   </div>
                 </CardContent>
               </Card>

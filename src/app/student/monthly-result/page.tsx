@@ -1,9 +1,10 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
-import { buildMonthlyClassSummary, buildMonthlyReport } from "@/lib/results/reports";
+import { buildMonthlyClassSummary, buildMonthlyReport, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,6 +49,7 @@ export default async function StudentMonthlyPage({ searchParams }: { searchParam
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   return (
     <div className="space-y-4">
@@ -191,6 +193,15 @@ export default async function StudentMonthlyPage({ searchParams }: { searchParam
                 </p>
               </div>
             </div>
+
+            {/* Point 08: Automatic Director signature on printed marksheet */}
+            <PrintSignatures
+              directorName={dirInfo.name}
+              directorSignatureUrl={dirInfo.signatureUrl}
+              directorInstitution={dirInfo.institution}
+              isSingleTeacher={false}
+              showGuardian={true}
+            />
           </div>
         </CardContent>
       </Card>

@@ -3,7 +3,8 @@
 // Results management (admin): exam list with filters + per-mark edit/delete.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Pencil, Search, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Search, Trash2, Printer } from "lucide-react";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -307,6 +308,24 @@ export function ResultsManager() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="mt-4 flex justify-between items-center no-print">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => window.print()}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                ফলাফল শিট প্রিন্ট করুন
+              </Button>
+            </div>
+
+            {/* Point 08: Automatic Director signature on printed sheet */}
+            <div className="hidden print:block">
+              <PrintSignatures isSingleTeacher={false} showGuardian={false} />
             </div>
           </CardContent>
         </Card>

@@ -1,10 +1,11 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses } from "@/lib/permissions";
-import { buildStudentAnnualReport } from "@/lib/results/reports";
+import { buildStudentAnnualReport, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { AnnualChart } from "@/components/app/annual-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -63,6 +64,7 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   return (
     <div className="space-y-4">
@@ -215,21 +217,17 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
                   </div>
                   <p className="mb-2 text-center text-[15px] font-bold">মাসিক পারফরম্যান্স গ্রাফ — {report.student.name} ({bn(year)})</p>
                   <AnnualChart points={report.annual.months.map((m) => ({ month: m.month, percentage: m.percentage }))} />
-                  <div className="mt-6 flex items-end justify-between">
-                    <div className="w-40 text-center text-[12px] text-muted-foreground">
-                      <div className="mb-10" />
-                      অভিভাবকের স্বাক্ষর
-                    </div>
-                    <div className="w-48 text-center">
-                      {user.signatureKey ? (
-                        <img src={`/api/files/${user.signatureKey}`} alt="শিক্ষকের স্বাক্ষর" className="mx-auto mb-1 h-14 object-contain" />
-                      ) : (
-                        <div className="mb-10" />
-                      )}
-                      <p className="border-t border-border pt-1 text-[13px] font-semibold">{user.name}</p>
-                      <p className="text-[11px] text-muted-foreground">শিক্ষক</p>
-                    </div>
-                  </div>
+                  {/* Point 08: Single teacher annual report print -> Both Teacher + Director signatures */}
+                  <PrintSignatures
+                    directorName={dirInfo.name}
+                    directorSignatureUrl={dirInfo.signatureUrl}
+                    directorInstitution={dirInfo.institution}
+                    teacherName={user.name}
+                    teacherSignatureUrl={user.signatureKey ? `/api/files/${user.signatureKey}` : null}
+                    teacherSubject={`${classLabel(className)} ${division ? divisionLabel(division) : ""}`}
+                    isSingleTeacher={true}
+                    showGuardian={true}
+                  />
                 </div>
               </div>
             </CardContent>

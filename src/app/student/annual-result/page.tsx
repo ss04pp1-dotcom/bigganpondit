@@ -1,9 +1,10 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
-import { buildStudentAnnualReport } from "@/lib/results/reports";
+import { buildStudentAnnualReport, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
+import { PrintSignatures } from "@/components/app/print-signatures";
 import { AnnualChart } from "@/components/app/annual-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,7 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const dirInfo = await getDirectorSignatureInfo(db);
 
   return (
     <div className="space-y-4">
@@ -131,6 +133,15 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
                   </tfoot>
                 </table>
               </div>
+
+              {/* Point 08: Automatic Director signature on printed annual report */}
+              <PrintSignatures
+                directorName={dirInfo.name}
+                directorSignatureUrl={dirInfo.signatureUrl}
+                directorInstitution={dirInfo.institution}
+                isSingleTeacher={false}
+                showGuardian={true}
+              />
             </div>
 
             <div className="print-page mt-6 print:mt-0">

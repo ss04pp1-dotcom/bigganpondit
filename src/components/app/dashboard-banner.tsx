@@ -108,14 +108,15 @@ export function DashboardBanner({
           backgroundImage: bgUrl ? `url(${bgUrl})` : undefined,
           backgroundSize: "cover",
           backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
         }}
       >
-        {/* Gradient dark overlay so text stays perfectly readable even with bright images */}
-        <div
-          className={`absolute inset-0 pointer-events-none transition-opacity ${
-            bgUrl ? "bg-gradient-to-r from-slate-950/90 via-slate-900/80 to-slate-950/75" : "bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]"
-          }`}
-        />
+        {/* Crystal-Clear Banner: Only soft left text-scrim; banner artwork is 100% sharp and unblurred */}
+        {bgUrl ? (
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/80 via-black/35 to-transparent sm:max-w-2xl transition-opacity" />
+        ) : (
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]" />
+        )}
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -196,8 +197,8 @@ export function DashboardBanner({
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-700">ব্যানার ব্যাকগ্রাউন্ড ছবি</Label>
                 <ImageUpload
-                  type="logo"
-                  label="ব্যানার ছবি (JPG, PNG, WebP)"
+                  type="banner"
+                  label="ব্যানার ছবি (JPG, PNG, WebP — হাই রেজোলিউশন / ক্রিস্টাল ক্লিয়ার)"
                   currentUrl={editImageKey ? `/api/files/${editImageKey}` : null}
                   onUploaded={(key) => setEditImageKey(key)}
                 />

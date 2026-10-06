@@ -166,10 +166,18 @@ export function AppShell({
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 rounded-full border border-[#d8e3f0] bg-white px-3 py-1 shadow-xs">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0d6efd] text-[11px] font-bold text-white shadow-xs">
-                  {user.shortName ?? user.name.slice(0, 2)}
-                </span>
+              <div className="flex items-center gap-2 rounded-full border border-[#d8e3f0] bg-white px-2.5 py-1 shadow-xs">
+                {user.photoUrl ? (
+                  <img
+                    src={user.photoUrl}
+                    alt={user.name}
+                    className="h-7 w-7 rounded-full object-cover border border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0d6efd] text-[11px] font-bold text-white shadow-xs shrink-0">
+                    {user.shortName ?? user.name.slice(0, 2)}
+                  </span>
+                )}
                 <span className="text-[13px] font-semibold text-[#18314d]">
                   {user.name} {user.shortName ? `(${user.shortName})` : ""}
                 </span>

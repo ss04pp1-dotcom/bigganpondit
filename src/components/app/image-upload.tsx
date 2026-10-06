@@ -3,6 +3,7 @@
 // Image upload widget: picks a file, previews it, uploads to /api/uploads (R2).
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,7 @@ export function ImageUpload({
   disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentUrl ?? null);
   const { toast } = useToast();
@@ -55,6 +57,7 @@ export function ImageUpload({
       setPreview(json.url);
       onUploaded?.(json.key, json.url);
       toast({ title: "সফলভাবে সংরক্ষণ করা হয়েছে।" });
+      router.refresh();
     } catch (e) {
       setPreview(currentUrl ?? null);
       toast({ title: e instanceof Error ? e.message : "আপলোড ব্যর্থ হয়েছে।", variant: "destructive" });

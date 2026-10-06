@@ -1141,6 +1141,126 @@ export function StudentManager({
 
       {/* view dialog */}
       <StudentViewDialog studentId={viewId} onClose={() => setViewId(null)} students={rows} />
+
+      {/* SMS MODAL FOR ADMIN — Point 05 */}
+    <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
+            <MessageSquare className="h-5 w-5 text-emerald-600" />
+            শিক্ষার্থীদের এসএমএস (SMS) প্রেরণ করুন
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSendSms} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">প্রাপক নির্বাচন (Scope)</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setSmsScope("ALL")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "ALL"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                সকল শ্রেণি
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmsScope("CLASS")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "CLASS"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                নির্দিষ্ট শ্রেণি
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmsScope("SELECTED")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "SELECTED"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                বাছাইকৃত
+              </button>
+            </div>
+          </div>
+
+          {smsScope === "CLASS" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">শ্রেণি নির্বাচন করুন</Label>
+              <Select value={smsClass} onValueChange={setSmsClass}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="শ্রেণি" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLASS_NUMBERS.map((c) => (
+                    <SelectItem key={c} value={c} className="text-xs">
+                      {classLabel(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">বার্তার বিবরণ (SMS Text) *</Label>
+              <span className="text-[11px] text-slate-400">
+                অক্ষর: {bn(smsMessage.length)} (১ এসএমএস ≈ ১৬০/৭০)
+              </span>
+            </div>
+            <Textarea
+              placeholder="অভিভাবকদের জন্য বার্তা লিখুন... যেমন: সম্মানিত অভিভাবক, আগামীকাল বিশেষ ক্লাস পরীক্ষা অনুষ্ঠিত হবে।"
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              rows={4}
+              required
+              className="text-xs resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSmsOpen(false)}
+              disabled={smsSending}
+              className="text-xs h-8"
+            >
+              বাতিল
+            </Button>
+            <Button
+              type="submit"
+              disabled={smsSending}
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs h-8 font-semibold shadow-xs"
+            >
+              {smsSending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  প্রেরণ হচ্ছে...
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  এসএমএস পাঠান
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
@@ -1323,126 +1443,6 @@ function StudentViewDialog({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
-
-    {/* SMS MODAL FOR ADMIN — Point 05 */}
-    <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
-            <MessageSquare className="h-5 w-5 text-emerald-600" />
-            শিক্ষার্থীদের এসএমএস (SMS) প্রেরণ করুন
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSendSms} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">প্রাপক নির্বাচন (Scope)</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setSmsScope("ALL")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "ALL"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                সকল শ্রেণি
-              </button>
-              <button
-                type="button"
-                onClick={() => setSmsScope("CLASS")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "CLASS"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                নির্দিষ্ট শ্রেণি
-              </button>
-              <button
-                type="button"
-                onClick={() => setSmsScope("SELECTED")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "SELECTED"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                বাছাইকৃত
-              </button>
-            </div>
-          </div>
-
-          {smsScope === "CLASS" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">শ্রেণি নির্বাচন করুন</Label>
-              <Select value={smsClass} onValueChange={setSmsClass}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="শ্রেণি" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c} className="text-xs">
-                      {classLabel(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">বার্তার বিবরণ (SMS Text) *</Label>
-              <span className="text-[11px] text-slate-400">
-                অক্ষর: {bn(smsMessage.length)} (১ এসএমএস ≈ ১৬০/৭০)
-              </span>
-            </div>
-            <Textarea
-              placeholder="অভিভাবকদের জন্য বার্তা লিখুন... যেমন: সম্মানিত অভিভাবক, আগামীকাল বিশেষ ক্লাস পরীক্ষা অনুষ্ঠিত হবে।"
-              value={smsMessage}
-              onChange={(e) => setSmsMessage(e.target.value)}
-              rows={4}
-              required
-              className="text-xs resize-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setSmsOpen(false)}
-              disabled={smsSending}
-              className="text-xs h-8"
-            >
-              বাতিল
-            </Button>
-            <Button
-              type="submit"
-              disabled={smsSending}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs h-8 font-semibold shadow-xs"
-            >
-              {smsSending ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  প্রেরণ হচ্ছে...
-                </>
-              ) : (
-                <>
-                  <Send className="h-3.5 w-3.5" />
-                  এসএমএস পাঠান
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
       </DialogContent>
     </Dialog>
   );

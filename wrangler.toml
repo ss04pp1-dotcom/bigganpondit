@@ -16,7 +16,7 @@ directory = ".open-next/assets"
 [[d1_databases]]
 binding = "DB"
 database_name = "academy-marks"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "abcb9f52-a073-4103-af43-59e1ec825b0c"
 migrations_dir = "db/migrations"
 
 # ---- Cloudflare R2 (file storage: photos / logo / signatures / backups) ----

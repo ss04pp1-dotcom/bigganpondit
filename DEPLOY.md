@@ -35,18 +35,39 @@ bunx wrangler secret put ADMIN_PASSWORD   # প্রাথমিক প্র�
 > প্রাথমিক প্রশাসক অ্যাকাউন্ট প্রথম বুটে এই env থেকে তৈরি হয় (সিকিউর সিড)।
 > `DEMO_HINT` ভেরিয়েবলটি প্রোডাকশনে `0` রাখুন যাতে লগইন পেজে ডেমো তথ্য না দেখায়।
 
-## ৫. মাইগ্রেশন ও ডিপ্লয়
+## ৫. GitHub Actions স্বয়ংক্রিয় ডিপ্লয়মেন্ট (CI/CD)
+
+আপনার রিপোজিটরির `.github/workflows/deploy.yml` ফাইলে অটো-ডিপ্লয়মেন্ট কনফিগার করা হয়েছে। এটি সক্রিয় করতে:
+
+1. **GitHub Secrets যোগ করুন:**
+   GitHub Repo > **Settings > Secrets and variables > Actions** এ গিয়ে নিচের ২টি সিক্রেট যোগ করুন:
+   - `CLOUDFLARE_API_TOKEN`: Cloudflare Dashboard (My Profile > API Tokens > "Edit Cloudflare Workers" টেমপ্লেট থেকে তৈরি করুন)।
+   - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Dashboard-এর ডান পাশের কলামে পাওয়া Account ID।
+
+2. **D1 ডাটাবেস ও ID বসানো:**
+   Cloudflare Dashboard বা টার্মিনালে D1 তৈরি করে প্রাপ্ত `database_id` টি `wrangler.toml` ফাইলে বসিয়ে দিন:
+   ```toml
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "academy-marks"
+   database_id = "আপনার_আসল_D1_DATABASE_ID"
+   ```
+
+3. **পুশ বা রান:**
+   `main` ব্রাঞ্চে কোনো পুশ হলে অথবা GitHub Actions ট্যাবে গিয়ে **"Run workflow"** ক্লিক করলেই স্বয়ংক্রিয়ভাবে বিল্ড হয়ে Cloudflare Workers-এ লাইভ হয়ে যাবে।
+
+## ৬. ম্যানুয়াল বিল্ড ও ডিপ্লয় (টার্মিনাল থেকে)
 
 ```bash
 # D1 মাইগ্রেশন (db/migrations/0001_init.sql)
 bunx wrangler d1 migrations apply academy-marks --remote
 
 # বিল্ড + ডিপ্লয় (OpenNext)
-bunx @opennextjs/cloudflare build
+bun run build:cf
 bunx wrangler deploy
 ```
 
-## ৬. লোকাল ডেভেলপমেন্ট
+## ৭. লোকাল ডেভেলপমেন্ট
 
 ```bash
 bun run dev          # http://localhost:3000

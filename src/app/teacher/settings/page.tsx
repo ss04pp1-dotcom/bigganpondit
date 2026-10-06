@@ -1,6 +1,7 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getSetting } from "@/lib/db";
 import { ImageUpload } from "@/components/app/image-upload";
+import { BiometricManager } from "@/components/app/biometric-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DEFAULT_ACADEMY_NAME, SETTING_ACADEMY_NAME } from "@/lib/constants";
 
@@ -71,6 +72,8 @@ export default async function TeacherSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BiometricManager />
     </div>
   );
 }

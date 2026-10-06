@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Loader2, User, Eye, EyeOff, GraduationCap } from "lucide-react";
+import { Lock, Loader2, User, Eye, EyeOff, GraduationCap, Fingerprint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { fromBase64Url, toBase64Url } from "@/lib/auth/webauthn";
 
 export function LoginForm({
   academyName,
@@ -45,6 +46,81 @@ export function LoginForm({
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
     } finally { setBusy(false); }
+  }
+
+  async function loginWithFingerprint() {
+    if (busy) return;
+    if (typeof window === "undefined" || !window.PublicKeyCredential) {
+      toast({
+        title: "বায়োমেট্রিক অসমর্থিত",
+        description: "আপনার ব্রাউজার বা ডিভাইসে ফিঙ্গারপ্রিন্ট সেন্সর উপলব্ধ নেই।",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const optUrl = username.trim()
+        ? `/api/auth/webauthn/login?username=${encodeURIComponent(username.trim())}`
+        : "/api/auth/webauthn/login";
+      const optRes = await fetch(optUrl);
+      const optJson = await optRes.json();
+      if (!optRes.ok || !optJson.ok) {
+        toast({ title: optJson.error ?? "বায়োমেট্রিক প্রস্তুতি ব্যর্থ হয়েছে।", variant: "destructive" });
+        return;
+      }
+
+      const { challenge, rpId, allowCredentials, userVerification, timeout } = optJson;
+      const challengeBytes = fromBase64Url(challenge);
+
+      const credential = (await navigator.credentials.get({
+        publicKey: {
+          challenge: challengeBytes as unknown as BufferSource,
+          rpId: rpId || window.location.hostname,
+          allowCredentials: (allowCredentials || []).map((c: any) => ({
+            id: fromBase64Url(c.id) as unknown as BufferSource,
+            type: "public-key" as const,
+          })),
+          userVerification: userVerification || "preferred",
+          timeout: timeout || 60000,
+        },
+      })) as (PublicKeyCredential & { rawId: ArrayBuffer; response: AuthenticatorAssertionResponse }) | null;
+
+      if (!credential) {
+        toast({ title: "ফিঙ্গারপ্রিন্ট যাচাই করা যায়নি।", variant: "destructive" });
+        return;
+      }
+
+      const rawId = toBase64Url(new Uint8Array(credential.rawId));
+      const clientDataJSON = new TextDecoder().decode(credential.response.clientDataJSON);
+
+      const verifyRes = await fetch("/api/auth/webauthn/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          credentialId: rawId,
+          rawClientData: clientDataJSON,
+        }),
+      });
+
+      const verifyJson = await verifyRes.json();
+      if (!verifyRes.ok || !verifyJson.ok) {
+        toast({ title: verifyJson.error ?? "ফিঙ্গারপ্রিন্ট দিয়ে লগইন ব্যর্থ হয়েছে।", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: `স্বাগতম, ${verifyJson.name}! বায়োমেট্রিক লগইন সফল।` });
+      window.location.href = verifyJson.redirect;
+    } catch (err: any) {
+      if (err.name === "NotAllowedError") {
+        toast({ title: "ফিঙ্গারপ্রিন্ট অনুরোধ বাতিল করা হয়েছে।", variant: "destructive" });
+      } else {
+        toast({ title: "ফিঙ্গারপ্রিন্ট দিয়ে লগইন করা যায়নি। সাধারণ পাসওয়ার্ড ব্যবহার করুন।", variant: "destructive" });
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -126,10 +202,29 @@ export function LoginForm({
             </div>
             <Button
               type="submit"
-              className="h-11 w-full rounded-lg bg-[#0d6efd] text-[14px] font-semibold text-white shadow-md hover:bg-[#0b5ed7] transition-all"
+              className="h-11 w-full rounded-lg bg-[#0d6efd] text-[14px] font-semibold text-white shadow-md hover:bg-[#0b5ed7] transition-all cursor-pointer"
               disabled={busy}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} লগইন
+            </Button>
+
+            <div className="relative my-3 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-slate-200" />
+              </div>
+              <span className="relative bg-white px-2 text-[11px] text-slate-400">
+                অথবা বায়োমেট্রিক
+              </span>
+            </div>
+
+            <Button
+              type="button"
+              onClick={loginWithFingerprint}
+              disabled={busy}
+              className="h-11 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <Fingerprint className="h-5 w-5 text-emerald-100" />
+              <span>আঙুলের ছাপ (Fingerprint) দিয়ে লগইন</span>
             </Button>
           </form>
 

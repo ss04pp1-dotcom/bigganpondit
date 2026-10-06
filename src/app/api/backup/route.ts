@@ -43,6 +43,7 @@ const TABLES = [
   "exams",
   "marks",
   "settings",
+  "webauthn_credentials",
 ] as const;
 
 export async function GET(req: Request) {
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
         exams: ["id", "class_id", "division", "subject_id", "month", "year", "exam_date", "title", "total_marks", "created_by", "created_at", "updated_at"],
         marks: ["id", "exam_id", "student_id", "attendance", "obtained_marks", "created_at", "updated_at"],
         settings: ["id", "key", "value", "updated_at"],
+        webauthn_credentials: ["id", "user_id", "credential_id", "public_key", "counter", "device_name", "created_at", "updated_at"],
       };
 
       // statements are executed safely in batches

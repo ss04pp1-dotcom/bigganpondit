@@ -67,9 +67,24 @@ async function runAudit() {
   // 3. TEACHER DASHBOARD & STUDENT COUNT CALCULATIONS
   // ------------------------------------------------------------------
   console.log("\n[3] Testing Teacher Dashboard & Class Calculations...");
-  // Find a teacher in db
-  const teachers = (await db.prepare("SELECT t.id, t.user_id, u.name, u.username FROM teachers t JOIN users u ON u.id = t.user_id").all<{ id: number; user_id: number; name: string; username: string }>()?.catch(() => null))?.results ?? [];
-  assert(teachers.length > 0, `Teachers exist in database (found ${teachers.length})`);
+  // Find or create a test teacher in db
+  let teachers = (await db.prepare("SELECT t.id, t.user_id, u.name, u.username FROM teachers t JOIN users u ON u.id = t.user_id").all<{ id: number; user_id: number; name: string; username: string }>()?.catch(() => null))?.results ?? [];
+  let isCreatedTestTeacher = false;
+  if (teachers.length === 0) {
+    const tHash = await hashPassword("test1234");
+    const ures = await db.prepare("INSERT INTO users (name, username, password_hash, role) VALUES ('টেস্ট শিক্ষক', 'test_teacher_audit', ?, 'TEACHER')").bind(tHash).run();
+    const uid = Number(ures.meta.last_row_id ?? 0);
+    const tres = await db.prepare("INSERT INTO teachers (user_id, short_name) VALUES (?, 'TT')").bind(uid).run();
+    const tid = Number(tres.meta.last_row_id ?? 0);
+    // Assign one subject from class 10
+    const s10 = await db.prepare("SELECT id FROM subjects WHERE class_id = (SELECT id FROM classes WHERE name = '10') LIMIT 1").first<{ id: number }>();
+    if (s10?.id) {
+      await db.prepare("INSERT INTO teacher_subjects (teacher_id, subject_id) VALUES (?, ?)").bind(tid, s10.id).run();
+    }
+    teachers = [{ id: tid, user_id: uid, name: "টেস্ট শিক্ষক", username: "test_teacher_audit" }];
+    isCreatedTestTeacher = true;
+  }
+  assert(teachers.length > 0, `Teachers available for testing (found/created ${teachers.length})`);
 
   const t1 = teachers[0];
   const allowedClasses = await getTeacherClasses(db, t1.id);
@@ -310,6 +325,13 @@ async function runAudit() {
     }
   }
   assert(strictlyOrdered, "Merit list entries are monotonically ordered by rank position");
+
+  // Clean up dynamic test teacher if created
+  if (isCreatedTestTeacher) {
+    await db.prepare("DELETE FROM teacher_subjects WHERE teacher_id = ?").bind(teachers[0].id).run();
+    await db.prepare("DELETE FROM teachers WHERE id = ?").bind(teachers[0].id).run();
+    await db.prepare("DELETE FROM users WHERE id = ?").bind(teachers[0].user_id).run();
+  }
 
   // ------------------------------------------------------------------
   // SUMMARY

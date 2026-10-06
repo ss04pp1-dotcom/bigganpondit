@@ -81,6 +81,11 @@ async function ensureSubjects(db: D1Database) {
 
 // ---------------------------------------------------------------- teachers
 async function ensureTeachers(db: D1Database) {
+  const flag = await db
+    .prepare("SELECT value FROM settings WHERE key = 'demo_teachers_seeded'")
+    .first<{ value: string }>()
+    .catch(() => null);
+  if (flag?.value === "disabled" || flag?.value === "1") return;
   if ((await count(db, "teachers")) > 0) return;
 
   interface SeedTeacher {
@@ -150,6 +155,10 @@ async function ensureTeachers(db: D1Database) {
     }
     if (links.length) await db.batch(links);
   }
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('demo_teachers_seeded', '1') ON CONFLICT(key) DO UPDATE SET value = '1'")
+    .run()
+    .catch(() => null);
 }
 
 // ---------------------------------------------------------------- admin
@@ -219,6 +228,11 @@ const DEMO_STUDENTS: { name: string; classNum: string; division: string | null; 
 ];
 
 async function ensureDemoData(db: D1Database) {
+  const flag = await db
+    .prepare("SELECT value FROM settings WHERE key = 'demo_data_seeded'")
+    .first<{ value: string }>()
+    .catch(() => null);
+  if (flag?.value === "disabled" || flag?.value === "1") return;
   if ((await count(db, "students")) > 0) return;
 
   // 1) student users + student rows
@@ -315,6 +329,10 @@ async function ensureDemoData(db: D1Database) {
       }
     }
   }
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('demo_data_seeded', '1') ON CONFLICT(key) DO UPDATE SET value = '1'")
+    .run()
+    .catch(() => null);
 }
 
 // ---------------------------------------------------------------- entry

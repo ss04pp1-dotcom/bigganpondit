@@ -25,6 +25,23 @@ export default async function ProfilePage() {
       .all<{ name: string; exams: number; total: number; obtained: number }>()
   ).results;
 
+  const studentExtra = user.studentId
+    ? await db
+        .prepare(
+          "SELECT father_name, mother_name, school_name, phone, address, blood_group FROM students WHERE id = ?"
+        )
+        .bind(user.studentId)
+        .first<{
+          father_name?: string | null;
+          mother_name?: string | null;
+          school_name?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          blood_group?: string | null;
+        }>(undefined as never)
+        .catch(() => null)
+    : null;
+
   const info: [string, string][] = [
     ["নাম", user.name],
     ["শ্রেণি", classLabel(user.className ?? "")],
@@ -33,6 +50,13 @@ export default async function ProfilePage() {
     ["রোল", bn(user.roll ?? 0)],
     ["ইউজারনেম", `@${user.username}`],
   ];
+
+  if (studentExtra?.school_name) info.push(["বিদ্যালয় / প্রতিষ্ঠান", studentExtra.school_name]);
+  if (studentExtra?.father_name) info.push(["পিতার নাম", studentExtra.father_name]);
+  if (studentExtra?.mother_name) info.push(["মাতার নাম", studentExtra.mother_name]);
+  if (studentExtra?.phone) info.push(["অভিভাবকের ফোন", bn(studentExtra.phone)]);
+  if (studentExtra?.blood_group) info.push(["রক্তের গ্রুপ", studentExtra.blood_group]);
+  if (studentExtra?.address) info.push(["ঠিকানা", studentExtra.address]);
 
   return (
     <div className="space-y-4">

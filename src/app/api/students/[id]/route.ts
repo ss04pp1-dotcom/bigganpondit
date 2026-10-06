@@ -119,6 +119,27 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.roll !== undefined) {
       await db.prepare("UPDATE students SET roll = ?, updated_at = datetime('now') WHERE id = ?").bind(body.roll, id).run();
     }
+    if (body.fatherName !== undefined) {
+      await db.prepare("UPDATE students SET father_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.fatherName ?? null, id).run();
+    }
+    if (body.motherName !== undefined) {
+      await db.prepare("UPDATE students SET mother_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.motherName ?? null, id).run();
+    }
+    if (body.schoolName !== undefined) {
+      await db.prepare("UPDATE students SET school_name = ?, updated_at = datetime('now') WHERE id = ?").bind(body.schoolName ?? null, id).run();
+    }
+    if (body.phone !== undefined) {
+      await db.prepare("UPDATE students SET phone = ?, updated_at = datetime('now') WHERE id = ?").bind(body.phone ?? null, id).run();
+    }
+    if (body.address !== undefined) {
+      await db.prepare("UPDATE students SET address = ?, updated_at = datetime('now') WHERE id = ?").bind(body.address ?? null, id).run();
+    }
+    if (body.bloodGroup !== undefined) {
+      await db.prepare("UPDATE students SET blood_group = ?, updated_at = datetime('now') WHERE id = ?").bind(body.bloodGroup ?? null, id).run();
+    }
+    if (body.dob !== undefined) {
+      await db.prepare("UPDATE students SET dob = ?, updated_at = datetime('now') WHERE id = ?").bind(body.dob ?? null, id).run();
+    }
     if (body.username) {
       await db.prepare("UPDATE users SET username = ?, updated_at = datetime('now') WHERE id = ?").bind(body.username, st.user_id).run();
     }

@@ -32,16 +32,23 @@ CREATE TABLE IF NOT EXISTS classes (
 );
 
 CREATE TABLE IF NOT EXISTS students (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  class_id   INTEGER NOT NULL REFERENCES classes(id),
-  division   TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
-  section    TEXT,
-  roll       INTEGER NOT NULL CHECK (roll > 0),
-  photo_key  TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  class_id    INTEGER NOT NULL REFERENCES classes(id),
+  division    TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+  section     TEXT,
+  roll        INTEGER NOT NULL CHECK (roll > 0),
+  photo_key   TEXT,
+  father_name TEXT,
+  mother_name TEXT,
+  school_name TEXT,
+  phone       TEXT,
+  address     TEXT,
+  blood_group TEXT,
+  dob         TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS subjects (

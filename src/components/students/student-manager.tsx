@@ -39,6 +39,13 @@ interface Row {
   photo_key: string | null;
   class_name: string;
   username: string;
+  father_name?: string | null;
+  mother_name?: string | null;
+  school_name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  blood_group?: string | null;
+  dob?: string | null;
 }
 
 interface FormState {
@@ -51,6 +58,13 @@ interface FormState {
   username: string;
   password: string;
   photo_key: string | null;
+  fatherName?: string;
+  motherName?: string;
+  schoolName?: string;
+  phone?: string;
+  address?: string;
+  bloodGroup?: string;
+  dob?: string;
 }
 
 const emptyForm: FormState = {
@@ -62,6 +76,13 @@ const emptyForm: FormState = {
   username: "",
   password: "",
   photo_key: null,
+  fatherName: "",
+  motherName: "",
+  schoolName: "",
+  phone: "",
+  address: "",
+  bloodGroup: "",
+  dob: "",
 };
 
 type Filter = "ALL" | "10-SCIENCE" | "10-HUMANITIES" | "9-SCIENCE" | "9-HUMANITIES" | "8" | "7" | "6";
@@ -152,6 +173,13 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
       roll: Number(form.roll),
       username: form.username.trim(),
       password: form.password,
+      fatherName: form.fatherName?.trim() || null,
+      motherName: form.motherName?.trim() || null,
+      schoolName: form.schoolName?.trim() || null,
+      phone: form.phone?.trim() || null,
+      address: form.address?.trim() || null,
+      bloodGroup: form.bloodGroup?.trim() || null,
+      dob: form.dob?.trim() || null,
     };
     if (form.id && !payload.password) delete payload.password;
     if (!payload.name || !payload.roll || !payload.username || (!form.id && !payload.password)) {
@@ -301,6 +329,13 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                               username: row.username,
                               password: "",
                               photo_key: row.photo_key,
+                              fatherName: row.father_name ?? "",
+                              motherName: row.mother_name ?? "",
+                              schoolName: row.school_name ?? "",
+                              phone: row.phone ?? "",
+                              address: row.address ?? "",
+                              bloodGroup: row.blood_group ?? "",
+                              dob: row.dob ?? "",
                             });
                           }}
                         >
@@ -399,6 +434,36 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                   <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="h-11" placeholder="••••" />
                 </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>পিতার নাম (ঐচ্ছিক)</Label>
+                  <Input value={form.fatherName ?? ""} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} className="h-10" placeholder="পিতার নাম" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>মাতার নাম (ঐচ্ছিক)</Label>
+                  <Input value={form.motherName ?? ""} onChange={(e) => setForm({ ...form, motherName: e.target.value })} className="h-10" placeholder="মাতার নাম" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>বিদ্যালয় / প্রতিষ্ঠানের নাম (ঐচ্ছিক)</Label>
+                  <Input value={form.schoolName ?? ""} onChange={(e) => setForm({ ...form, schoolName: e.target.value })} className="h-10" placeholder="বিদ্যালয় বা প্রতিষ্ঠানের নাম" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>অভিভাবকের ফোন নম্বর (ঐচ্ছিক)</Label>
+                  <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="h-10" placeholder="০১৭১XXXXXXXX" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>ঠিকানা (ঐচ্ছিক)</Label>
+                  <Input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10" placeholder="গ্রাম/এলাকা, থানা, জেলা" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>রক্তের গ্রুপ (ঐচ্ছিক)</Label>
+                  <Input value={form.bloodGroup ?? ""} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} className="h-10" placeholder="A+ / B+ / O+ ইত্যাদি" />
+                </div>
+              </div>
               <div className="rounded-lg border border-dashed border-input p-3">
                 {form.id ? (
                   <ImageUpload
@@ -457,6 +522,7 @@ function StudentViewDialog({
   onClose: () => void;
   students: Row[];
 }) {
+  const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");
   const [data, setData] = useState<{
     forId: number;
     forYear: number;
@@ -495,71 +561,182 @@ function StudentViewDialog({
 
   return (
     <Dialog open={!!studentId} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl p-6">
         <DialogHeader>
-          <DialogTitle>শিক্ষার্থীর বিবরণ</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-[#142942]">শিক্ষার্থীর সম্পূর্ণ তথ্য</DialogTitle>
         </DialogHeader>
         {student && (
-          <>
-            <div className="flex items-center gap-4 rounded-xl bg-muted/50 p-4">
-              <StudentAvatar photoKey={student.photo_key} name={student.name} size="xl" />
-              <div className="min-w-0">
-                <p className="text-lg font-bold">{student.name}</p>
-                <p className="text-[13px] text-muted-foreground">
-                  {classLabel(student.class_name)}
-                  {student.division ? ` — ${divisionLabel(student.division)}` : ""}
-                  {student.section ? ` • শাখা ${student.section}` : ""} • রোল {bn(student.roll)}
-                </p>
-                <p className="text-[12px] text-muted-foreground">লগইন: @{student.username}</p>
+          <div className="space-y-4">
+            {/* Header card */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#dce6f2] bg-[#f8fafd] p-4 shadow-xs">
+              <div className="flex items-center gap-4">
+                <StudentAvatar photoKey={student.photo_key} name={student.name} size="xl" className="h-16 w-16 ring-2 ring-[#0d6efd]/30" />
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold text-[#142942]">{student.name}</h3>
+                  <p className="text-[13px] font-semibold text-slate-600">
+                    {classLabel(student.class_name)}
+                    {student.division ? ` — ${divisionLabel(student.division)}` : ""}
+                    {student.section ? ` • শাখা ${student.section}` : ""} • রোল {bn(student.roll)}
+                  </p>
+                  <p className="text-[11px] text-slate-500">লগইন আইডি: @{student.username}</p>
+                </div>
               </div>
-              <div className="ml-auto">
-                <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                  <SelectTrigger className="h-9 w-[110px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[year + 1, year, year - 1, year - 2].map((y) => (
-                      <SelectItem key={y} value={String(y)}>{bn(y)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-xl border border-border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/60">
-                    <TableHead className="text-[12px]">বিষয়</TableHead>
-                    <TableHead className="text-[12px]">পরীক্ষা</TableHead>
-                    <TableHead className="text-center text-[12px]">মাস</TableHead>
-                    <TableHead className="text-right text-[12px]">মোট</TableHead>
-                    <TableHead className="text-right text-[12px]">প্রাপ্ত</TableHead>
-                    <TableHead className="text-right text-[12px]">সর্বোচ্চ</TableHead>
-                    <TableHead className="text-center text-[12px]">গ্রেড</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows === null ? (
-                    <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">লোড হচ্ছে…</TableCell></TableRow>
-                  ) : rows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">এই বছরে কোনো ফলাফল নেই।</TableCell></TableRow>
-                  ) : (
-                    rows.map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-[13px]">{r.subjectName}</TableCell>
-                        <TableCell className="text-[13px]">{r.title}</TableCell>
-                        <TableCell className="text-center text-[13px]">{MONTHS_BN[r.month - 1]}</TableCell>
-                        <TableCell className="text-right text-[13px]">{fmtNum(r.total)}</TableCell>
-                        <TableCell className={cn("text-right text-[13px] font-semibold", r.attendance === "ABSENT" && "text-red-600")}>
-                          {r.attendance === "ABSENT" ? "অনুপস্থিত (০)" : fmtNum(r.obtained)}
-                        </TableCell>
-                        <TableCell className="text-right text-[13px]">{fmtNum(r.highest)}</TableCell>
-                        <TableCell className="text-center text-[13px] font-semibold">{r.grade}</TableCell>
-                      </TableRow>
-                    ))
+
+              {/* Tab Selector */}
+              <div className="flex items-center gap-1 rounded-lg border border-[#cfdbe8] bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("profile")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-bold transition-all",
+                    activeTab === "profile"
+                      ? "bg-[#0d6efd] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
                   )}
-                </TableBody>
-              </Table>
+                >
+                  👤 প্রোফাইল তথ্য
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("results")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-bold transition-all",
+                    activeTab === "results"
+                      ? "bg-[#0d6efd] text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  📊 পরীক্ষার ফলাফল
+                </button>
+              </div>
             </div>
-          </>
+
+            {/* TAB 1: Complete Profile Info */}
+            {activeTab === "profile" ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xs">
+                  <h4 className="mb-3 text-[14px] font-bold text-[#18314d] border-b border-slate-100 pb-2">
+                    ব্যক্তিগত ও প্রাতিষ্ঠানিক তথ্য
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-[13px]">
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">শিক্ষার্থীর পুরো নাম</span>
+                      <span className="font-bold text-slate-800">{student.name}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">শ্রেণি ও শাখা</span>
+                      <span className="font-semibold text-slate-800">
+                        {classLabel(student.class_name)} {student.section ? `(শাখা: ${student.section})` : ""}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">বিভাগ</span>
+                      <span className="font-semibold text-slate-800">
+                        {student.division ? divisionLabel(student.division) : "প্রযোজ্য নয়"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">রোল নম্বর</span>
+                      <span className="font-bold text-[#0d6efd]">{bn(student.roll)}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">বিদ্যালয় / প্রতিষ্ঠানের নাম</span>
+                      <span className="font-semibold text-slate-800">
+                        {student.school_name || "বিজ্ঞান পণ্ডিত একাডেমি"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">লগইন ইউজারনেম</span>
+                      <span className="font-mono text-slate-700">@{student.username}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-xs">
+                  <h4 className="mb-3 text-[14px] font-bold text-[#18314d] border-b border-slate-100 pb-2">
+                    অভিভাবক ও যোগাযোগের তথ্য
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-[13px]">
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">পিতার নাম</span>
+                      <span className="font-semibold text-slate-800">{student.father_name || "উল্লেখ নেই"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">মাতার নাম</span>
+                      <span className="font-semibold text-slate-800">{student.mother_name || "উল্লেখ নেই"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">অভিভাবকের মোবাইল নম্বর</span>
+                      <span className="font-bold text-slate-800">{student.phone ? bn(student.phone) : "উল্লেখ নেই"}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-slate-500 text-[11px]">রক্তের গ্রুপ</span>
+                      <span className="font-semibold text-rose-600">{student.blood_group || "উল্লেখ নেই"}</span>
+                    </div>
+                    <div className="flex flex-col sm:col-span-2">
+                      <span className="text-slate-500 text-[11px]">বর্তমান ঠিকানা</span>
+                      <span className="font-medium text-slate-700">{student.address || "উল্লেখ নেই"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* TAB 2: Exam Results */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-slate-700">পরীক্ষার তালিকা ({bn(year)})</p>
+                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                    <SelectTrigger className="h-8 w-[110px] bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[year + 1, year, year - 1, year - 2].map((y) => (
+                        <SelectItem key={y} value={String(y)}>{bn(y)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/60">
+                        <TableHead className="text-[12px]">বিষয়</TableHead>
+                        <TableHead className="text-[12px]">পরীক্ষা</TableHead>
+                        <TableHead className="text-center text-[12px]">মাস</TableHead>
+                        <TableHead className="text-right text-[12px]">মোট</TableHead>
+                        <TableHead className="text-right text-[12px]">প্রাপ্ত</TableHead>
+                        <TableHead className="text-right text-[12px]">সর্বোচ্চ</TableHead>
+                        <TableHead className="text-center text-[12px]">গ্রেড</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows === null ? (
+                        <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">লোড হচ্ছে…</TableCell></TableRow>
+                      ) : rows.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">এই বছরে কোনো ফলাফল নেই।</TableCell></TableRow>
+                      ) : (
+                        rows.map((r, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="text-[13px] font-medium">{r.subjectName}</TableCell>
+                            <TableCell className="text-[13px]">{r.title}</TableCell>
+                            <TableCell className="text-center text-[13px]">{MONTHS_BN[r.month - 1]}</TableCell>
+                            <TableCell className="text-right text-[13px]">{fmtNum(r.total)}</TableCell>
+                            <TableCell className={cn("text-right text-[13px] font-semibold", r.attendance === "ABSENT" && "text-red-600")}>
+                              {r.attendance === "ABSENT" ? "অনুপস্থিত (০)" : fmtNum(r.obtained)}
+                            </TableCell>
+                            <TableCell className="text-right text-[13px]">{fmtNum(r.highest)}</TableCell>
+                            <TableCell className="text-center text-[13px]">
+                              <span className="inline-block rounded px-2 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700">
+                                {r.grade}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>

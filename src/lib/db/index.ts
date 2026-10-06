@@ -67,6 +67,24 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
   } catch (err) {
     console.warn("Schema execution notice:", err);
   }
+
+  // Ensure new student profile columns exist in existing databases
+  const newCols = [
+    "father_name TEXT",
+    "mother_name TEXT",
+    "school_name TEXT",
+    "phone TEXT",
+    "address TEXT",
+    "blood_group TEXT",
+    "dob TEXT",
+  ];
+  for (const col of newCols) {
+    try {
+      await db.exec(`ALTER TABLE students ADD COLUMN ${col};`);
+    } catch {
+      // Column already exists
+    }
+  }
   try {
     // 2) seed (idempotent); initial admin comes from environment variables
     const env = cf ?? localEnv();

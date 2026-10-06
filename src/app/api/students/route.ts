@@ -22,7 +22,9 @@ export async function GET(req: Request) {
       if (!user.studentId) throw new ApiError(403, MSG.noPermissionView);
       const own = await db
         .prepare(
-          `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key, c.name as class_name, u.username
+          `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
+                  st.father_name, st.mother_name, st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  c.name as class_name, u.username
            FROM students st JOIN classes c ON c.id = st.class_id JOIN users u ON u.id = st.user_id
            WHERE st.id = ?`
         )
@@ -55,14 +57,15 @@ export async function GET(req: Request) {
       params.push(division);
     }
     if (q) {
-      clauses.push("(st.name LIKE ? OR CAST(st.roll AS TEXT) = ? OR u.username LIKE ?)");
-      params.push(`%${q}%`, q, `%${q}%`);
+      clauses.push("(st.name LIKE ? OR CAST(st.roll AS TEXT) = ? OR u.username LIKE ? OR st.school_name LIKE ? OR st.phone LIKE ?)");
+      params.push(`%${q}%`, q, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     const rows = (
       await db
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
+                  st.father_name, st.mother_name, st.school_name, st.phone, st.address, st.blood_group, st.dob,
                   c.name as class_name, c.sort_order, u.username
            FROM students st
            JOIN classes c ON c.id = st.class_id
@@ -133,9 +136,26 @@ export async function POST(req: Request) {
 
     await db
       .prepare(
-        "INSERT INTO students (user_id, name, class_id, division, section, roll) VALUES (?, ?, ?, ?, ?, ?)"
+        `INSERT INTO students (
+          user_id, name, class_id, division, section, roll,
+          father_name, mother_name, school_name, phone, address, blood_group, dob
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .bind(userId, body.name, classRow.id, body.division ?? null, body.section ?? null, body.roll)
+      .bind(
+        userId,
+        body.name,
+        classRow.id,
+        body.division ?? null,
+        body.section ?? null,
+        body.roll,
+        body.fatherName ?? null,
+        body.motherName ?? null,
+        body.schoolName ?? null,
+        body.phone ?? null,
+        body.address ?? null,
+        body.bloodGroup ?? null,
+        body.dob ?? null
+      )
       .run();
 
     const created = await db.prepare("SELECT id, photo_key FROM students WHERE user_id = ?").bind(userId).first<{ id: number; photo_key: string | null }>();

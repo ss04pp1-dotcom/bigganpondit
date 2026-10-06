@@ -27,6 +27,13 @@ export const studentCreateSchema = z.object({
     .max(50)
     .regex(/^[a-zA-Z0-9._-]+$/, "ইউজারনেমে শুধু ইংরেজি অক্ষর, সংখ্যা, . _ - ব্যবহার করা যাবে।"),
   password: z.string().min(4, "পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।").max(100),
+  fatherName: z.string().trim().max(100).nullish(),
+  motherName: z.string().trim().max(100).nullish(),
+  schoolName: z.string().trim().max(150).nullish(),
+  phone: z.string().trim().max(30).nullish(),
+  address: z.string().trim().max(200).nullish(),
+  bloodGroup: z.string().trim().max(10).nullish(),
+  dob: z.string().trim().max(30).nullish(),
 });
 export const studentUpdateSchema = studentCreateSchema.partial();
 

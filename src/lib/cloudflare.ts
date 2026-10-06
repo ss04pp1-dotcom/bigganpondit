@@ -17,17 +17,19 @@ export async function getCloudflareEnv(): Promise<CloudflareEnv | null> {
   try {
     const mod: any = await import("@opennextjs/cloudflare");
     if (typeof mod?.getCloudflareContext === "function") {
-      // getCloudflareContext is async in recent @opennextjs/cloudflare versions
-      const maybe = mod.getCloudflareContext() as
-        | Promise<{ env: CloudflareEnv } | null>
-        | { env: CloudflareEnv } | null;
-      const ctx = maybe && typeof (maybe as Promise<unknown>).then === "function"
-        ? await (maybe as Promise<{ env: CloudflareEnv } | null>)
-        : (maybe as { env: CloudflareEnv } | null);
+      let ctx: any;
+      try {
+        ctx = await mod.getCloudflareContext({ async: true });
+      } catch {
+        ctx = mod.getCloudflareContext();
+      }
+      if (ctx && typeof ctx.then === "function") {
+        ctx = await ctx;
+      }
       if (ctx?.env) return ctx.env as CloudflareEnv;
     }
-  } catch {
-    // Not running on Cloudflare Workers (local dev) — fall back.
+  } catch (err) {
+    console.error("Failed to get Cloudflare context:", err);
   }
   return null;
 }

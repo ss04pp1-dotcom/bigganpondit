@@ -111,13 +111,13 @@ CREATE INDEX IF NOT EXISTS idx_students_class    ON students(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_roll     ON students(roll);
 CREATE INDEX IF NOT EXISTS idx_students_division ON students(division);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_students_class_div_roll
-  ON students(class_id, COALESCE(division, ''), roll);
+  ON students(class_id, (COALESCE(division, '')), roll);
 
 CREATE INDEX IF NOT EXISTS idx_exams_class     ON exams(class_id);
 CREATE INDEX IF NOT EXISTS idx_exams_subject   ON exams(subject_id);
 CREATE INDEX IF NOT EXISTS idx_exams_month_year ON exams(month, year);
 CREATE INDEX IF NOT EXISTS idx_exams_date      ON exams(exam_date);
-CREATE INDEX IF NOT EXISTS idx_exams_class_div ON exams(class_id, COALESCE(division, ''), month, year);
+CREATE INDEX IF NOT EXISTS idx_exams_class_div ON exams(class_id, (COALESCE(division, '')), month, year);
 
 CREATE INDEX IF NOT EXISTS idx_marks_exam    ON marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);

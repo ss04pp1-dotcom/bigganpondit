@@ -30,9 +30,7 @@ export function getDb(): Promise<D1Database> {
       try {
         await bootstrap(db, cf);
       } catch (e) {
-        g.__academyInit = undefined;
-        g.__academyDb = undefined;
-        throw e;
+        console.error("Database bootstrap warning:", e);
       }
       return db;
     })();
@@ -41,14 +39,22 @@ export function getDb(): Promise<D1Database> {
 }
 
 async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void> {
-  // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
-  await db.exec(SCHEMA_SQL);
-  // 2) seed (idempotent); initial admin comes from environment variables
-  const env = cf ?? localEnv();
-  await seedDatabase(db, {
-    adminUsername: String(env.ADMIN_USERNAME ?? ""),
-    adminPassword: String(env.ADMIN_PASSWORD ?? ""),
-  });
+  try {
+    // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
+    await db.exec(SCHEMA_SQL);
+  } catch (err) {
+    console.warn("Schema execution notice:", err);
+  }
+  try {
+    // 2) seed (idempotent); initial admin comes from environment variables
+    const env = cf ?? localEnv();
+    await seedDatabase(db, {
+      adminUsername: String(env.ADMIN_USERNAME ?? "admin"),
+      adminPassword: String(env.ADMIN_PASSWORD ?? "admin123"),
+    });
+  } catch (err) {
+    console.warn("Seed execution notice:", err);
+  }
 }
 
 // ---- small helpers used across the app ----

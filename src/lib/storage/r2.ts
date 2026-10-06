@@ -69,6 +69,20 @@ class LocalBucket implements StorageBucket {
   }
 }
 
+class MemoryBucket implements StorageBucket {
+  private store = new Map<string, Uint8Array>();
+  async put(key: string, data: Uint8Array): Promise<void> {
+    this.store.set(key, data);
+  }
+  async get(key: string): Promise<StoredObject | null> {
+    const data = this.store.get(key);
+    return data ? { key, data, size: data.length } : null;
+  }
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+}
+
 // ---------------- entry ----------------
 export async function getBucket(): Promise<StorageBucket> {
   if (g.__academyBucket) return g.__academyBucket;
@@ -90,7 +104,11 @@ export async function getBucket(): Promise<StorageBucket> {
       },
     };
   } else {
-    g.__academyBucket = new LocalBucket();
+    try {
+      g.__academyBucket = new LocalBucket();
+    } catch {
+      g.__academyBucket = new MemoryBucket();
+    }
   }
   return g.__academyBucket;
 }

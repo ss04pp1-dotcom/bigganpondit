@@ -15,7 +15,13 @@ export async function GET(req: Request) {
 
     if (!classIdStr) throw new ApiError(400, "শ্রেণি নির্বাচন করুন।");
 
-    const classId = Number(classIdStr);
+    let classId = Number(classIdStr);
+    const byId = await db.prepare("SELECT id FROM classes WHERE id = ?").bind(classId).first<{ id: number }>().catch(() => null);
+    if (!byId) {
+      const byName = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(classIdStr).first<{ id: number }>().catch(() => null);
+      if (byName) classId = byName.id;
+    }
+
     const month = Number(monthStr);
     const year = Number(yearStr);
 
@@ -92,6 +98,8 @@ export async function GET(req: Request) {
       year,
       daysInMonth,
       rows,
+      students: rows,
+      studentDays,
     });
   } catch (e) {
     return handleError(e);

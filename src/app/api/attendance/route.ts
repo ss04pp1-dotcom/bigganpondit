@@ -15,7 +15,12 @@ export async function GET(req: Request) {
     if (!classIdStr) {
       throw new ApiError(400, "শ্রেণি নির্বাচন করুন।");
     }
-    const classId = Number(classIdStr);
+    let classId = Number(classIdStr);
+    const byId = await db.prepare("SELECT id FROM classes WHERE id = ?").bind(classId).first<{ id: number }>().catch(() => null);
+    if (!byId) {
+      const byName = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(classIdStr).first<{ id: number }>().catch(() => null);
+      if (byName) classId = byName.id;
+    }
 
     // Get all students of this class
     const students = (
@@ -78,21 +83,32 @@ export async function POST(req: Request) {
     assertSameOrigin(req);
     const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const body = (await req.json().catch(() => ({}))) as {
-      classId?: number;
+      classId?: number | string;
       date?: string;
       entries?: Array<{
         studentId: number;
         status: "PRESENT" | "ABSENT" | "LATE";
         remarks?: string;
       }>;
+      records?: Array<{
+        studentId: number;
+        status: "PRESENT" | "ABSENT" | "LATE";
+        remarks?: string;
+      }>;
     };
 
-    if (!body.classId || !body.date || !Array.isArray(body.entries)) {
+    const entries = body.entries || body.records;
+    if (!body.classId || !body.date || !Array.isArray(entries)) {
       throw new ApiError(400, "শ্রেণি, তারিখ এবং হাজিরার তালিকা আবশ্যক।");
     }
 
     const date = body.date.trim();
-    const classId = Number(body.classId);
+    let classId = Number(body.classId);
+    const byId = await db.prepare("SELECT id FROM classes WHERE id = ?").bind(classId).first<{ id: number }>().catch(() => null);
+    if (!byId) {
+      const byName = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(String(body.classId)).first<{ id: number }>().catch(() => null);
+      if (byName) classId = byName.id;
+    }
 
     // Authorization check for teachers
     if (user.role === "TEACHER" && user.teacherId) {
@@ -104,7 +120,7 @@ export async function POST(req: Request) {
 
     // High performance batching: convert N+1 sequential queries into batched chunk executions
     const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
-    for (const entry of body.entries) {
+    for (const entry of entries) {
       const studentId = Number(entry.studentId);
       const status = entry.status || "PRESENT";
       const remarks = entry.remarks?.trim() || null;

@@ -67,25 +67,31 @@ export function AttendanceManager({
 
   // Load class list
   useEffect(() => {
-    fetch("/api/admin/teachers")
+    fetch("/api/classes")
       .then((res) => res.json())
       .then((json) => {
-        if (json.ok && Array.isArray(json.classes)) {
+        if (json.ok && Array.isArray(json.classes) && json.classes.length > 0) {
           setClasses(json.classes);
+          return;
         }
+        return fetch("/api/admin/teachers")
+          .then((r) => r.json())
+          .then((j) => {
+            if (j.ok && Array.isArray(j.classes)) setClasses(j.classes);
+          });
       })
       .catch(() => {});
   }, []);
 
   const activeClassObj = classes.find((c) => c.name === selectedClass);
-  const classId = activeClassObj?.id;
+  const targetClassParam = activeClassObj?.id ?? selectedClass;
 
   // Load Daily Attendance
   const loadDaily = useCallback(async () => {
-    if (!classId) return;
+    if (!targetClassParam) return;
     setLoadingDaily(true);
     try {
-      const res = await fetch(`/api/attendance?classId=${classId}&date=${date}`);
+      const res = await fetch(`/api/attendance?classId=${targetClassParam}&date=${date}`);
       const json = await res.json();
       if (json.ok && Array.isArray(json.students)) {
         setStudents(json.students);
@@ -100,7 +106,7 @@ export function AttendanceManager({
     } finally {
       setLoadingDaily(false);
     }
-  }, [classId, date]);
+  }, [targetClassParam, date]);
 
   useEffect(() => {
     if (activeTab === "daily") {
@@ -110,10 +116,10 @@ export function AttendanceManager({
 
   // Load Monthly Sheet
   const loadMonthlySheet = useCallback(async () => {
-    if (!classId) return;
+    if (!targetClassParam) return;
     setLoadingSheet(true);
     try {
-      const res = await fetch(`/api/attendance/sheet?classId=${classId}&month=${month}&year=${year}`);
+      const res = await fetch(`/api/attendance/sheet?classId=${targetClassParam}&month=${month}&year=${year}`);
       const json = await res.json();
       if (json.ok) {
         setSheetData(json);
@@ -123,7 +129,7 @@ export function AttendanceManager({
     } finally {
       setLoadingSheet(false);
     }
-  }, [classId, month, year]);
+  }, [targetClassParam, month, year]);
 
   useEffect(() => {
     if (activeTab === "monthly") {
@@ -140,10 +146,10 @@ export function AttendanceManager({
   }
 
   async function handleSaveDaily() {
-    if (!classId) return;
+    if (!targetClassParam) return;
     setSavingDaily(true);
     try {
-      const records = students.map((s) => ({
+      const entries = students.map((s) => ({
         studentId: s.id,
         status: dailyStatus[s.id] || "PRESENT",
       }));
@@ -152,9 +158,10 @@ export function AttendanceManager({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          classId,
+          classId: targetClassParam,
           date,
-          records,
+          entries,
+          records: entries,
         }),
       });
       const json = await res.json();
@@ -473,7 +480,7 @@ export function AttendanceManager({
               <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
               হাজিরা শিট লোড হচ্ছে...
             </div>
-          ) : !sheetData || sheetData.students?.length === 0 ? (
+          ) : !sheetData || ((sheetData.students?.length ?? 0) === 0 && (sheetData.rows?.length ?? 0) === 0) ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-16 text-center text-slate-500">
               এই মাসে কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি।
             </div>
@@ -507,16 +514,18 @@ export function AttendanceManager({
                     </tr>
                   </thead>
                   <tbody>
-                    {sheetData.students.map((st: any) => {
-                      const days = sheetData.studentDays?.[st.id] || {};
-                      let p = 0;
-                      let a = 0;
-                      for (let d = 1; d <= sheetData.daysInMonth; d++) {
-                        if (days[d] === "PRESENT") p++;
-                        else if (days[d] === "ABSENT") a++;
+                    {(sheetData.students || sheetData.rows || []).map((st: any) => {
+                      const days = st.days || sheetData.studentDays?.[st.id] || {};
+                      let p = typeof st.present === "number" ? st.present : 0;
+                      let a = typeof st.absent === "number" ? st.absent : 0;
+                      if (typeof st.present !== "number") {
+                        for (let d = 1; d <= sheetData.daysInMonth; d++) {
+                          if (days[d] === "PRESENT") p++;
+                          else if (days[d] === "ABSENT") a++;
+                        }
                       }
                       const totalRecorded = p + a;
-                      const pPct = totalRecorded > 0 ? Math.round((p / totalRecorded) * 100) : 0;
+                      const pPct = typeof st.rate === "number" ? st.rate : (totalRecorded > 0 ? Math.round((p / totalRecorded) * 100) : 0);
 
                       return (
                         <tr key={st.id} className="hover:bg-slate-50">

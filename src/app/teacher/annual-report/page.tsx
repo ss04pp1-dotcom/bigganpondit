@@ -208,6 +208,18 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
                       </tfoot>
                     </table>
                   </div>
+
+                  {/* Point 08: Page 1 Marksheet table signatures */}
+                  <PrintSignatures
+                    directorName={dirInfo.name}
+                    directorSignatureUrl={dirInfo.signatureUrl}
+                    directorInstitution={dirInfo.institution}
+                    teacherName={user.name}
+                    teacherSignatureUrl={user.signatureKey ? `/api/files/${user.signatureKey}` : null}
+                    teacherSubject={`${classLabel(className)} ${division ? divisionLabel(division) : ""}`}
+                    isSingleTeacher={true}
+                    showGuardian={true}
+                  />
                 </div>
 
                 {/* page 2: graph */}

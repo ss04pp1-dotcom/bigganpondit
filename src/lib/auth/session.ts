@@ -75,6 +75,7 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
     .first<UserRow & { sid: string; expires_at: string }>()
     .catch(() => null);
   if (!row) return null;
+  const user = row;
 
   // Sliding renewal: extend when less than 2 days remain.
   const expiresMs = new Date(row.expires_at.replace(" ", "T") + "Z").getTime();

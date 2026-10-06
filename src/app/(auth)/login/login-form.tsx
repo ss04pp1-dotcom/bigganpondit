@@ -41,8 +41,7 @@ export function LoginForm({
         return;
       }
       toast({ title: `স্বাগতম, ${json.name}!` });
-      router.replace(json.redirect);
-      router.refresh();
+      window.location.href = json.redirect;
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
     } finally { setBusy(false); }

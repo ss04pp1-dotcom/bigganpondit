@@ -42,13 +42,14 @@ export async function POST(req: Request) {
       role: user.role,
       redirect: roleHome(user.role),
     }) as NextResponse;
+    const isHttps = req.headers.get("x-forwarded-proto") === "https" || req.url.startsWith("https://");
     const opts = sessionCookieOptions();
     res.cookies.set({
       name: SESSION_COOKIE,
       value: token,
       httpOnly: opts.httpOnly,
       sameSite: opts.sameSite,
-      secure: opts.secure,
+      secure: isHttps,
       path: opts.path,
       maxAge: opts.maxAge,
     });

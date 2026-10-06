@@ -35,42 +35,71 @@ export default async function StudentDashboard() {
   const recent = rows.slice(-6).reverse();
 
   const quickLinks = [
-    { href: "/student/results", label: "ফলাফল দেখুন", icon: Search, tint: "bg-blue-50 text-blue-600" },
-    { href: "/student/monthly-result", label: "মাসিক ফলাফল", icon: FileText, tint: "bg-emerald-50 text-emerald-600" },
-    { href: "/student/annual-result", label: "বার্ষিক ফলাফল", icon: CalendarRange, tint: "bg-amber-50 text-amber-600" },
+    {
+      href: "/student/results",
+      label: "আমার ফলাফল দেখুন",
+      icon: Search,
+      bg: "bg-[#eaf3fe] border-[#cfe2ff] hover:bg-[#e0effe]",
+      iconBg: "bg-[#0d6efd] text-white",
+      textColor: "text-[#0a58ca]",
+    },
+    {
+      href: "/student/monthly-result",
+      label: "মাসিক রেজাল্ট",
+      icon: FileText,
+      bg: "bg-[#ebf9f1] border-[#d1e7dd] hover:bg-[#dff5e8]",
+      iconBg: "bg-[#10b981] text-white",
+      textColor: "text-[#0f5132]",
+    },
+    {
+      href: "/student/annual-result",
+      label: "বাৎসরিক রেজাল্ট",
+      icon: CalendarRange,
+      bg: "bg-[#fef6e9] border-[#ffe8cc] hover:bg-[#fdedd3]",
+      iconBg: "bg-[#f59e0b] text-white",
+      textColor: "text-[#854d0e]",
+    },
   ];
 
   return (
     <div className="space-y-5">
-      <Card className="overflow-hidden">
-        <CardContent className="flex items-center gap-4 bg-white px-4 py-4 sm:px-5">
-          <StudentAvatar photoKey={user.photoKey} name={user.name} size="xl" className="h-16 w-16 ring-2 ring-[#d8e8f8]" />
-          <div className="min-w-0">
-            <p className="text-[11px] text-slate-500">শিক্ষার্থী প্রোফাইল</p>
-            <h1 className="truncate text-[18px] font-bold text-[#18314d]">{user.name}</h1>
-            <p className="text-[12px] text-slate-500">
-              {classLabel(user.className ?? "")}
-              {user.division ? ` • ${divisionLabel(user.division)}` : ""}
-              {user.section ? ` • শাখা ${user.section}` : ""} • রোল {bn(user.roll ?? 0)}
-            </p>
+      {/* Student Welcome Card — Panel 7 */}
+      <div className="rounded-xl border border-[#dce6f2] bg-white p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <StudentAvatar photoKey={user.photoKey} name={user.name} size="xl" className="h-16 w-16 ring-2 ring-[#d8e8f8]" />
+            <div className="min-w-0">
+              <h1 className="truncate text-[20px] font-bold text-[#142942]">স্বাগতম, {user.name}</h1>
+              <p className="mt-1 text-[13px] font-semibold text-slate-600">
+                {classLabel(user.className ?? "")}
+                {user.division ? ` | ${divisionLabel(user.division)}` : ""}
+                {user.section ? ` | শাখা: ${user.section}` : ""} | রোল: {bn(user.roll ?? 0)}
+              </p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <form action="/api/auth/logout" method="post" className="sm:self-center">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfdbe8] bg-[#f8fafd] px-3.5 py-1.5 text-[12px] font-semibold text-[#0d6efd] hover:bg-[#edf4fc] transition-colors"
+            >
+              <span>লগআউট</span>
+            </button>
+          </form>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* 3 Colorful Action Cards — Panel 7 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {quickLinks.map((q) => {
           const Icon = q.icon;
           return (
-            <Link key={q.href} href={q.href}>
-              <Card className="print-avoid-break transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center gap-3 py-4">
-                  <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${q.tint}`}>
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="text-[15px] font-semibold">{q.label}</span>
-                  <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
-                </CardContent>
-              </Card>
+            <Link key={q.href} href={q.href} className="block group">
+              <div className={`flex flex-col items-center justify-center p-6 rounded-xl border ${q.bg} shadow-xs transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5 text-center`}>
+                <span className={`mb-3 flex h-14 w-14 items-center justify-center rounded-2xl ${q.iconBg} shadow-md`}>
+                  <Icon className="h-7 w-7" />
+                </span>
+                <span className={`text-[16px] font-bold ${q.textColor}`}>{q.label}</span>
+              </div>
             </Link>
           );
         })}

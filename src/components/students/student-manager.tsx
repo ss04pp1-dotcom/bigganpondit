@@ -278,14 +278,17 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                           {row.section ? ` • শাখা ${row.section}` : ""} • @{row.username}
                         </p>
                       </div>
-                      <div className="flex shrink-0 gap-1.5">
-                        <Button size="sm" variant="outline" className="h-8 gap-1.5 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800" onClick={() => setViewId(row.id)}>
-                          <Eye className="h-3.5 w-3.5" /> <span className="hidden sm:inline">বিস্তারিত</span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
+                          onClick={() => setViewId(row.id)}
+                        >
+                          ভিউ
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+                          className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
                           onClick={() => {
                             setPendingPhoto(null);
                             setForm({
@@ -301,12 +304,15 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                             });
                           }}
                         >
-                          <Pencil className="h-3.5 w-3.5" /> <span className="hidden sm:inline">সম্পাদনা</span>
+                          এডিট
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="outline" className="h-8 gap-1.5 border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800">
-                              <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">মুছে ফেলুন</span>
+                            <Button
+                              size="sm"
+                              className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#ef4444] text-white hover:bg-[#dc2626] shadow-xs"
+                            >
+                              ডিলিট
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -318,7 +324,9 @@ export function StudentManager({ canCreate = true }: { canCreate?: boolean }) {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>না</AlertDialogCancel>
-                              <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => remove(row)}>মুছে ফেলুন</AlertDialogAction>
+                              <AlertDialogAction onClick={() => remove(row.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                হ্যাঁ, মুছে ফেলুন
+                              </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>

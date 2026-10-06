@@ -159,6 +159,18 @@ export default async function StudentMonthlyPage({ searchParams }: { searchParam
               </table>
             </div>
 
+            {report && report.subjects.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#bce6ce] bg-[#f0fbf5] p-3.5 shadow-xs">
+                <div className="text-[14px] font-bold text-[#142942]">
+                  মোট GPA: <span className="text-[#0d6efd] text-[16px] font-extrabold">{fmtGpa(report.overall.gpa)}</span>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#d8f6e5] px-4 py-1.5 text-[12px] font-bold text-[#0e7441] border border-[#b4ecc9] shadow-xs">
+                  <span>🎉</span>
+                  <span>{report.overall.gpa >= 3.0 ? "অভিনন্দন! আপনি ভালো করেছেন!" : "ভালো হয়েছে, আরো চেষ্টা করুন!"}</span>
+                </div>
+              </div>
+            )}
+
             <div className="print-avoid-break mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-[11px] text-muted-foreground">শতকরা</p>

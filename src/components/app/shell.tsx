@@ -156,21 +156,23 @@ export function AppShell({
               <p className="hidden text-[12px] text-muted-foreground sm:block">{dateBn}</p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center gap-2 rounded-full bg-accent px-3 py-1.5 sm:flex">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-full border border-[#d8e3f0] bg-white px-3 py-1 shadow-xs">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0d6efd] text-[11px] font-bold text-white shadow-xs">
                   {user.shortName ?? user.name.slice(0, 2)}
                 </span>
-                <span className="text-[13px] font-medium text-accent-foreground">{user.name}</span>
+                <span className="text-[13px] font-semibold text-[#18314d]">
+                  {user.name} {user.shortName ? `(${user.shortName})` : ""}
+                </span>
               </div>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-9 gap-2 border-input text-[13px]"
+                className="h-8 gap-1.5 text-[12px] font-semibold text-[#0d6efd] hover:bg-[#eef5fc] hover:text-[#0b5ed7]"
                 onClick={logout}
               >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">লগআউট</span>
+                <LogOut className="h-3.5 w-3.5" />
+                <span>লগআউট</span>
               </Button>
             </div>
           </div>

@@ -188,13 +188,33 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
                 </table>
               </div>
             </div>
-            <div className="rounded-md border border-[#dfe7f1] bg-white p-3">
-              <div className="mb-2 text-[13px] font-semibold text-[#18314d]">দ্রুত কার্যক্রম</div>
-              <div className="space-y-2">
-                <Link href="/teacher/students" className="reference-action"><UserPlus /> নতুন শিক্ষার্থী যুক্ত করুন</Link>
-                <Link href="/teacher/marks" className="reference-action"><ClipboardEdit /> নতুন নম্বর প্রদান</Link>
-                <Link href="/teacher/monthly-report" className="reference-action green"><FileText /> মাসিক/বার্ষিক রিপোর্ট</Link>
-                <Link href="/teacher/results" className="reference-action green"><Search /> ফলাফল অনুসন্ধান</Link>
+            <div className="rounded-xl border border-[#dfe7f1] bg-white p-4 shadow-xs">
+              <div className="mb-3 text-[14px] font-bold text-[#18314d]">দ্রুত কার্যক্রম</div>
+              <div className="space-y-2.5">
+                <Link href="/teacher/students" className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] p-2.5 hover:border-blue-400 hover:bg-blue-50/50 transition-all font-semibold text-[13px] text-slate-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0d6efd] text-white shadow-xs">
+                    <UserPlus className="h-4 w-4" />
+                  </span>
+                  <span>নতুন শিক্ষার্থী যুক্ত করুন</span>
+                </Link>
+                <Link href="/teacher/marks" className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] p-2.5 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all font-semibold text-[13px] text-slate-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#4f46e5] text-white shadow-xs">
+                    <ClipboardEdit className="h-4 w-4" />
+                  </span>
+                  <span>নম্বর ইনপুট করুন</span>
+                </Link>
+                <Link href="/teacher/monthly-report" className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] p-2.5 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all font-semibold text-[13px] text-slate-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10b981] text-white shadow-xs">
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <span>মাসিক/বার্ষিক রিপোর্ট</span>
+                </Link>
+                <Link href="/teacher/results" className="flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] p-2.5 hover:border-teal-400 hover:bg-teal-50/50 transition-all font-semibold text-[13px] text-slate-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#059669] text-white shadow-xs">
+                    <Search className="h-4 w-4" />
+                  </span>
+                  <span>ফলাফল অনুসন্ধান</span>
+                </Link>
               </div>
             </div>
           </div>

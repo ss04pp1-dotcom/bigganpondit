@@ -1,0 +1,109 @@
+// POST /api/uploads — image uploads to Cloudflare R2.
+// Allowed: JPG / JPEG / PNG (validated by magic bytes, not by filename),
+// max 5 MB. Only the R2 object key is stored in D1.
+
+import { getDb } from "@/lib/db";
+import { requireApiUser } from "@/lib/auth/guards";
+import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+import { ALLOWED_IMAGE_EXT, MAX_UPLOAD_BYTES, MSG, SETTING_ACADEMY_LOGO } from "@/lib/constants";
+import { setSetting } from "@/lib/db";
+import { getBucket } from "@/lib/storage/r2";
+import { teacherClassAllowed } from "@/lib/permissions";
+
+function detectImageType(bytes: Uint8Array): "jpg" | "png" | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e &&
+    bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a &&
+    bytes[6] === 0x1a && bytes[7] === 0x0a
+  ) return "png";
+  return null;
+}
+
+function extOf(key: string): string {
+  const m = key.toLowerCase().match(/\.(jpg|jpeg|png)$/);
+  return m ? m[1] : "";
+}
+
+export async function POST(req: Request) {
+  try {
+    assertSameOrigin(req);
+    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
+    const form = await req.formData();
+    const file = form.get("file");
+    const type = String(form.get("type") ?? "");
+
+    if (!(file instanceof File)) throw new ApiError(400, "ফাইল পাওয়া যায়নি।");
+    if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const detected = detectImageType(bytes);
+    if (!detected) throw new ApiError(400, MSG.invalidFileType + " (শুধু JPG/JPEG/PNG)");
+    if (!ALLOWED_IMAGE_EXT.includes(detected)) throw new ApiError(400, MSG.invalidFileType);
+
+    const bucket = await getBucket();
+    const uuid = crypto.randomUUID();
+
+    if (type === "logo") {
+      // Academy logo (spec 10: teacher can upload; admin manages it too)
+      const current = await db
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .bind(SETTING_ACADEMY_LOGO)
+        .first<{ value: string | null }>(undefined as never)
+        .catch(() => null);
+      const key = `academy/logos/main-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await setSetting(SETTING_ACADEMY_LOGO, key);
+      if (current?.value) await bucket.delete(current.value).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "signature") {
+      let teacherId = user.teacherId ?? null;
+      const target = String(form.get("teacherId") ?? "");
+      if (target && Number(target)) {
+        if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
+        teacherId = Number(target);
+      }
+      if (!teacherId) throw new ApiError(400, "শিক্ষক নির্বাচন করুন।");
+      const teacher = await db
+        .prepare("SELECT id, signature_key FROM teachers WHERE id = ?")
+        .bind(teacherId)
+        .first<{ id: number; signature_key: string | null }>(undefined as never)
+        .catch(() => null);
+      if (!teacher) throw new ApiError(404, MSG.notFound);
+      const key = `academy/signatures/teacher-${teacherId}-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await db.prepare("UPDATE teachers SET signature_key = ?, updated_at = datetime('now') WHERE id = ?").bind(key, teacherId).run();
+      if (teacher.signature_key) await bucket.delete(teacher.signature_key).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "student-photo") {
+      const studentId = Number(form.get("studentId") ?? 0);
+      if (!studentId) throw new ApiError(400, "শিক্ষার্থী নির্বাচন করুন।");
+      const student = await db
+        .prepare("SELECT id, photo_key, class_id FROM students WHERE id = ?")
+        .bind(studentId)
+        .first<{ id: number; photo_key: string | null; class_id: number }>(undefined as never)
+        .catch(() => null);
+      if (!student) throw new ApiError(404, MSG.notFound);
+      if (user.role === "TEACHER" && user.teacherId) {
+        const allowed = await teacherClassAllowed(db, user.teacherId, student.class_id);
+        if (!allowed) throw new ApiError(403, MSG.noPermissionView);
+      }
+      const key = `academy/students/${studentId}/${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await db.prepare("UPDATE students SET photo_key = ?, updated_at = datetime('now') WHERE id = ?").bind(key, studentId).run();
+      if (student.photo_key) await bucket.delete(student.photo_key).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    throw new ApiError(400, "অজানা আপলোড ধরন।");
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+void extOf;

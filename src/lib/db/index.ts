@@ -1,0 +1,73 @@
+// Database entry point.
+// Production: Cloudflare D1 binding (DB) via @opennextjs/cloudflare context.
+// Local dev: SQLite behind the same D1 API (see ./local.ts).
+// On first access the schema is applied and the secure seed runs
+// (idempotent), so both environments converge to the same state.
+
+import { getCloudflareEnv, localEnv, type CloudflareEnv } from "@/lib/cloudflare";
+import { getLocalD1 } from "./local";
+import { SCHEMA_SQL } from "./schema";
+import { seedDatabase } from "./seed";
+import type { D1Database } from "./types";
+
+const g = globalThis as unknown as {
+  __academyDb?: D1Database;
+  __academyInit?: Promise<D1Database>;
+};
+
+/**
+ * Single-flight database access. The init promise is assigned synchronously,
+ * so concurrent requests always share ONE bootstrap run (no races).
+ */
+export function getDb(): Promise<D1Database> {
+  if (!g.__academyInit) {
+    g.__academyInit = (async () => {
+      const cf = await getCloudflareEnv();
+      const db: D1Database = cf?.DB
+        ? (cf.DB as unknown as D1Database)
+        : await getLocalD1();
+      g.__academyDb = db;
+      try {
+        await bootstrap(db, cf);
+      } catch (e) {
+        g.__academyInit = undefined;
+        g.__academyDb = undefined;
+        throw e;
+      }
+      return db;
+    })();
+  }
+  return g.__academyInit;
+}
+
+async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void> {
+  // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
+  await db.exec(SCHEMA_SQL);
+  // 2) seed (idempotent); initial admin comes from environment variables
+  const env = cf ?? localEnv();
+  await seedDatabase(db, {
+    adminUsername: String(env.ADMIN_USERNAME ?? ""),
+    adminPassword: String(env.ADMIN_PASSWORD ?? ""),
+  });
+}
+
+// ---- small helpers used across the app ----
+export async function getSetting(key: string, fallback = ""): Promise<string> {
+  const db = await getDb();
+  const row = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(key)
+    .first<{ value: string | null }>()
+    .catch(() => null);
+  return row?.value ?? fallback;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')"
+    )
+    .bind(key, value)
+    .run();
+}

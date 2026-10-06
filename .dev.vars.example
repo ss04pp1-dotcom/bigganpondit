@@ -1,0 +1,15 @@
+# লোকাল ডেভেলপমেন্ট env — এই ফাইলটি কপি করে .dev.vars বানান:  cp .dev.vars.example .dev.vars
+# ⚠️ .dev.vars ফাইলটি কখনো git-এ commit করবেন না (ইতিমধ্যে .gitignore-এ আছে)।
+
+# প্রাথমিক প্রশাসক অ্যাকাউন্ট (প্রথম বুটে তৈরি হয়)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=Admin@123
+
+# সেশন সাইনিং সিক্রেট — প্রোডাকশনে দীর্ঘ র‍্যান্ডম স্ট্রিং দিন
+AUTH_SECRET=change-me-to-a-long-random-string
+
+# অ্যাপ URL
+APP_URL=http://localhost:3000
+
+# 1 = লগইন পেজে ডেমো অ্যাকাউন্টের হিন্ট দেখায় (শুধু ডেভেলপমেন্টে), প্রোডাকশনে 0
+DEMO_HINT=1

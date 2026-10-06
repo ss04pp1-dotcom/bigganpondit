@@ -1,0 +1,76 @@
+# ডিপ্লয়মেন্ট গাইড — Cloudflare Workers + D1 + R2
+
+এই অ্যাপ্লিকেশনটি Cloudflare-এ চালানোর জন্য ডিজাইন করা হয়েছে:
+**Next.js (OpenNext) → Cloudflare Workers → D1 (SQLite) + R2 (ফাইল)**।
+কোনো VPS, MySQL, MongoDB বা আলাদা Node সার্ভারের প্রয়োজন নেই।
+
+## ১. প্রয়োজনীয় জিনিস
+
+- Cloudflare অ্যাকাউন্ট
+- Node.js 22+ / Bun
+- `bun install` (প্যাকেজ ইনস্টল)
+
+## ২. D1 ডাটাবেস তৈরি
+
+```bash
+bunx wrangler d1 create academy-marks
+```
+
+আউটপুটে পাওয়া `database_id` টি `wrangler.toml`-এ `[[d1_databases]]` অংশে বসান।
+
+## ৩. R2 বাকেট তৈরি
+
+```bash
+bunx wrangler r2 bucket create academy-assets
+```
+
+## ৪. সিক্রেট সেট করুন (একবারই)
+
+```bash
+bunx wrangler secret put AUTH_SECRET      # দীর্ঘ র‍্যান্ডম স্ট্রিং
+bunx wrangler secret put ADMIN_USERNAME   # প্রাথমিক প্রশাসক ইউজারনেম
+bunx wrangler secret put ADMIN_PASSWORD   # প্রাথমিক প্রশাসক পাসওয়ার্ড (সংগ্রহস্থলে কখনো লিখবেন না)
+```
+
+> প্রাথমিক প্রশাসক অ্যাকাউন্ট প্রথম বুটে এই env থেকে তৈরি হয় (সিকিউর সিড)।
+> `DEMO_HINT` ভেরিয়েবলটি প্রোডাকশনে `0` রাখুন যাতে লগইন পেজে ডেমো তথ্য না দেখায়।
+
+## ৫. মাইগ্রেশন ও ডিপ্লয়
+
+```bash
+# D1 মাইগ্রেশন (db/migrations/0001_init.sql)
+bunx wrangler d1 migrations apply academy-marks --remote
+
+# বিল্ড + ডিপ্লয় (OpenNext)
+bunx @opennextjs/cloudflare build
+bunx wrangler deploy
+```
+
+## ৬. লোকাল ডেভেলপমেন্ট
+
+```bash
+bun run dev          # http://localhost:3000
+```
+
+লোকাল মোডে D1-সামঞ্জস্যপূর্ণ SQLite অ্যাডাপ্টার (`db/academy.db`) ও R2-সামঞ্জস্যপূর্ণ
+ফাইলসিস্টেম অ্যাডাপ্টার (`.storage/r2/`) ব্যবহৃত হয় — প্রোডাকশনে একই কোড আসল
+D1/R2 বাইন্ডিং-এ চলে। `.env` ও `.dev.vars` লোকাল কনফিগের জন্য।
+
+## ৭. ডেমো/প্রাথমিক অ্যাকাউন্ট (লোকাল প্রিভিউ)
+
+- প্রশাসক: `admin / Admin@123` (`.env` থেকে)
+- শিক্ষক: `rakibul / 0092`, `mehedi / 2732`
+- শিক্ষার্থী: `student01` … `student24` / `1234`
+
+## ৮. আর্কিটেকচার
+
+```
+Internet → Cloudflare Network → Next.js + Workers (OpenNext)
+                ├─ Auth (PBKDF2 + D1 sessions, HttpOnly cookie)
+                ├─ D1 (users/teachers/students/classes/subjects/teacher_subjects/exams/marks/settings/sessions)
+                ├─ R2 (academy/logos | signatures | students | backups — অথেনটিকেটেড /api/files/* দিয়ে সরবরাহ)
+                └─ Result Engine (single module: percentage/grade/GPA/highest/aggregation/ranking)
+```
+
+সব অনুমতি যাচাই সার্ভার-সাইডে (D1 `teacher_subjects` + ownership চেক)।
+শিক্ষার্থী অন্যের তথ্য URL/আইডি বদলে কখনো দেখতে পারে না (IDOR সুরক্ষিত)।

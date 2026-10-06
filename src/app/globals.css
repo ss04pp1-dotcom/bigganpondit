@@ -1,0 +1,424 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Kalpurush", "Tiro Bangla", "Hind Siliguri", sans-serif;
+  --font-mono: "Kalpurush", "Tiro Bangla", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================================
+   Reference palette (from the provided UI image):
+   dark navy sidebar, blue primary, light gray content, white cards
+   ============================================================ */
+:root {
+  --radius: 0.625rem;
+  --background: #f3f4f6;
+  --foreground: #1f2937;
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+  --primary: #0d6efd;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f7;
+  --secondary-foreground: #1f2937;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #eaf2fe;
+  --accent-foreground: #0a58ca;
+  --destructive: #ef4444;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #0d6efd;
+  --chart-1: #0d6efd;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #8b5cf6;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #0d6efd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #0d6efd;
+  --success: #10b981;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #ffffff;
+  --info: #dbeafe;
+  --info-foreground: #1d4ed8;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #273449;
+  --secondary-foreground: #f8fafc;
+  --muted: #273449;
+  --muted-foreground: #94a3b8;
+  --accent: #273449;
+  --accent-foreground: #f8fafc;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.18);
+  --ring: #3b82f6;
+}
+
+/* ============================================================
+   Bangla fonts — Kalpurush (primary) + Tiro Bangla (fallback)
+   ============================================================ */
+@font-face {
+  font-family: "Kalpurush";
+  src: url("/fonts/kalpurush.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tiro Bangla";
+  src: url("/fonts/TiroBangla-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    font-family: "Kalpurush", "Tiro Bangla", "Hind Siliguri", sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Kalpurush", "Tiro Bangla", "Hind Siliguri", sans-serif;
+    letter-spacing: 0.01em;
+  }
+  h1, h2, h3, h4 {
+    font-weight: 600;
+  }
+}
+
+/* ============================================================
+   Custom scrollbar (subtle, matches reference)
+   ============================================================ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   App shell helpers
+   ============================================================ */
+.app-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+/* ============================================================
+   A4 print layout — নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার
+   210mm × 297mm, hides navigation/sidebar/buttons/filters.
+   ============================================================ */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    /* Kill phantom trailing blank pages caused by sub-pixel overflow */
+    height: auto !important;
+    overflow: hidden !important;
+  }
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* Flatten the app shell so the report flows on paper */
+  .app-shell,
+  .app-shell > *,
+  .app-main,
+  .app-main > * {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    inset: auto !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+  .app-sidebar,
+  .app-topbar {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  /* Each logical report page starts on a fresh sheet */
+  .print-page {
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .print-avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  tr,
+  td,
+  th {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
+/* On-screen preview of an A4 sheet */
+.a4-sheet {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 10mm;
+  max-width: 210mm;
+  margin: 0 auto;
+}
+
+
+/* ============================================================
+   V3 REFERENCE UI — science coaching dashboard visual system
+   Based directly on the supplied 10-panel reference image.
+   ============================================================ */
+:root {
+  --reference-navy: #082a52;
+  --reference-navy-2: #0b3568;
+  --reference-blue: #087cf5;
+  --reference-bg: #f5f8fc;
+  --reference-border: #dfe7f1;
+  --reference-text: #18283b;
+}
+
+body { background: var(--reference-bg); color: var(--reference-text); }
+
+/* Compact white cards like the reference */
+[data-slot="card"] {
+  border-color: var(--reference-border) !important;
+  border-radius: 7px !important;
+  box-shadow: 0 1px 5px rgba(18, 52, 86, .055) !important;
+  gap: 0 !important;
+}
+[data-slot="card-header"] { padding: 13px 16px !important; }
+[data-slot="card-content"] { padding-left: 16px !important; padding-right: 16px !important; }
+[data-slot="card-footer"] { padding-left: 16px !important; padding-right: 16px !important; }
+[data-slot="card-title"] { color: #19304b; font-size: 15px; }
+
+[data-slot="button"] { border-radius: 5px !important; font-size: 13px !important; }
+[data-slot="input"], [data-slot="select-trigger"] { border-radius: 5px !important; }
+[data-slot="input"] { height: 35px !important; background: #fff; font-size: 13px !important; }
+
+/* tables */
+table { border-collapse: separate; border-spacing: 0; }
+thead tr { background: #f2f6fb !important; }
+th { color: #42546b !important; font-weight: 600 !important; }
+tbody tr:hover { background: #f7fbff !important; }
+
+/* app shell */
+.app-sidebar {
+  width: 176px !important;
+  background: linear-gradient(180deg, #082a52 0%, #06264b 100%) !important;
+  box-shadow: 2px 0 10px rgba(8, 42, 82, .08);
+}
+.app-sidebar .border-b { border-color: rgba(255,255,255,.10) !important; }
+.app-sidebar a {
+  border-radius: 5px !important;
+  font-size: 12px !important;
+  min-height: 34px;
+}
+.app-sidebar a.bg-primary {
+  background: #087cf5 !important;
+  box-shadow: 0 3px 8px rgba(8,124,245,.28) !important;
+}
+.app-sidebar .app-scroll { padding-left: 9px !important; padding-right: 9px !important; }
+.app-sidebar .px-4 { padding-left: 11px !important; padding-right: 11px !important; }
+.app-sidebar .py-5 { padding-top: 12px !important; padding-bottom: 12px !important; }
+.app-sidebar .h-11.w-11 { width: 34px !important; height: 34px !important; border-radius: 7px !important; }
+.app-sidebar .h-11.w-11 svg { width: 19px !important; height: 19px !important; }
+.app-sidebar .text-\[15px\] { font-size: 12px !important; }
+.app-sidebar .text-\[11px\] { font-size: 9px !important; }
+
+.app-topbar {
+  height: 48px !important;
+  background: rgba(255,255,255,.96) !important;
+  border-color: #e5ebf2 !important;
+}
+.app-topbar > div { height: 48px !important; padding-left: 16px !important; padding-right: 16px !important; }
+.app-topbar p.text-\[15px\] { font-size: 14px !important; }
+.app-topbar .rounded-full { border-radius: 4px !important; background: #f3f7fb !important; }
+
+.app-main {
+  max-width: 1180px !important;
+  padding-top: 17px !important;
+  padding-bottom: 24px !important;
+}
+
+/* compact page headings */
+.app-main h1 { color: #17314f; }
+.app-main > div > h1.text-xl { font-size: 18px !important; }
+
+/* reference stat cards */
+.reference-stat {
+  min-height: 65px;
+  background: #fff;
+  border: 1px solid var(--reference-border);
+  border-radius: 7px;
+  box-shadow: 0 1px 4px rgba(20,50,80,.045);
+}
+.reference-stat-icon { width: 34px; height: 34px; border-radius: 6px; }
+
+/* Reference quick action buttons */
+.reference-action {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: 1px solid #e0e7ef; border-radius: 5px;
+  background: #fff; color: #263b53; font-size: 12px; font-weight: 600;
+  transition: .15s ease;
+}
+.reference-action:hover { background: #f3f8ff; border-color: #b9d8fb; color: #086ee0; }
+.reference-action svg { width: 17px; height: 17px; padding: 2px; border-radius: 4px; color: #fff; background: #087cf5; }
+.reference-action.green svg { background: #16a66a; }
+.reference-action.orange svg { background: #f0a91b; }
+
+/* Reference merit rows */
+.reference-merit-row td { padding-top: 7px !important; padding-bottom: 7px !important; }
+.reference-avatar { width: 27px; height: 27px; border-radius: 50%; object-fit: cover; }
+
+/* Login reference */
+.reference-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: #edf2f8;
+}
+.reference-login-brand {
+  position: relative; overflow: hidden; width: 52%; min-height: 100vh;
+  background: #082a52 url('/login-reference-bg.jpg') center/cover no-repeat;
+}
+.reference-login-brand::after {
+  content: ""; position:absolute; inset:0;
+  background: linear-gradient(90deg, rgba(3,28,57,.12), rgba(3,28,57,.30));
+}
+.reference-login-brand-inner { position: relative; z-index: 1; height:100%; display:flex; align-items:center; justify-content:center; padding: 36px; }
+.reference-login-card {
+  width: min(390px, 92%); border: 1px solid #dbe4ee; border-radius: 7px;
+  background: rgba(255,255,255,.98); box-shadow: 0 16px 45px rgba(8,35,68,.22);
+  padding: 25px;
+}
+.reference-login-card input { background:#fff !important; }
+.reference-login-brand-title { display:none; }
+.reference-login-form-side { flex:1; display:flex; align-items:center; justify-content:center; background:#f7f9fc; padding:30px; }
+.reference-login-form-side .reference-login-card { max-width:390px; }
+
+@media (max-width: 900px) {
+  .app-sidebar { width: 164px !important; }
+  .lg\:pl-60 { padding-left: 164px !important; }
+  .reference-login-brand { width: 45%; }
+}
+@media (max-width: 767px) {
+  .app-main { padding-left: 10px !important; padding-right: 10px !important; }
+  .reference-login { display:block; background:#f5f8fc; }
+  .reference-login-brand { width:100%; min-height:205px; }
+  .reference-login-brand-inner { display:none; }
+  .reference-login-form-side { min-height:calc(100vh - 205px); padding:18px 12px; align-items:flex-start; }
+  .reference-login-card { margin-top:-22px; position:relative; z-index:3; }
+}
+
+@media print {
+  .app-sidebar, .app-topbar { display:none !important; }
+}

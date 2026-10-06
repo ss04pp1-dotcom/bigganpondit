@@ -1,0 +1,35 @@
+# Cloudflare Workers configuration — নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার
+# Deploy: bunx @opennextjs/cloudflare build && bunx wrangler deploy
+# (see DEPLOY.md for the full production guide)
+
+name = "academy-marks-system"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# OpenNext (Next.js on Cloudflare Workers) output
+main = ".open-next/worker.js"
+
+[assets]
+directory = ".open-next/assets"
+
+# ---- Cloudflare D1 (SQLite database) ----
+[[d1_databases]]
+binding = "DB"
+database_name = "academy-marks"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "db/migrations"
+
+# ---- Cloudflare R2 (file storage: photos / logo / signatures / backups) ----
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "academy-assets"
+
+[vars]
+APP_URL = "https://your-domain.com"
+# Set the real secret in production:
+#   bunx wrangler secret put AUTH_SECRET
+#   bunx wrangler secret put ADMIN_USERNAME
+#   bunx wrangler secret put ADMIN_PASSWORD
+
+[env.preview]
+name = "academy-marks-preview"

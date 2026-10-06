@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+build/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# env & secrets — কখনো commit করবেন না
+.env
+.env.*
+.dev.vars
+
+# local database (প্রথম বুটে স্বয়ংক্রিয়ভাবে তৈরি ও সিড হয়)
+db/*.db
+db/*.db-wal
+db/*.db-shm
+
+# local R2-compatible file storage (dev)
+.storage/
+
+# logs & misc
+*.log
+.DS_Store
+.vercel
+coverage/

@@ -65,6 +65,44 @@ export async function POST(req: Request) {
       throw new ApiError(400, "বই বা নোটের শিরোনাম এবং আপলোডকৃত পিডিএফ ফাইল আবশ্যক।");
     }
 
+    // Safely resolve class_id (handles class number text like '10', '9' or internal class id)
+    let resolvedClassId: number | null = null;
+    const rawClass = body.classId;
+    if (rawClass !== undefined && rawClass !== null && String(rawClass).trim() !== "" && String(rawClass) !== "ALL" && String(rawClass) !== "none") {
+      // 1) First check if a class exists with id = rawClass
+      const byId = await db
+        .prepare("SELECT id FROM classes WHERE id = ?")
+        .bind(Number(rawClass))
+        .first<{ id: number }>()
+        .catch(() => null);
+      if (byId) {
+        resolvedClassId = byId.id;
+      } else {
+        // 2) Try match by class name ('6'..'10')
+        const byName = await db
+          .prepare("SELECT id FROM classes WHERE name = ?")
+          .bind(String(rawClass).trim())
+          .first<{ id: number }>()
+          .catch(() => null);
+        if (byName) {
+          resolvedClassId = byName.id;
+        }
+      }
+    }
+
+    // Safely resolve subject_id (ensure foreign key exists)
+    let resolvedSubjectId: number | null = null;
+    if (body.subjectId && Number(body.subjectId) > 0) {
+      const subRow = await db
+        .prepare("SELECT id FROM subjects WHERE id = ?")
+        .bind(Number(body.subjectId))
+        .first<{ id: number }>()
+        .catch(() => null);
+      if (subRow) {
+        resolvedSubjectId = subRow.id;
+      }
+    }
+
     const res = await db
       .prepare(
         `INSERT INTO notebooks (
@@ -73,19 +111,19 @@ export async function POST(req: Request) {
       )
       .bind(
         body.title.trim(),
-        body.classId ? Number(body.classId) : null,
-        body.subjectId ? Number(body.subjectId) : null,
+        resolvedClassId,
+        resolvedSubjectId,
         body.fileKey.trim(),
         body.fileName?.trim() || "document.pdf",
         body.fileSize ? Number(body.fileSize) : null,
         user.id,
-        user.name,
+        user.name || user.username || "ব্যবহারকারী",
         body.description?.trim() || null
       )
       .run();
 
     return ok({
-      id: res.meta.last_row_id,
+      id: res?.meta?.last_row_id ?? 0,
       message: "নোট বুক সফলভাবে যুক্ত করা হয়েছে।",
     });
   } catch (e) {

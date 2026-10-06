@@ -46,8 +46,21 @@ export async function POST(req: Request) {
       const maxPdfBytes = 25 * 1024 * 1024; // 25 MB
       if (file.size > maxPdfBytes) throw new ApiError(400, "পিডিএফ ফাইলটি অনেক বড় (সর্বোচ্চ ২৫ MB)।");
       const bytes = new Uint8Array(await file.arrayBuffer());
-      // Validate PDF signature: %PDF (0x25, 0x50, 0x44, 0x46)
-      if (bytes.length < 4 || bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) {
+      // Validate PDF signature: %PDF (0x25, 0x50, 0x44, 0x46) anywhere in first 1024 bytes
+      const headerWindow = bytes.subarray(0, Math.min(bytes.length, 1024));
+      let hasPdfHeader = false;
+      for (let i = 0; i <= headerWindow.length - 4; i++) {
+        if (
+          headerWindow[i] === 0x25 &&
+          headerWindow[i + 1] === 0x50 &&
+          headerWindow[i + 2] === 0x44 &&
+          headerWindow[i + 3] === 0x46
+        ) {
+          hasPdfHeader = true;
+          break;
+        }
+      }
+      if (!hasPdfHeader) {
         throw new ApiError(400, "অননুমোদিত ফাইল ধরন — শুধুমাত্র বৈধ PDF ফাইল আপলোড করা যাবে।");
       }
       const bucket = await getBucket();

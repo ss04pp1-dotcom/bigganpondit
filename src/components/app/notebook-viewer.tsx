@@ -181,8 +181,8 @@ export function NotebookViewer({
       setUploadDesc("");
       setUploadFile(null);
       loadNotebooks();
-    } catch {
-      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
     } finally {
       setUploading(false);
     }

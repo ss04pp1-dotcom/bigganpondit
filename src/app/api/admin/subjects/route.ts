@@ -8,7 +8,7 @@ import { parseJson, subjectCreateSchema } from "@/lib/validation";
 
 export async function GET(req: Request) {
   try {
-    await requireApiUser(["ADMIN", "TEACHER"]);
+    await requireApiUser(["ADMIN", "TEACHER", "DIRECTOR"]);
     const db = await getDb();
     const subjects = (
       await db

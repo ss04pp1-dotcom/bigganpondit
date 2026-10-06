@@ -387,7 +387,7 @@ export function DirectorManager() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-700">পরিচালকের ছবি</Label>
                 <ImageUpload
-                  type="student"
+                  type="director-photo"
                   label="ছবি (JPG, PNG)"
                   currentUrl={photoKey ? `/api/files/${photoKey}` : null}
                   onUploaded={(key) => setPhotoKey(key)}
@@ -397,7 +397,7 @@ export function DirectorManager() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-700">পরিচালকের স্বাক্ষর (PNG/JPG)</Label>
                 <ImageUpload
-                  type="signature"
+                  type="director-signature"
                   label="স্বাক্ষর ফাইল"
                   currentUrl={signatureKey ? `/api/files/${signatureKey}` : null}
                   onUploaded={(key) => setSignatureKey(key)}

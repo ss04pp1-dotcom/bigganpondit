@@ -5,6 +5,7 @@
 
 import path from "node:path";
 import fs from "node:fs";
+import { Buffer } from "node:buffer";
 import { getCloudflareEnv } from "@/lib/cloudflare";
 import { getDb } from "@/lib/db";
 

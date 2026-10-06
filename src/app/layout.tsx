@@ -10,7 +10,11 @@ export const metadata: Metadata = {
   },
   description:
     "বিজ্ঞান পণ্ডিত একাডেমি — নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার। পরীক্ষার নম্বর সংগ্রহ, ফলাফল গণনা, মেধা তালিকা ও মাসিক/বার্ষিক রিপোর্ট।",
-  icons: { icon: "/logo.svg" },
+  icons: {
+    icon: "/api/logo",
+    shortcut: "/api/logo",
+    apple: "/api/logo",
+  },
 };
 
 export const viewport: Viewport = {

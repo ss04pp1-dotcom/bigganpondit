@@ -34,8 +34,25 @@ export const studentCreateSchema = z.object({
   address: z.string().trim().max(200).nullish(),
   bloodGroup: z.string().trim().max(10).nullish(),
   dob: z.string().trim().max(30).nullish(),
+  hidePhotoFromStudents: z.boolean().optional().default(false),
 });
 export const studentUpdateSchema = studentCreateSchema.partial();
+
+export const directorCreateSchema = z.object({
+  name: z.string().trim().min(1, "পরিচালকের নাম লিখুন।").max(100),
+  username: z
+    .string()
+    .trim()
+    .min(3, "ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।")
+    .max(50)
+    .regex(/^[a-zA-Z0-9._-]+$/, "ইউজারনেমে শুধু ইংরেজি অক্ষর, সংখ্যা, . _ - ব্যবহার করা যাবে।"),
+  password: z.string().min(4, "পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।").max(100),
+  institution: z.string().trim().max(200).nullish(),
+  remarks: z.string().trim().max(500).nullish(),
+  photo_key: z.string().nullish(),
+  signature_key: z.string().nullish(),
+});
+export const directorUpdateSchema = directorCreateSchema.partial();
 
 export const markSaveSchema = z.object({
   classId: z.number().int().positive(),

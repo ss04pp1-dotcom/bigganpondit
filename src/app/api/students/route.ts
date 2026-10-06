@@ -68,6 +68,7 @@ export async function GET(req: Request) {
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
                   st.father_name, st.mother_name, st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  st.hide_photo_from_students,
                   c.name as class_name, c.sort_order, u.username
            FROM students st
            JOIN classes c ON c.id = st.class_id
@@ -79,7 +80,15 @@ export async function GET(req: Request) {
         .all<Record<string, unknown>>()
     ).results;
 
-    return ok({ students: rows });
+    // Apply student privacy rule: if hide_photo_from_students is 1, mask photo from other students
+    const sanitized = rows.map((s: any) => {
+      if (user.role === "STUDENT" && s.hide_photo_from_students === 1 && s.id !== user.studentId) {
+        return { ...s, photo_key: null };
+      }
+      return s;
+    });
+
+    return ok({ students: sanitized });
   } catch (e) {
     return handleError(e);
   }
@@ -196,8 +205,8 @@ export async function POST(req: Request) {
       .prepare(
         `INSERT INTO students (
           user_id, name, class_id, division, section, roll,
-          father_name, mother_name, school_name, phone, address, blood_group, dob
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          father_name, mother_name, school_name, phone, address, blood_group, dob, hide_photo_from_students
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         userId,
@@ -212,7 +221,8 @@ export async function POST(req: Request) {
         body.phone ?? null,
         body.address ?? null,
         body.bloodGroup ?? null,
-        body.dob ?? null
+        body.dob ?? null,
+        body.hidePhotoFromStudents ? 1 : 0
       )
       .run();
 

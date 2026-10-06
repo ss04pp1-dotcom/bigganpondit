@@ -1,6 +1,8 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db";
 import { getStudentExamRows } from "@/lib/results/reports";
+import { DashboardBanner } from "@/components/app/dashboard-banner";
+import { RecentResultBox } from "@/components/app/recent-result-box";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
@@ -12,7 +14,7 @@ import {
   fmtNum,
   fmtPct,
 } from "@/lib/constants";
-import { ArrowRight, FileText, CalendarRange, Search } from "lucide-react";
+import { ArrowRight, FileText, CalendarRange, Search, BookMarked, Bell } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "ড্যাশবোর্ড" };
@@ -63,6 +65,13 @@ export default async function StudentDashboard() {
 
   return (
     <div className="space-y-5">
+      {/* 1. Header Banner */}
+      <DashboardBanner
+        user={user}
+        panelTitle="শিক্ষার্থী প্যানেল"
+        panelDesc="তোমার পরীক্ষার ফলাফল, মেধা তালিকা ও বইসমূহ।"
+      />
+
       {/* Student Welcome Card — Panel 7 */}
       <div className="rounded-xl border border-[#dce6f2] bg-white p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -104,6 +113,9 @@ export default async function StudentDashboard() {
           );
         })}
       </div>
+
+      {/* 4. Recent Published Result Box with Top 3 Podium (Students only see Top 3 & Self) */}
+      <RecentResultBox user={user} defaultClass={user.className || "10"} />
 
       <Card>
         <CardContent className="pt-4">

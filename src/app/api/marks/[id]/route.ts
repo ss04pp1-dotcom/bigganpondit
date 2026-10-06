@@ -54,10 +54,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    const { user, db } = await requireApiUser(["ADMIN"]);
+    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
     const id = Number((await ctx.params).id);
     const mark = await loadMark(db, id);
     if (!mark) throw new ApiError(404, MSG.notFound);
+
+    if (user.role === "TEACHER" && user.teacherId) {
+      const allowed = await teacherSubjectAllowed(db, user.teacherId, mark.subject_id);
+      if (!allowed) throw new ApiError(403, MSG.noPermissionSubject);
+    }
+
     await db.prepare("DELETE FROM marks WHERE id = ?").bind(id).run();
     return ok({ message: MSG.deleted });
   } catch (e) {

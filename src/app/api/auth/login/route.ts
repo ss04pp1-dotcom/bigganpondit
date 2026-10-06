@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession, sessionCookieOptions } from "@/lib/auth/session";
 import { fail, handleError, ok, assertSameOrigin, loginRateClear, loginRateKey, loginRateLimit } from "@/lib/api";
-import { SESSION_COOKIE, MSG } from "@/lib/constants";
+import { SESSION_COOKIE, MSG, type Role } from "@/lib/constants";
 import { parseJson, loginSchema } from "@/lib/validation";
 import { roleHome } from "@/lib/auth/guards";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const user = await db
       .prepare("SELECT id, name, username, password_hash, role FROM users WHERE username = ?")
       .bind(body.username)
-      .first<{ id: number; name: string; username: string; password_hash: string; role: "ADMIN" | "TEACHER" | "STUDENT" }>(undefined as never)
+      .first<{ id: number; name: string; username: string; password_hash: string; role: Role }>(undefined as never)
       .catch(() => null);
 
     // Constant-time mitigation against username enumeration

@@ -117,6 +117,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.address !== undefined) { studentCols.push("address = ?"); studentVals.push(body.address ?? null); }
     if (body.bloodGroup !== undefined) { studentCols.push("blood_group = ?"); studentVals.push(body.bloodGroup ?? null); }
     if (body.dob !== undefined) { studentCols.push("dob = ?"); studentVals.push(body.dob ?? null); }
+    if (body.hidePhotoFromStudents !== undefined) { studentCols.push("hide_photo_from_students = ?"); studentVals.push(body.hidePhotoFromStudents ? 1 : 0); }
 
     const userCols: string[] = [];
     const userVals: unknown[] = [];

@@ -2,6 +2,8 @@ import { requirePageUser } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db";
 import { getTeacherClasses } from "@/lib/permissions";
 import { buildMonthlyClassSummary } from "@/lib/results/reports";
+import { DashboardBanner } from "@/components/app/dashboard-banner";
+import { RecentResultBox } from "@/components/app/recent-result-box";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -168,6 +170,16 @@ export default async function TeacherDashboard({ searchParams }: { searchParams:
 
   return (
     <div className="space-y-5">
+      {/* 1. Header Banner */}
+      <DashboardBanner
+        user={user}
+        panelTitle="শিক্ষক প্যানেল"
+        panelDesc="শিক্ষার্থীদের নম্বর এন্ট্রি, মূল্যায়ন ও রিপোর্ট ট্র্যাকার।"
+      />
+
+      {/* 4. Recent Result Box with Top 3 Podium */}
+      <RecentResultBox user={user} defaultClass={classNum} />
+
       {/* compact page heading */}
       <div className="flex items-end justify-between gap-3">
         <div>

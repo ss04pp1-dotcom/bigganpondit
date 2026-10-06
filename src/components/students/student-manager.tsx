@@ -22,11 +22,16 @@ import {
   Inbox,
   UserCheck,
   ShieldCheck,
+  Phone,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -73,6 +78,7 @@ interface Row {
   address?: string | null;
   blood_group?: string | null;
   dob?: string | null;
+  hide_photo_from_students?: number | boolean;
 }
 
 interface RequestRow {
@@ -96,6 +102,7 @@ interface RequestRow {
   address: string | null;
   blood_group: string | null;
   dob: string | null;
+  hide_photo_from_students?: number | boolean;
   status: "PENDING" | "APPROVED" | "REJECTED";
   admin_notes: string | null;
   reviewed_at: string | null;
@@ -119,6 +126,7 @@ interface FormState {
   address?: string;
   bloodGroup?: string;
   dob?: string;
+  hidePhotoFromStudents?: boolean;
 }
 
 const emptyForm: FormState = {
@@ -137,6 +145,7 @@ const emptyForm: FormState = {
   address: "",
   bloodGroup: "",
   dob: "",
+  hidePhotoFromStudents: false,
 };
 
 type Filter = "ALL" | "10-SCIENCE" | "10-HUMANITIES" | "9-SCIENCE" | "9-HUMANITIES" | "8" | "7" | "6";
@@ -196,7 +205,54 @@ export function StudentManager({
   const [rejectModalReq, setRejectModalReq] = useState<RequestRow | null>(null);
   const [rejectNote, setRejectNote] = useState("");
 
+  // SMS Modal state
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsScope, setSmsScope] = useState<"ALL" | "CLASS" | "SELECTED">("ALL");
+  const [smsClass, setSmsClass] = useState("10");
+  const [smsMessage, setSmsMessage] = useState("");
+  const [smsSending, setSmsSending] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(new Set());
+
   const { toast } = useToast();
+
+  async function handleSendSms(e: React.FormEvent) {
+    e.preventDefault();
+    if (!smsMessage.trim()) {
+      toast({ title: "এসএমএস বার্তা লিখুন।", variant: "destructive" });
+      return;
+    }
+    setSmsSending(true);
+    try {
+      let classIdNum: number | undefined = undefined;
+      if (smsScope === "CLASS") {
+        const clsRes = await fetch("/api/admin/teachers").then((r) => r.json()).catch(() => null);
+        const clsObj = clsRes?.classes?.find((c: any) => c.name === smsClass);
+        classIdNum = clsObj?.id;
+      }
+      const res = await fetch("/api/admin/sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scope: smsScope,
+          classId: classIdNum,
+          studentIds: smsScope === "SELECTED" ? Array.from(selectedStudentIds) : undefined,
+          message: smsMessage.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "এসএমএস প্রেরণ করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: "এসএমএস সফল", description: json.message });
+      setSmsOpen(false);
+      setSmsMessage("");
+    } catch {
+      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } finally {
+      setSmsSending(false);
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -275,6 +331,7 @@ export function StudentManager({
       address: form.address?.trim() || null,
       bloodGroup: form.bloodGroup?.trim() || null,
       dob: form.dob?.trim() || null,
+      hidePhotoFromStudents: !!form.hidePhotoFromStudents,
     };
     if (form.id && !payload.password) delete payload.password;
     if (!payload.name || !payload.roll || !payload.username || (!form.id && !payload.password)) {
@@ -426,18 +483,31 @@ export function StudentManager({
           </button>
         </div>
 
-        {canCreate && mainTab === "students" && (
-          <Button
-            className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs"
-            onClick={() => {
-              setPendingPhoto(null);
-              setForm({ ...emptyForm });
-            }}
-          >
-            <UserPlus className="h-4 w-4" />
-            {role === "TEACHER" ? "শিক্ষার্থী যুক্তির আবেদন" : "তথ্য সংযুক্ত করুন"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {role === "ADMIN" && mainTab === "students" && (
+            <Button
+              variant="outline"
+              className="h-10 gap-2 border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 shadow-xs text-xs font-bold"
+              onClick={() => setSmsOpen(true)}
+            >
+              <MessageSquare className="h-4 w-4 text-emerald-600" />
+              SMS পাঠান
+            </Button>
+          )}
+
+          {canCreate && mainTab === "students" && (
+            <Button
+              className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs text-xs font-bold"
+              onClick={() => {
+                setPendingPhoto(null);
+                setForm({ ...emptyForm });
+              }}
+            >
+              <UserPlus className="h-4 w-4" />
+              {role === "TEACHER" ? "শিক্ষার্থী যুক্তির আবেদন" : "তথ্য সংযুক্ত করুন"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* VIEW 1: ACTIVE STUDENTS LIST */}
@@ -539,6 +609,15 @@ export function StudentManager({
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5">
+                            {row.phone && (
+                              <a
+                                href={`tel:${row.phone}`}
+                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1"
+                                title="সরাসরি ফোন দিন"
+                              >
+                                <Phone className="h-3 w-3" /> কল
+                              </a>
+                            )}
                             <Button
                               size="sm"
                               className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
@@ -569,6 +648,7 @@ export function StudentManager({
                                     address: row.address ?? "",
                                     bloodGroup: row.blood_group ?? "",
                                     dob: row.dob ?? "",
+                                    hidePhotoFromStudents: !!row.hide_photo_from_students,
                                   });
                                 }}
                               >
@@ -1022,6 +1102,21 @@ export function StudentManager({
                   </div>
                 )}
               </div>
+
+              {/* Photo privacy rule — Point 04 */}
+              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-bold text-slate-800">ছবি হাইড করুন -(অন্য শিক্ষার্থী)</Label>
+                  <p className="text-[11px] text-slate-500">
+                    এটা সিলেক্ট করলে এডমিন, ডিরেক্টর, শিক্ষক ও নিজে ব্যতীত অন্য কোনো শিক্ষার্থী এই ছবি দেখতে পারবে না।
+                  </p>
+                </div>
+                <Switch
+                  checked={!!form.hidePhotoFromStudents}
+                  onCheckedChange={(c) => setForm({ ...form, hidePhotoFromStudents: c })}
+                />
+              </div>
+
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="outline" onClick={() => setForm(null)} className="h-11 px-5">
                   বাতিল
@@ -1228,6 +1323,126 @@ function StudentViewDialog({
             </div>
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+
+    {/* SMS MODAL FOR ADMIN — Point 05 */}
+    <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
+            <MessageSquare className="h-5 w-5 text-emerald-600" />
+            শিক্ষার্থীদের এসএমএস (SMS) প্রেরণ করুন
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSendSms} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">প্রাপক নির্বাচন (Scope)</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setSmsScope("ALL")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "ALL"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                সকল শ্রেণি
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmsScope("CLASS")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "CLASS"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                নির্দিষ্ট শ্রেণি
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmsScope("SELECTED")}
+                className={cn(
+                  "rounded-lg border p-2 text-xs font-semibold transition-all",
+                  smsScope === "SELECTED"
+                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                বাছাইকৃত
+              </button>
+            </div>
+          </div>
+
+          {smsScope === "CLASS" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">শ্রেণি নির্বাচন করুন</Label>
+              <Select value={smsClass} onValueChange={setSmsClass}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="শ্রেণি" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLASS_NUMBERS.map((c) => (
+                    <SelectItem key={c} value={c} className="text-xs">
+                      {classLabel(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">বার্তার বিবরণ (SMS Text) *</Label>
+              <span className="text-[11px] text-slate-400">
+                অক্ষর: {bn(smsMessage.length)} (১ এসএমএস ≈ ১৬০/৭০)
+              </span>
+            </div>
+            <Textarea
+              placeholder="অভিভাবকদের জন্য বার্তা লিখুন... যেমন: সম্মানিত অভিভাবক, আগামীকাল বিশেষ ক্লাস পরীক্ষা অনুষ্ঠিত হবে।"
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              rows={4}
+              required
+              className="text-xs resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSmsOpen(false)}
+              disabled={smsSending}
+              className="text-xs h-8"
+            >
+              বাতিল
+            </Button>
+            <Button
+              type="submit"
+              disabled={smsSending}
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs h-8 font-semibold shadow-xs"
+            >
+              {smsSending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  প্রেরণ হচ্ছে...
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  এসএমএস পাঠান
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

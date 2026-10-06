@@ -256,8 +256,8 @@ export function LoginForm({
                 <User className="h-8 w-8 text-[#0d6efd]" />
               )}
             </div>
-            <h2 className="text-[20px] font-bold text-[#142942]">শিক্ষক লগইন</h2>
-            <p className="mt-1 text-[12px] text-slate-500">{academyName} • {appTitle}</p>
+            <h2 className="text-[20px] font-bold text-[#142942]">অ্যাকাউন্ট লগইন</h2>
+            <p className="mt-1 text-[12px] text-slate-500">পরিচালক • শিক্ষক • শিক্ষার্থী • অ্যাডমিন</p>
           </div>
 
           <form onSubmit={submit} className="space-y-4">

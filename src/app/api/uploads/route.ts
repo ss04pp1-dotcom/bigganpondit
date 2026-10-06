@@ -34,12 +34,35 @@ function extOf(key: string): string {
 export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
-    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
+    const { user, db } = await requireApiUser(["ADMIN", "TEACHER", "DIRECTOR"]);
     const form = await req.formData();
     const file = form.get("file");
     const type = String(form.get("type") ?? "");
 
     if (!(file instanceof File)) throw new ApiError(400, "ফাইল পাওয়া যায়নি।");
+
+    // Special handling for notebook PDFs
+    if (type === "notebook-pdf") {
+      const maxPdfBytes = 25 * 1024 * 1024; // 25 MB
+      if (file.size > maxPdfBytes) throw new ApiError(400, "পিডিএফ ফাইলটি অনেক বড় (সর্বোচ্চ ২৫ MB)।");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // Validate PDF signature: %PDF (0x25, 0x50, 0x44, 0x46)
+      if (bytes.length < 4 || bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) {
+        throw new ApiError(400, "অননুমোদিত ফাইল ধরন — শুধুমাত্র বৈধ PDF ফাইল আপলোড করা যাবে।");
+      }
+      const bucket = await getBucket();
+      const uuid = crypto.randomUUID();
+      const key = `academy/notebooks/${uuid}.pdf`;
+      await bucket.put(key, bytes);
+      return ok({
+        key,
+        url: `/api/files/${key}`,
+        fileName: file.name,
+        fileSize: file.size,
+        message: "পিডিএফ সফলভাবে আপলোড হয়েছে।",
+      });
+    }
+
     if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -49,6 +72,27 @@ export async function POST(req: Request) {
 
     const bucket = await getBucket();
     const uuid = crypto.randomUUID();
+
+    if (type === "banner") {
+      if (user.role !== "ADMIN") throw new ApiError(403, "শুধুমাত্র প্রশাসক ব্যানার পরিবর্তন করতে পারেন।");
+      const key = `academy/banners/banner-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "director-photo") {
+      if (user.role !== "ADMIN" && user.role !== "DIRECTOR") throw new ApiError(403, MSG.noPermissionView);
+      const key = `academy/directors/photo-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "director-signature") {
+      if (user.role !== "ADMIN" && user.role !== "DIRECTOR") throw new ApiError(403, MSG.noPermissionView);
+      const key = `academy/signatures/director-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
 
     if (type === "logo") {
       if (user.role !== "ADMIN") {

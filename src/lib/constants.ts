@@ -10,10 +10,17 @@ export const SETTING_BACKUP_REGISTRY = "backup_registry";
 export const SETTING_ADMIN_EMAIL = "admin_recovery_email";
 export const SETTING_RESEND_API_KEY = "resend_api_key";
 export const SETTING_RESEND_FROM = "resend_from_email";
+export const SETTING_BANNER_IMAGE = "banner_image_key";
+export const SETTING_BANNER_TITLE = "banner_title";
+export const SETTING_BANNER_SUBTITLE = "banner_subtitle";
+export const SETTING_BANNER_LINK = "banner_link";
+export const SETTING_BANNER_ACTIVE = "banner_active";
+export const SETTING_DIRECTOR_SIGNATURE = "director_default_signature_key";
 
-export type Role = "ADMIN" | "TEACHER" | "STUDENT";
+export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "DIRECTOR";
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: "প্রশাসক",
+  DIRECTOR: "পরিচালক",
   TEACHER: "শিক্ষক",
   STUDENT: "শিক্ষার্থী",
 };

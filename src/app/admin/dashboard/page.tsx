@@ -1,7 +1,9 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb } from "@/lib/db";
+import { DashboardBanner } from "@/components/app/dashboard-banner";
+import { RecentResultBox } from "@/components/app/recent-result-box";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, GraduationCap, BookOpen, ClipboardEdit, Database } from "lucide-react";
+import { Users, GraduationCap, BookOpen, ClipboardEdit, Database, Building2 } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtNum } from "@/lib/constants";
 import Link from "next/link";
 
@@ -68,11 +70,11 @@ export default async function AdminDashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl bg-[#0f172a] px-5 py-5 text-white">
-        <p className="text-[13px] text-slate-400">প্রশাসন প্যানেল</p>
-        <h1 className="text-xl font-bold">{user.name}</h1>
-        <p className="text-[13px] text-slate-400">সিস্টেমের সব তথ্য ও নিয়ন্ত্রণ এক জায়গায়।</p>
-      </div>
+      <DashboardBanner
+        user={user}
+        panelTitle="প্রশাসন প্যানেল"
+        panelDesc="সিস্টেমের সব তথ্য ও নিয়ন্ত্রণ এক জায়গায়।"
+      />
 
       {pendingRequestsCount > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-[13px] text-amber-950 flex items-center justify-between gap-3 shadow-xs">
@@ -138,6 +140,9 @@ export default async function AdminDashboard() {
           );
         })}
       </div>
+
+      {/* Recent Published Result Box with Podium */}
+      <RecentResultBox user={user} defaultClass="10" />
 
       <Card>
         <CardContent className="pt-4">

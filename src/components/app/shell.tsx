@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE } from "./nav";
 import { ROLE_LABELS, type Role, bn, APP_TITLE } from "@/lib/constants";
+import { NoticeTicker } from "./notice-ticker";
 
 export interface ShellUser {
   name: string;
@@ -335,6 +336,9 @@ export function AppShell({
             </div>
           </div>
         </header>
+
+        {/* Floating Notice Ticker */}
+        <NoticeTicker />
 
         {/* Content */}
         <main className="app-main mx-auto w-full max-w-[1180px] px-4 py-5 sm:px-6 lg:py-6">{children}</main>

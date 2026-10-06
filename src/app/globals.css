@@ -422,3 +422,14 @@ tbody tr:hover { background: #f7fbff !important; }
 @media print {
   .app-sidebar, .app-topbar { display:none !important; }
 }
+
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 25s linear infinite;
+}

@@ -11,6 +11,8 @@ export function roleHome(role: Role): string {
   switch (role) {
     case "ADMIN":
       return "/admin/dashboard";
+    case "DIRECTOR":
+      return "/director/dashboard";
     case "TEACHER":
       return "/teacher/dashboard";
     default:

@@ -1,0 +1,10 @@
+import { requirePageUser } from "@/lib/auth/guards";
+import { NoticeBoard } from "@/components/app/notice-board";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "নোটিশ বোর্ড" };
+
+export default async function StudentNoticesPage() {
+  const user = await requirePageUser(["STUDENT"]);
+  return <NoticeBoard user={user} />;
+}

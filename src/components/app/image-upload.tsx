@@ -9,6 +9,54 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+async function makeSignatureTransparent(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const w = img.naturalWidth || img.width;
+          const h = img.naturalHeight || img.height;
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(file);
+          ctx.drawImage(img, 0, 0);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+            if (a === 0) continue;
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness >= 230) {
+              data[i + 3] = 0;
+            } else if (brightness > 185) {
+              const factor = (230 - brightness) / 45;
+              data[i + 3] = Math.round(a * Math.pow(factor, 1.25));
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".png"), { type: "image/png" }));
+            } else {
+              resolve(file);
+            }
+          }, "image/png");
+        } catch {
+          resolve(file);
+        }
+      };
+      img.onerror = () => resolve(file);
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ImageUpload({
   type,
   studentId,
@@ -43,12 +91,16 @@ export function ImageUpload({
       toast({ title: type === "banner" ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।" : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।", variant: "destructive" });
       return;
     }
-    const localUrl = URL.createObjectURL(file);
+    let fileToUpload = file;
+    if (type === "signature" || type === "director-signature") {
+      fileToUpload = await makeSignatureTransparent(file);
+    }
+    const localUrl = URL.createObjectURL(fileToUpload);
     setPreview(localUrl);
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", fileToUpload);
       fd.append("type", type);
       if (studentId) fd.append("studentId", String(studentId));
       if (teacherId) fd.append("teacherId", String(teacherId));

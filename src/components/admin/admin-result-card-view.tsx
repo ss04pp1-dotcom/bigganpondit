@@ -73,7 +73,6 @@ export function AdminResultCardView() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [sharedBgTheme, setSharedBgTheme] = useState<"FLORAL" | "ROYAL" | "PARCHMENT" | "CLEAN">("FLORAL");
 
   // Reset preview index when filters change
   useEffect(() => {
@@ -427,8 +426,6 @@ export function AdminResultCardView() {
                       logoUrl={logoUrl}
                       academyName={academyName}
                       defaultTab="ALL"
-                      bgTheme={sharedBgTheme}
-                      onBgThemeChange={setSharedBgTheme}
                       isLastCard={isLastCard}
                       hideCardControls={!isPreview}
                     />

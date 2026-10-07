@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { TransparentSignature } from "@/components/app/transparent-signature";
 
 interface PrintSignaturesProps {
   directorName?: string | null;
@@ -41,10 +42,10 @@ export function PrintSignatures({
           <div className="w-40 sm:w-48 text-center">
             <div className="h-12 flex items-end justify-center mb-1">
               {teacherSignatureUrl ? (
-                <img
+                <TransparentSignature
                   src={teacherSignatureUrl}
                   alt="শিক্ষকের স্বাক্ষর"
-                  className="max-h-12 max-w-full object-contain mix-blend-multiply filter contrast-125 brightness-95"
+                  className="max-h-12 max-w-full object-contain"
                 />
               ) : (
                 <div className="w-full border-b border-dashed border-slate-300" />
@@ -63,10 +64,10 @@ export function PrintSignatures({
         <div className="w-40 sm:w-48 text-center ml-auto">
           <div className="h-12 flex items-end justify-center mb-1">
             {directorSignatureUrl ? (
-              <img
+              <TransparentSignature
                 src={directorSignatureUrl}
                 alt="পরিচালকের স্বাক্ষর"
-                className="max-h-12 max-w-full object-contain mix-blend-multiply filter contrast-125 brightness-95"
+                className="max-h-12 max-w-full object-contain"
               />
             ) : (
               <div className="w-full border-b border-dashed border-slate-300" />

@@ -993,6 +993,7 @@ tbody tr:hover { background: #f7fbff !important; }
   font-weight: 700;
   font-size: 15px;
   text-align: center;
+  background: transparent !important;
 }
 .rc-sb .rc-sig-wrap {
   position: absolute;
@@ -1005,14 +1006,16 @@ tbody tr:hover { background: #f7fbff !important; }
   align-items: center;
   justify-content: center;
   background: transparent !important;
+  pointer-events: none;
 }
 .rc-sb .rc-sig-wrap img,
 .rc-sb .rc-sig-wrap svg {
   height: 28px;
   max-width: 100%;
   object-fit: contain;
-  mix-blend-mode: multiply;
+  mix-blend-mode: multiply !important;
   background: transparent !important;
+  filter: contrast(135%) brightness(102%);
 }
 .rc-ln {
   position: absolute;
@@ -1024,6 +1027,7 @@ tbody tr:hover { background: #f7fbff !important; }
   line-height: 17px;
   white-space: nowrap;
   overflow: hidden;
+  background: transparent !important;
 }
 .rc-ln-s {
   font-size: 12px;

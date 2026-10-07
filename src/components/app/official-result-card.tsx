@@ -10,8 +10,9 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { Printer, FileText, BookOpen, Layers, Palette } from "lucide-react";
+import { Printer, FileText, BookOpen, Layers } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa } from "@/lib/constants";
+import { TransparentSignature } from "@/components/app/transparent-signature";
 
 export interface OfficialSubjectRow {
   subjectId: number;
@@ -180,12 +181,7 @@ export function OfficialResultCard({
   showPrintButton = false,
 }: OfficialResultCardProps) {
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
-  const [localBgTheme, setLocalBgTheme] = useState<BgTheme>("FLORAL");
-  const bgTheme = propBgTheme ?? localBgTheme;
-  const handleBgThemeChange = (newTheme: BgTheme) => {
-    setLocalBgTheme(newTheme);
-    onBgThemeChange?.(newTheme);
-  };
+  const bgTheme = propBgTheme ?? "FLORAL";
   const [wrapRef, scale] = useFitScale();
 
   const [activeDirectorId, setActiveDirectorId] = useState<number | "BOTH">(() => {
@@ -417,23 +413,6 @@ export function OfficialResultCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* ব্যাকগ্রাউন্ড থিম নির্বাচক */}
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
-              <Palette className="h-3.5 w-3.5 text-slate-600" />
-              <span className="font-bold text-slate-700 whitespace-nowrap">ডিজাইন ব্যাকগ্রাউন্ড:</span>
-              <select
-                value={bgTheme}
-                onChange={(e) => handleBgThemeChange(e.target.value as BgTheme)}
-                aria-label="ব্যাকগ্রাউন্ড থিম নির্বাচন"
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
-              >
-                <option value="FLORAL">১. ফ্লোরাল ও স্টুডেন্ট আর্ট (অফিশিয়াল)</option>
-                <option value="ROYAL">২. রয়্যাল ব্লু সার্টিফিকেট</option>
-                <option value="PARCHMENT">৩. ক্লাসিক পার্চমেন্ট পেপার</option>
-                <option value="CLEAN">৪. মিনিমালিস্ট ক্লিন হোয়াইট</option>
-              </select>
-            </div>
-
             {availableDirectors && availableDirectors.length > 1 && (
               <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
                 <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
@@ -763,7 +742,7 @@ export function OfficialResultCard({
                   <div key={d.id} className="rc-a rc-sb" style={{ left: 54 + i * 198, width: i === 0 ? 199.5 : 198 }}>
                     <div className="rc-sig-wrap">
                       {d.signatureUrl ? (
-                        <img src={d.signatureUrl} alt={`${d.name}-এর স্বাক্ষর`} />
+                        <TransparentSignature src={d.signatureUrl} alt={`${d.name}-এর স্বাক্ষর`} />
                       ) : (
                         <svg className="h-[26px] w-[85px] text-[#1e3a5f]" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M 8,22 Q 28,5 45,18 T 75,8 T 92,18" />
@@ -781,7 +760,7 @@ export function OfficialResultCard({
                 <div className="rc-a rc-sb" style={{ left: 54, width: 396 }}>
                   <div className="rc-sig-wrap">
                     {activeSignatureUrl ? (
-                      <img src={activeSignatureUrl} alt="ডিরেক্টরের স্বাক্ষর" />
+                      <TransparentSignature src={activeSignatureUrl} alt="ডিরেক্টরের স্বাক্ষর" />
                     ) : (
                       <svg className="h-[26px] w-[85px] text-[#1e3a5f]" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M 8,22 Q 28,5 45,18 T 75,8 T 92,18" />

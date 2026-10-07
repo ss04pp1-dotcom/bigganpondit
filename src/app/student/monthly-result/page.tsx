@@ -133,6 +133,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         availableDirectors={availableDirectors}
         logoUrl={logoUrl}
         defaultTab="ALL"
+        showPrintButton={true}
       />
     </div>
   );

@@ -86,6 +86,7 @@ export interface OfficialResultCardProps {
   onBgThemeChange?: (theme: BgTheme) => void;
   isLastCard?: boolean;
   hideCardControls?: boolean;
+  showPrintButton?: boolean;
 }
 
 /* ---- ফিক্সড মাপ (px, 96dpi) ---- */
@@ -176,6 +177,7 @@ export function OfficialResultCard({
   onBgThemeChange,
   isLastCard = true,
   hideCardControls = false,
+  showPrintButton = false,
 }: OfficialResultCardProps) {
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
   const [localBgTheme, setLocalBgTheme] = useState<BgTheme>("FLORAL");
@@ -454,13 +456,15 @@ export function OfficialResultCard({
                 </select>
               </div>
             )}
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
-            >
-              <Printer className="h-4 w-4" />
-              <span>প্রিন্ট করুন (A4 Landscape)</span>
-            </button>
+            {showPrintButton && (
+              <button
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+              >
+                <Printer className="h-4 w-4" />
+                <span>প্রিন্ট করুন (A4 Landscape)</span>
+              </button>
+            )}
           </div>
         </div>
       )}

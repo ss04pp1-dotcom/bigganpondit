@@ -31,6 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useToast } from "@/hooks/use-toast";
 import { CLASS_NUMBERS, bn, classLabel, type Role } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { PdfBookReader } from "./pdf-book-reader";
 
 interface NotebookItem {
   id: number;
@@ -356,82 +357,13 @@ export function NotebookViewer({
         </div>
       )}
 
-      {/* READ-ONLY SECURE PDF READER MODAL */}
-      <Dialog open={!!readingBook} onOpenChange={(open) => !open && setReadingBook(null)}>
-        <DialogContent
-          className={cn(
-            "p-0 overflow-hidden bg-slate-950 border-slate-800 text-white transition-all flex flex-col",
-            isFullscreen ? "!max-w-none !w-screen !h-screen !rounded-none" : "sm:max-w-[900px] h-[85vh] rounded-2xl"
-          )}
-        >
-          {readingBook && (
-            <>
-              {/* Reader Header */}
-              <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-2.5 text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <BookOpen className="h-4 w-4 text-cyan-400 shrink-0" />
-                  <span className="font-bold truncate text-slate-200">{readingBook.title}</span>
-                  {readingBook.class_name && (
-                    <span className="hidden sm:inline rounded bg-cyan-900/80 text-cyan-200 border border-cyan-700 px-2 py-0.5 text-[10px] font-semibold shrink-0">
-                      {classLabel(readingBook.class_name)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="hidden md:flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-300 border border-amber-500/30">
-                    <Lock className="h-3 w-3" /> রিড-অনলি মোড (ডাউনলোড নিষিদ্ধ)
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-white"
-                    title={isFullscreen ? "ছোট করুন" : "পূর্ণ পর্দা"}
-                  >
-                    {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setReadingBook(null)}
-                    className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-800 hover:text-white"
-                    title="বন্ধ করুন"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* PDF Secure Embedded Iframe */}
-              <div
-                className="relative flex-1 bg-slate-900 select-none"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  toast({ title: "সুরক্ষা বার্তা", description: "ডাউনলোড ও কপি নিষিদ্ধ।" });
-                }}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "p" || e.key === "c")) {
-                    e.preventDefault();
-                    toast({ title: "অননুমোদিত কমান্ড", description: "ডাউনলোড বা সংরক্ষণ অনুমোদিত নয়।" });
-                  }
-                }}
-              >
-                <iframe
-                  src={`/api/files/${readingBook.file_key}#toolbar=0&navpanes=0&scrollbar=1`}
-                  className="h-full w-full border-0 bg-slate-900"
-                  title={readingBook.title}
-                />
-              </div>
-
-              {/* Reader Footer Warning */}
-              <div className="border-t border-slate-800 bg-slate-950 px-4 py-1.5 text-center text-[11px] text-slate-400">
-                বিজ্ঞান পণ্ডিত একাডেমি ডিজিটাল নোট বুক লাইব্রেরি • শুধুমাত্র অধ্যয়নের উদ্দেশ্যে সংরক্ষিত।
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* READ-ONLY SECURE ULTRA HIGH-QUALITY PDF READER */}
+      {readingBook && (
+        <PdfBookReader
+          book={readingBook}
+          onClose={() => setReadingBook(null)}
+        />
+      )}
 
       {/* UPLOAD PDF MODAL (Admin / Director / Teacher) */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>

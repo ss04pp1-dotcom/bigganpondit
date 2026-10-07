@@ -44,13 +44,14 @@ export async function GET(req: Request, ctx: Ctx) {
     const user = await getCurrentUser(db);
     if (!user) return fail(401, "লগইন করা আবশ্যক।");
 
-    // ---- notebooks: read-only pdfs for authenticated users ----
+    // ---- notebooks: read-only pdfs for authenticated users (DRM stream) ----
     if (key.startsWith("academy/notebooks/")) {
       return new Response(obj.data as unknown as BodyInit, {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": "inline; filename=\"notebook-preview.pdf\"",
-          "Cache-Control": "private, max-age=3600",
+          "Content-Disposition": "inline; filename=\"stream.pdf\"",
+          "Cache-Control": "private, no-transform, max-age=1800",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     }

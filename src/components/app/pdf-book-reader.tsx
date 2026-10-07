@@ -18,6 +18,8 @@ import {
   Sun,
   Moon,
   ShieldAlert,
+  Expand,
+  Shrink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bn, classLabel } from "@/lib/constants";
@@ -67,6 +69,7 @@ interface PdfPageProxy {
     intent?: string;
   }) => {
     promise: Promise<void>;
+    cancel: () => void;
   };
 }
 
@@ -74,20 +77,65 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
   const { toast } = useToast();
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [zoom, setZoom] = useState<number>(1.15); // Comfortable reading scale
+  const [zoom, setZoom] = useState<number>(1.0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [theme, setTheme] = useState<"DARK" | "SEPIA" | "LIGHT">("DARK");
   const [loading, setLoading] = useState<boolean>(true);
+  const [pageRendering, setPageRendering] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [inputPage, setInputPage] = useState<string>("1");
   const [pdfDoc, setPdfDoc] = useState<PdfDocumentProxy | null>(null);
 
+  // Store original page viewport dimensions (at scale 1.0)
+  const [basePageDim, setBasePageDim] = useState<{ width: number; height: number }>({
+    width: 600,
+    height: 800,
+  });
+  const [displayDim, setDisplayDim] = useState<{ width: number; height: number }>({
+    width: 600,
+    height: 800,
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const renderTaskRef = useRef<Promise<void> | null>(null);
+  const activeRenderTaskRef = useRef<{ cancel: () => void; promise: Promise<void> } | null>(null);
+  const initialFitDoneRef = useRef<boolean>(false);
 
-  // Load PDF.js library
+  // Function to calculate fit-width scale based on current container width
+  const calculateFitWidthZoom = useCallback((pageWidth: number) => {
+    if (!scrollContainerRef.current || pageWidth <= 0) return 1.0;
+    const containerWidth = scrollContainerRef.current.clientWidth;
+    // Leave safe padding (16px on mobile, 32px on larger screens) so edges never clip
+    const horizontalPadding = containerWidth < 640 ? 20 : 48;
+    const availableWidth = Math.max(containerWidth - horizontalPadding, 260);
+    const computedScale = availableWidth / pageWidth;
+    // Keep zoom within comfortable reading bounds
+    return Math.max(0.4, Math.min(computedScale, 2.0));
+  }, []);
+
+  // Function to calculate fit-page scale (both width and height fit inside viewport)
+  const calculateFitPageZoom = useCallback(
+    (pageWidth: number, pageHeight: number) => {
+      if (!scrollContainerRef.current || pageWidth <= 0 || pageHeight <= 0) return 1.0;
+      const containerWidth = scrollContainerRef.current.clientWidth;
+      const containerHeight = scrollContainerRef.current.clientHeight;
+
+      const horizontalPadding = containerWidth < 640 ? 24 : 48;
+      const verticalPadding = 32;
+
+      const availW = Math.max(containerWidth - horizontalPadding, 260);
+      const availH = Math.max(containerHeight - verticalPadding, 300);
+
+      const scaleW = availW / pageWidth;
+      const scaleH = availH / pageHeight;
+
+      return Math.max(0.35, Math.min(scaleW, scaleH, 1.8));
+    },
+    []
+  );
+
+  // Load PDF.js library and fetch file
   useEffect(() => {
     let isMounted = true;
 
@@ -129,6 +177,22 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         setNumPages(doc.numPages);
         setCurrentPage(1);
         setInputPage("1");
+
+        // Inspect page 1 dimensions to set optimal initial fit
+        try {
+          const p1 = await doc.getPage(1);
+          const vp1 = p1.getViewport({ scale: 1.0 });
+          setBasePageDim({ width: vp1.width, height: vp1.height });
+
+          if (!initialFitDoneRef.current) {
+            initialFitDoneRef.current = true;
+            const fitZoom = calculateFitWidthZoom(vp1.width);
+            setZoom(+fitZoom.toFixed(2));
+          }
+        } catch {
+          // fallback
+        }
+
         setLoading(false);
       } catch (err) {
         if (!isMounted) return;
@@ -142,6 +206,13 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
 
     return () => {
       isMounted = false;
+      if (activeRenderTaskRef.current) {
+        try {
+          activeRenderTaskRef.current.cancel();
+        } catch {
+          // ignore
+        }
+      }
       if (pdfDoc && pdfDoc.destroy) {
         try {
           pdfDoc.destroy();
@@ -150,47 +221,76 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         }
       }
     };
-  }, [book.file_key]);
+  }, [book.file_key, calculateFitWidthZoom]);
 
-  // Render current page in ultra-high quality Retina scaling
+  // Render current page in ultra-high quality Retina supersampling
   const renderSinglePage = useCallback(
     async (pageNum: number, currentZoom: number) => {
       if (!pdfDoc || !canvasRef.current) return;
 
+      // Cancel any ongoing render to avoid "Cannot use the same canvas during multiple render() operations"
+      if (activeRenderTaskRef.current) {
+        try {
+          activeRenderTaskRef.current.cancel();
+        } catch {
+          // ignore
+        }
+        activeRenderTaskRef.current = null;
+      }
+
       try {
+        setPageRendering(true);
         const page = await pdfDoc.getPage(pageNum);
         const canvas = canvasRef.current;
         if (!canvas) return;
 
+        // Base 1.0 viewport to track real dimensions
+        const baseVp = page.getViewport({ scale: 1.0 });
+        setBasePageDim({ width: baseVp.width, height: baseVp.height });
+
+        // Display viewport on screen (CSS pixels)
+        const displayViewport = page.getViewport({ scale: currentZoom });
+        const cssWidth = Math.floor(displayViewport.width);
+        const cssHeight = Math.floor(displayViewport.height);
+
+        setDisplayDim({ width: cssWidth, height: cssHeight });
+
+        // Device Pixel Ratio supersampling for 4K / Retina crystal clarity
+        const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 2.0) : 2.0;
+        const renderScale = currentZoom * dpr;
+        const renderViewport = page.getViewport({ scale: renderScale });
+
+        // Internal high-res canvas buffer
+        canvas.width = Math.floor(renderViewport.width);
+        canvas.height = Math.floor(renderViewport.height);
+
+        // CSS display dimensions
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+
         const ctx = canvas.getContext("2d", { alpha: false });
         if (!ctx) return;
-
-        // Device Pixel Ratio supersampling for razor sharp clarity on retina and 4K displays
-        const dpr = Math.max(window.devicePixelRatio || 1, 2.0);
-        const renderScale = currentZoom * dpr;
-
-        const viewport = page.getViewport({ scale: renderScale });
-        const displayViewport = page.getViewport({ scale: currentZoom });
-
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-
-        canvas.style.width = `${Math.floor(displayViewport.width)}px`;
-        canvas.style.height = `${Math.floor(displayViewport.height)}px`;
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
 
         const renderContext = {
           canvasContext: ctx,
-          viewport: viewport,
+          viewport: renderViewport,
         };
 
         const renderTask = page.render(renderContext);
-        renderTaskRef.current = renderTask.promise;
+        activeRenderTaskRef.current = renderTask;
+
         await renderTask.promise;
-      } catch (err) {
-        // Rendering cancelled or error
+        activeRenderTaskRef.current = null;
+        setPageRendering(false);
+      } catch (err: unknown) {
+        const errorObj = err as { name?: string };
+        if (errorObj?.name !== "RenderingCancelledException") {
+          console.error("PDF render error:", err);
+        }
+        setPageRendering(false);
       }
     },
     [pdfDoc]
@@ -215,7 +315,7 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
     }
   }
 
-  // Prevent unauthorized keys (Ctrl+S, Ctrl+P, Ctrl+C, Ctrl+U)
+  // Prevent unauthorized keys (Ctrl+S, Ctrl+P, Ctrl+C, Ctrl+U) and keyboard navigation
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "p" || e.key === "c" || e.key === "u")) {
@@ -230,22 +330,32 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
 
       if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
-        setCurrentPage((prev) => Math.min(numPages, prev + 1));
+        setCurrentPage((prev) => {
+          const next = Math.min(numPages, prev + 1);
+          scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+          return next;
+        });
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
-        setCurrentPage((prev) => Math.max(1, prev - 1));
+        setCurrentPage((prev) => {
+          const next = Math.max(1, prev - 1);
+          scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+          return next;
+        });
       } else if (e.key === "Home") {
         e.preventDefault();
         setCurrentPage(1);
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       } else if (e.key === "End") {
         e.preventDefault();
         setCurrentPage(numPages);
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       } else if (e.key === "+" || e.key === "=") {
         e.preventDefault();
-        setZoom((prev) => Math.min(2.5, prev + 0.15));
+        setZoom((prev) => Math.min(2.5, +(prev + 0.15).toFixed(2)));
       } else if (e.key === "-") {
         e.preventDefault();
-        setZoom((prev) => Math.max(0.6, prev - 0.15));
+        setZoom((prev) => Math.max(0.4, +(prev - 0.15).toFixed(2)));
       } else if (e.key === "Escape") {
         if (!document.fullscreenElement) {
           onClose();
@@ -263,10 +373,30 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
     const p = parseInt(inputPage, 10);
     if (!isNaN(p) && p >= 1 && p <= numPages) {
       setCurrentPage(p);
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       setInputPage(String(currentPage));
     }
   }
+
+  // Quick zoom presets
+  const handleFitWidth = () => {
+    const fitScale = calculateFitWidthZoom(basePageDim.width);
+    setZoom(+fitScale.toFixed(2));
+    toast({
+      title: "প্রস্থে ফিট করা হয়েছে",
+      description: "বইয়ের সম্পূর্ণ পাতা স্ক্রিনের মাপে নিখুঁতভাবে সমন্বয় করা হয়েছে। কোনো পাশ কাটবে না।",
+    });
+  };
+
+  const handleFitPage = () => {
+    const fitScale = calculateFitPageZoom(basePageDim.width, basePageDim.height);
+    setZoom(+fitScale.toFixed(2));
+    toast({
+      title: "পুরো পৃষ্ঠা ফিট",
+      description: "পুরো পাতা এক নজরে দেখার জন্য সমন্বয় করা হয়েছে।",
+    });
+  };
 
   const themeStyles = {
     DARK: "bg-slate-950 text-slate-100",
@@ -296,7 +426,7 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
       }}
     >
       {/* ================= শীর্ষ কন্ট্রোল বার ================= */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-900/95 px-3 sm:px-5 backdrop-blur-md text-white shadow-sm">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-900/95 px-3 sm:px-5 backdrop-blur-md text-white shadow-sm z-30">
         {/* বাম অংশ: বইয়ের তথ্য */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 mr-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30">
@@ -322,8 +452,8 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
           </div>
         </div>
 
-        {/* মাঝের অংশ: পৃষ্ঠা নেভিগেশন ও জুম */}
-        <div className="hidden lg:flex items-center gap-2">
+        {/* মাঝের অংশ: পৃষ্ঠা নেভিগেশন ও জুম (Desktop & Tablet) */}
+        <div className="hidden md:flex items-center gap-2">
           {/* পৃষ্ঠা নেভিগেশন */}
           <div className="flex items-center gap-1 rounded-xl bg-slate-800/80 px-2 py-1 text-xs border border-slate-700/60 shadow-inner">
             <Button
@@ -331,7 +461,10 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
               size="sm"
               variant="ghost"
               disabled={currentPage <= 1 || loading}
-              onClick={() => setCurrentPage(1)}
+              onClick={() => {
+                setCurrentPage(1);
+                scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="প্রথম পৃষ্ঠা (Home)"
             >
@@ -342,7 +475,10 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
               size="sm"
               variant="ghost"
               disabled={currentPage <= 1 || loading}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1));
+                scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="পূর্ববর্তী পৃষ্ঠা (←)"
             >
@@ -367,7 +503,10 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
               size="sm"
               variant="ghost"
               disabled={currentPage >= numPages || loading}
-              onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+              onClick={() => {
+                setCurrentPage((p) => Math.min(numPages, p + 1));
+                scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="পরবর্তী পৃষ্ঠা (→)"
             >
@@ -378,7 +517,10 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
               size="sm"
               variant="ghost"
               disabled={currentPage >= numPages || loading}
-              onClick={() => setCurrentPage(numPages)}
+              onClick={() => {
+                setCurrentPage(numPages);
+                scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="শেষ পৃষ্ঠা (End)"
             >
@@ -386,37 +528,66 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
             </Button>
           </div>
 
-          {/* জুম কন্ট্রোল */}
+          {/* জুম ও ফিট কন্ট্রোল */}
           <div className="flex items-center gap-1 rounded-xl bg-slate-800/80 px-2 py-1 text-xs border border-slate-700/60 shadow-inner">
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              disabled={zoom <= 0.6 || loading}
-              onClick={() => setZoom((z) => Math.max(0.6, z - 0.15))}
+              disabled={zoom <= 0.4 || loading}
+              onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="ছোট করুন (-)"
             >
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
+
             <button
               type="button"
-              onClick={() => setZoom(1.15)}
+              onClick={() => setZoom(1.0)}
               className="px-1.5 py-0.5 text-[11px] font-bold text-slate-300 hover:text-cyan-300"
-              title="রিসেট জুম (১০০%)"
+              title="১০০% স্কেল"
             >
               {bn(Math.round(zoom * 100))}%
             </button>
+
             <Button
               type="button"
               size="sm"
               variant="ghost"
               disabled={zoom >= 2.5 || loading}
-              onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))}
+              onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.15).toFixed(2)))}
               className="h-7 w-7 p-0 text-slate-300 hover:bg-slate-700 hover:text-white"
               title="বড় করুন (+)"
             >
               <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+
+            <div className="h-4 w-px bg-slate-700 mx-0.5" />
+
+            {/* প্রস্থে ফিট বাটন - পাতা দুই পাশ থেকে কখনো কাটবে না */}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleFitWidth}
+              className="h-7 px-2 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-950/60 hover:text-cyan-200"
+              title="স্ক্রিনের প্রস্থ অনুযায়ী ফিট করুন (কাটবে না)"
+            >
+              <Expand className="h-3.5 w-3.5 mr-1" />
+              প্রস্থে ফিট
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleFitPage}
+              className="h-7 px-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
+              title="পুরো পৃষ্ঠা স্ক্রিনে ফিট করুন"
+            >
+              <Shrink className="h-3.5 w-3.5 mr-1" />
+              পুরো পাতা
             </Button>
           </div>
         </div>
@@ -489,35 +660,74 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         </div>
       </header>
 
-      {/* মোবাইল পৃষ্ঠা কন্ট্রোল স্ট্রিপ */}
-      <div className="flex lg:hidden items-center justify-between border-b border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={currentPage <= 1 || loading}
-          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-          className="h-7 text-xs bg-slate-800 border-slate-700 text-slate-200"
-        >
-          পূর্ববর্তী
-        </Button>
-        <span className="text-[11px] font-bold text-cyan-300">
-          পৃষ্ঠা {bn(currentPage)} / {bn(numPages || 1)}
-        </span>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={currentPage >= numPages || loading}
-          onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-          className="h-7 text-xs bg-slate-800 border-slate-700 text-slate-200"
-        >
-          পরবর্তী
-        </Button>
+      {/* মোবাইল পৃষ্ঠা ও ফিট কন্ট্রোল স্ট্রিপ */}
+      <div className="flex md:hidden items-center justify-between border-b border-slate-800 bg-slate-900/95 px-3 py-1.5 text-xs text-white z-20">
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage <= 1 || loading}
+            onClick={() => {
+              setCurrentPage((p) => Math.max(1, p - 1));
+              scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="h-7 px-2 text-xs bg-slate-800 border-slate-700 text-slate-200"
+          >
+            <ChevronLeft className="h-3.5 w-3.5 mr-0.5" />
+            আগে
+          </Button>
+          <span className="text-[11px] font-bold text-cyan-300 px-1">
+            {bn(currentPage)} / {bn(numPages || 1)}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage >= numPages || loading}
+            onClick={() => {
+              setCurrentPage((p) => Math.min(numPages, p + 1));
+              scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="h-7 px-2 text-xs bg-slate-800 border-slate-700 text-slate-200"
+          >
+            পরে
+            <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleFitWidth}
+            className="h-7 px-2 text-[10px] font-bold bg-cyan-950/40 border-cyan-500/40 text-cyan-300"
+            title="স্ক্রিনের মাপে ফিট করুন"
+          >
+            <Expand className="h-3 w-3 mr-1" />
+            প্রস্থে ফিট
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.15).toFixed(2)))}
+            className="h-7 w-7 p-0 text-slate-300"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.15).toFixed(2)))}
+            className="h-7 w-7 p-0 text-slate-300"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* ================= মূল রিডিং এরিয়া ================= */}
+      {/* ================= মূল রিডিং এরিয়া (নো-কাটিং আর্কিটেকচার) ================= */}
       <main
         ref={scrollContainerRef}
-        className="relative flex-1 overflow-auto p-4 sm:p-8 flex items-start justify-center"
+        className="relative flex-1 overflow-auto p-2 sm:p-6 w-full"
       >
         {loading && (
           <div className="flex flex-col items-center justify-center py-32 text-center text-slate-400">
@@ -544,21 +754,41 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         )}
 
         {!loading && !error && (
-          <div className="relative flex flex-col items-center max-w-full">
-            {/* ক্যানভাস ধারক (নিখুঁত পেপার শ্যাডো ও মাপ) */}
+          <div className="min-w-fit w-full flex flex-col items-center py-2 sm:py-4">
+            {/* ক্যানভাস পেপার ফ্রেম (নিখুঁত প্রান্ত ও শূন্য কাটিং) */}
             <div
               className={cn(
-                "relative transition-all rounded-sm overflow-hidden",
+                "relative transition-all rounded-md shadow-2xl ring-1",
                 readerPaperStyles[theme]
               )}
+              style={{
+                width: `${displayDim.width}px`,
+                minWidth: `${displayDim.width}px`,
+                maxWidth: "none",
+              }}
             >
+              {/* রেন্ডারিং নির্দেশক স্পিনার (পৃষ্ঠা উল্টানোর সময়) */}
+              {pageRendering && (
+                <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-full bg-slate-900/80 px-2.5 py-1 text-[10px] font-bold text-cyan-300 backdrop-blur-sm shadow-md border border-slate-700">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>রেন্ডার হচ্ছে…</span>
+                </div>
+              )}
+
+              {/* হাই-রেজোলিউশন ক্যানভাস */}
               <canvas
                 ref={canvasRef}
-                className="block pointer-events-none"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
+                className="block pointer-events-none rounded-md"
+                style={{
+                  display: "block",
+                  width: `${displayDim.width}px`,
+                  height: `${displayDim.height}px`,
+                  maxWidth: "none",
+                  imageRendering: "-webkit-optimize-contrast",
+                }}
               />
 
-              {/* অ্যান্টি-কপি / অ্যান্টি-ডাউনলোড স্বচ্ছ সুরক্ষা স্তর */}
+              {/* অ্যান্টি-কপি / অ্যান্টি-ডাউনলোড সম্পূর্ণ স্বচ্ছ ইন্টারঅ্যাকশন স্তর */}
               <div
                 className="absolute inset-0 z-10 cursor-default"
                 onContextMenu={(e) => {
@@ -570,7 +800,7 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
                 }}
               >
                 {/* হালকা ওয়াটারমার্ক প্যাটার্ন (কপিরাইট সুরক্ষা) */}
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.035] rotate-[-25deg] select-none text-slate-900">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.035] rotate-[-25deg] select-none text-slate-900 overflow-hidden">
                   <div className="text-center font-black leading-tight text-xl sm:text-2xl uppercase tracking-widest">
                     বিজ্ঞান পণ্ডিত প্রকাশনী<br />
                     ডিজিটাল লাইব্রেরি — কপি নিষিদ্ধ
@@ -580,7 +810,10 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
             </div>
 
             {/* নিচের নেভিগেশন বাটনের দ্রুত অ্যাক্সেস */}
-            <div className="mt-6 flex items-center justify-between w-full max-w-md px-2 text-xs font-semibold">
+            <div
+              className="mt-6 flex items-center justify-between px-2 text-xs font-semibold"
+              style={{ width: `${Math.min(displayDim.width, 500)}px` }}
+            >
               <Button
                 type="button"
                 variant="outline"
@@ -618,7 +851,7 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
       </main>
 
       {/* ================= ফুটার সুরক্ষা বার্তা ================= */}
-      <footer className="shrink-0 border-t border-slate-800/80 bg-slate-950 px-4 py-2 text-center text-[11px] text-slate-400">
+      <footer className="shrink-0 border-t border-slate-800/80 bg-slate-950 px-4 py-2 text-center text-[11px] text-slate-400 z-30">
         বিজ্ঞান পণ্ডিত একাডেমি ডিজিটাল প্রকাশনী • শিক্ষার্থীদের জন্য শুধুমাত্র পড়ার উদ্দেশ্যে সংরক্ষিত • ডাউনলোড ও মুদ্রণ অননুমোদিত।
       </footer>
     </div>

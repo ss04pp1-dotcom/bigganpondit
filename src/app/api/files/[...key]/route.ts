@@ -35,7 +35,7 @@ export async function GET(req: Request, ctx: Ctx) {
       return new Response(obj.data as unknown as BodyInit, {
         headers: {
           "Content-Type": contentTypeFor(key),
-          "Cache-Control": "public, max-age=300",
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
         },
       });
     }

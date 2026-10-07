@@ -103,18 +103,18 @@ export async function getStudentExamRows(
 
   if (!rows.length) return [];
 
-  // highest mark per exam — fetch all marks of these exams in one query
+  // highest mark per exam — native SQL aggregate grouped by exam_id
   const examIds = [...new Set(rows.map((r) => Number(r.exam_id)))];
   const ph = examIds.map(() => "?").join(",");
-  const allMarks = (
+  const highestRows = (
     await db
-      .prepare(`SELECT exam_id, obtained_marks, attendance FROM marks WHERE exam_id IN (${ph})`)
+      .prepare(`SELECT exam_id, MAX(obtained_marks) as max_marks FROM marks WHERE exam_id IN (${ph}) GROUP BY exam_id`)
       .bind(...examIds)
-      .all<{ exam_id: number; obtained_marks: number; attendance: string }>()
+      .all<{ exam_id: number; max_marks: number }>()
   ).results;
   const highestByExam = new Map<number, number>();
-  for (const m of allMarks) {
-    highestByExam.set(m.exam_id, Math.max(highestByExam.get(m.exam_id) ?? 0, m.obtained_marks));
+  for (const r of highestRows) {
+    highestByExam.set(Number(r.exam_id), Number(r.max_marks ?? 0));
   }
 
   return rows.map((r) => {

@@ -127,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_exams_class_div ON exams(class_id, (COALESCE(divi
 
 CREATE INDEX IF NOT EXISTS idx_marks_exam    ON marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
+CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
+CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_exams_lookup  ON exams(subject_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_teacher_subjects_subject ON teacher_subjects(subject_id);
 

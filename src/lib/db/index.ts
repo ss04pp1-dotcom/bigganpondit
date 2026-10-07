@@ -288,6 +288,16 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
+  // Ensure composite performance indexes exist
+  try {
+    await db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
+      CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
+    `);
+  } catch {
+    // Indexes already exist
+  }
+
   try {
     // 2) seed (idempotent); initial admin comes from environment variables
     const env = cf ?? localEnv();

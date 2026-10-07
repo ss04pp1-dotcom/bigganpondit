@@ -341,7 +341,7 @@ export function AdminResultCardView() {
           {cards.map((card, idx) => (
             <div
               key={`card-${card.student.id}-${idx}`}
-              className={cards.length > 1 ? "print-page break-after-page mb-8" : ""}
+              className="mb-8 print:mb-0 print:p-0"
             >
               <OfficialResultCard
                 mode={mode}

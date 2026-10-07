@@ -178,7 +178,7 @@
 
 /* ============================================================
    A4 print layout — নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার
-   210mm × 297mm, hides navigation/sidebar/buttons/filters.
+   210mm × 297mm full-sheet calibrated fill layout
    ============================================================ */
 .print-only {
   display: none;
@@ -187,16 +187,18 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 6mm 7mm;
   }
   html,
   body {
     background: #ffffff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    /* Kill phantom trailing blank pages caused by sub-pixel overflow */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
     height: auto !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
   .no-print,
   .no-print * {
@@ -205,11 +207,13 @@
   .print-only {
     display: block !important;
   }
-  /* Flatten the app shell so the report flows on paper */
+  /* Flatten the app shell so the report flows on paper without offsets */
   .app-shell,
   .app-shell > *,
   .app-main,
-  .app-main > * {
+  .app-main > *,
+  main,
+  main > * {
     display: block !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -222,10 +226,13 @@
     inset: auto !important;
     border: 0 !important;
     box-shadow: none !important;
-    background: #ffffff !important;
+    background: transparent !important;
   }
   .app-sidebar,
-  .app-topbar {
+  .app-topbar,
+  header,
+  aside,
+  nav {
     display: none !important;
   }
   .print-area {
@@ -236,10 +243,12 @@
     box-shadow: none !important;
     border: 0 !important;
   }
-  /* Each logical report page starts on a fresh sheet */
+  /* Clean page breaks */
   .print-page {
     page-break-after: always;
     break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .print-page:last-child {
     page-break-after: auto;
@@ -434,42 +443,82 @@ tbody tr:hover { background: #f7fbff !important; }
   animation: marquee 25s linear infinite;
 }
 
-/* Official Result Sheet & Booklet print fidelity (Image 1 100% pixel-to-pixel copy) */
+/* Official Result Sheet & Booklet print fidelity (A4 100% Full Paper Fill) */
 @media print {
+  .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  .space-y-5 > :not([hidden]) ~ :not([hidden]),
+  .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
+
   .official-result-sheet {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
     width: 100% !important;
     max-width: 100% !important;
+    height: 282mm !important;
+    min-height: 282mm !important;
+    max-height: 283mm !important;
     background-color: #edf6ed !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    border: 2px solid #000000 !important;
-    padding: 10mm 12mm !important;
-    margin: 0 !important;
+    border: 3px solid #000000 !important;
+    padding: 6mm 8mm !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+  }
+  .official-result-sheet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   .official-result-sheet * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
   .official-result-booklet {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
     width: 100% !important;
     max-width: 100% !important;
+    height: 282mm !important;
+    min-height: 282mm !important;
+    max-height: 283mm !important;
     background-color: #fdfbf7 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    border: 2px solid #000000 !important;
-    padding: 10mm 12mm !important;
-    margin: 0 !important;
+    border: 3px solid #000000 !important;
+    padding: 6mm 8mm !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+  }
+  .official-result-booklet:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   .official-result-booklet * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  .official-result-booklet .booklet-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6mm !important;
+    height: 100% !important;
+    flex: 1 1 auto !important;
   }
 }

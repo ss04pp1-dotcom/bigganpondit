@@ -147,15 +147,15 @@ export function OfficialResultCard({
 
   // Calculate total rows for right-side summary rowSpan
   const totalSubjectRows = subjects.length;
-  // Pad with blank rows to reach at least 7 rows for authentic physical sheet look
-  const blankRowsCount = Math.max(0, 7 - totalSubjectRows);
+  // Pad with blank rows to reach at least 8 rows for authentic full-page physical sheet look
+  const blankRowsCount = Math.max(0, 8 - totalSubjectRows);
 
   const handlePrint = () => {
     window.print();
   };
 
   return (
-    <div className="w-full space-y-4 font-sans text-slate-900">
+    <div className="w-full space-y-4 font-sans text-slate-900 print:space-y-0">
       {/* Interactive Tabs & Print Controls (Hidden on Print) */}
       <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -224,7 +224,7 @@ export function OfficialResultCard({
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
           >
             <Printer className="h-4 w-4" />
-            <span>প্রিন্ট করুন (A4 — হুবহু অফিশিয়াল কপি)</span>
+            <span>প্রিন্ট করুন (A4 — ফুল পেজ)</span>
           </button>
         </div>
       </div>
@@ -233,45 +233,53 @@ export function OfficialResultCard({
           SECTION 1: OFICIAL RESULT SHEET (Image 1 Bottom - Tabular Result Sheet)
           ========================================================================= */}
       {(activeView === "SHEET" || activeView === "ALL") && (
-        <div className="official-result-sheet print-page mx-auto w-full max-w-[850px] overflow-hidden rounded-md border-[2.5px] border-slate-900 bg-[#edf6ed] p-3 sm:p-5 shadow-md print:m-0 print:w-full print:max-w-none print:border-[2px] print:border-black print:p-4 print:shadow-none">
+        <div className="official-result-sheet print-page mx-auto w-full max-w-[850px] overflow-hidden rounded-md border-[2.5px] border-slate-900 bg-[#edf6ed] p-3 sm:p-5 shadow-md print:m-0 print:w-full print:max-w-none print:border-[3px] print:border-black print:p-2.5 print:shadow-none">
           
-          {/* Header Title with Uploaded Logo Seamlessly Integrated */}
-          <div className="relative text-center">
+          {/* Header Title with Uploaded Logo & Academy Name */}
+          <div className="relative text-center print:pt-0.5">
             {logoUrl && (
-              <div className="sm:absolute sm:left-2 sm:top-0 mb-1 sm:mb-0 flex items-center justify-center">
+              <div className="sm:absolute sm:left-2 sm:top-1/2 sm:-translate-y-1/2 mb-1 sm:mb-0 flex items-center justify-center">
                 <img
                   src={logoUrl}
                   alt="লোগো"
-                  className="h-11 sm:h-13 w-auto max-w-[70px] object-contain mix-blend-multiply filter contrast-110"
+                  className="h-12 sm:h-14 print:h-13 w-auto max-w-[85px] object-contain mix-blend-multiply filter contrast-110"
                 />
               </div>
             )}
-            <h2 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-slate-900">
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`inline-block h-3.5 w-3.5 rounded-full border-[1.5px] border-black ${mode === "MONTHLY" ? "bg-black" : "bg-transparent"}`} />
-                <span>মাসিক</span>
-              </span>
-              <span className="mx-2">/</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className={`inline-block h-3.5 w-3.5 rounded-full border-[1.5px] border-black ${mode === "ANNUAL" ? "bg-black" : "bg-transparent"}`} />
-                <span>বাৎসরিক রেজাল্ট শিট — ২০</span>
-                <span className="inline-block border-b border-dotted border-black min-w-[36px] text-center font-bold">
-                  {bn(yearSuffix)}
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-slate-950">
+              {academyName || "বিজ্ঞান পণ্ডিত একাডেমি"}
+            </h1>
+            <p className="text-[11px] sm:text-xs font-semibold text-slate-700">
+              সঞ্জীব ভিলা (সিলভা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ
+            </p>
+            <div className="mt-1 flex items-center justify-center gap-2">
+              <h2 className="text-sm sm:text-base md:text-lg font-bold tracking-tight text-slate-900">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full border-[1.5px] border-black ${mode === "MONTHLY" ? "bg-black" : "bg-transparent"}`} />
+                  <span>মাসিক</span>
                 </span>
-              </span>
-            </h2>
+                <span className="mx-2">/</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full border-[1.5px] border-black ${mode === "ANNUAL" ? "bg-black" : "bg-transparent"}`} />
+                  <span>বাৎসরিক রেজাল্ট শিট — ২০</span>
+                  <span className="inline-block border-b border-dotted border-black min-w-[36px] text-center font-bold">
+                    {bn(yearSuffix)}
+                  </span>
+                </span>
+              </h2>
+            </div>
             <div className="mx-auto mt-1 h-[1.5px] w-4/5 bg-slate-400" />
           </div>
 
           {/* Month Strip */}
-          <div className="mt-2 text-center text-[11px] sm:text-[12px] font-bold text-slate-900">
+          <div className="mt-1.5 text-center text-[11px] sm:text-[12px] print:text-[12px] font-bold text-slate-900">
             <span className="mr-1">মাসঃ</span>
             {MONTHS_BN.map((mName, idx) => {
               const isSelected = idx + 1 === month;
               return (
                 <React.Fragment key={mName}>
                   <span
-                    className={`inline-block px-1 py-0.5 transition ${
+                    className={`inline-block px-1 py-0.2 transition ${
                       isSelected
                         ? "rounded border-[1.5px] border-slate-900 bg-white font-extrabold shadow-xs"
                         : "text-slate-800"
@@ -285,42 +293,45 @@ export function OfficialResultCard({
             })}
           </div>
 
-          {/* Student Info Bar (Added for clean reference print) */}
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-400 pb-1.5 text-[11px] sm:text-[12px] font-semibold text-slate-800">
+          {/* Student Info Bar */}
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-[1.5px] border-slate-800 bg-[#f8fbf8] px-3 py-1.5 rounded text-[12px] sm:text-[13px] print:text-[12px] font-semibold text-slate-800">
             <div>
-              <span>শিক্ষার্থীর নাম: </span>
-              <span className="font-bold text-slate-950">{student.name}</span>
+              <span className="text-slate-600">শিক্ষার্থীর নাম: </span>
+              <span className="font-extrabold text-slate-950 text-sm">{student.name}</span>
             </div>
             <div>
-              <span>শ্রেণি: </span>
-              <span className="font-bold text-slate-950">{classLabel(student.className)}</span>
+              <span className="text-slate-600">শ্রেণি: </span>
+              <span className="font-extrabold text-slate-950">{classLabel(student.className)}</span>
               {student.division && <span> ({divisionLabel(student.division)})</span>}
               {student.section && <span> | শাখা: {student.section}</span>}
             </div>
             <div>
-              <span>রোল: </span>
-              <span className="font-bold text-slate-950">{bn(student.roll)}</span>
+              <span className="text-slate-600">রোল: </span>
+              <span className="font-extrabold text-slate-950 text-sm">{bn(student.roll)}</span>
+              {student.bookNo && (
+                <span className="ml-3 text-slate-600">বই নং: <b className="text-slate-950">{bn(student.bookNo)}</b></span>
+              )}
             </div>
           </div>
 
-          {/* Main Table Matching Image 1 Exactly */}
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full border-collapse border-[1.5px] border-slate-900 text-center text-[11px] sm:text-[12px]">
+          {/* Main Table Matching Image 1 Exactly — Full Width Percentage Based */}
+          <div className="mt-2 overflow-x-auto print:overflow-visible print:w-full flex-1 flex flex-col justify-center">
+            <table className="w-full table-fixed border-collapse border-[2px] border-slate-900 text-center text-[12px] sm:text-[12.5px] print:text-[11.5px]">
               <thead>
                 <tr className="bg-[#e2ede2] font-bold text-slate-950">
-                  <th className="border border-slate-900 px-2 py-2 w-[110px]">শিক্ষক</th>
-                  <th className="border border-slate-900 px-2 py-2 w-[130px]">বিষয়</th>
-                  <th className="border border-slate-900 px-1.5 py-2 w-[70px]">মোট নম্বর</th>
-                  <th className="border border-slate-900 px-1.5 py-2 w-[85px] leading-tight">সর্বোচ্চ প্রাপ্ত নম্বর</th>
-                  <th className="border border-slate-900 px-1.5 py-2 w-[75px] leading-tight">প্রাপ্ত নম্বর</th>
-                  <th className="border border-slate-900 px-1 py-2 w-[55px]">গ্রেড</th>
-                  <th className="border border-slate-900 px-1 py-2 w-[70px] leading-tight">GPA (5.00)</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[13%]">শিক্ষক</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[17%]">বিষয়</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[8%]">মোট নম্বর</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[9%] leading-tight">সর্বোচ্চ প্রাপ্ত নম্বর</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[8%] leading-tight">প্রাপ্ত নম্বর</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[6%]">গ্রেড</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[7%] leading-tight">GPA (5.00)</th>
                   
                   {/* Summary Columns Header on the right */}
-                  <th className="border border-slate-900 px-1.5 py-2 w-[80px] bg-[#fbf2e6] leading-tight">সর্বোচ্চ প্রাপ্ত নম্বর</th>
-                  <th className="border border-slate-900 px-1.5 py-2 w-[80px] bg-[#fbf2e6] leading-tight">মোট প্রাপ্ত নম্বর</th>
-                  <th className="border border-slate-900 px-1 py-2 w-[55px] bg-[#fbf2e6] leading-tight">মোট গ্রেড</th>
-                  <th className="border border-slate-900 px-1.5 py-2 w-[75px] bg-[#fbf2e6] leading-tight">মোট GPA (5.00)</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[9%] bg-[#fbf2e6] leading-tight">সর্বোচ্চ প্রাপ্ত নম্বর</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[9%] bg-[#fbf2e6] leading-tight">মোট প্রাপ্ত নম্বর</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[7%] bg-[#fbf2e6] leading-tight">মোট গ্রেড</th>
+                  <th className="border border-slate-900 px-1 py-2 w-[7%] bg-[#fbf2e6] leading-tight">মোট GPA (5.00)</th>
                 </tr>
               </thead>
               <tbody>
@@ -330,14 +341,14 @@ export function OfficialResultCard({
                     const totalRowsSpan = totalSubjectRows + blankRowsCount;
 
                     return (
-                      <tr key={`sub-${sub.subjectId}-${subIdx}`} className="bg-white/70 hover:bg-white transition-colors">
+                      <tr key={`sub-${sub.subjectId}-${subIdx}`} className="bg-white/70 hover:bg-white transition-colors h-8 sm:h-9 print:h-8.5">
                         {/* Teacher Cell (Spans all subjects of this teacher) */}
                         {subIdx === 0 && (
                           <td
                             rowSpan={group.subjects.length}
-                            className="border border-slate-900 px-2 py-2 font-bold text-slate-950 align-middle bg-[#f5faf5]"
+                            className="border border-slate-900 px-1 py-1 font-bold text-slate-950 align-middle bg-[#f5faf5]"
                           >
-                            <div>{group.teacherName}</div>
+                            <div className="leading-tight">{group.teacherName}</div>
                             {group.teacherShortName && (
                               <div className="text-[10px] text-slate-600">({group.teacherShortName})</div>
                             )}
@@ -345,7 +356,7 @@ export function OfficialResultCard({
                         )}
 
                         {/* Subject Name */}
-                        <td className="border border-slate-900 px-2 py-1.5 text-left font-semibold text-slate-900">
+                        <td className="border border-slate-900 px-1.5 py-1 text-left font-semibold text-slate-900 leading-tight">
                           {sub.subjectName}
                           {sub.isFourth && (
                             <span className="ml-1 rounded bg-violet-100 px-1 py-0.2 text-[9px] text-violet-700">৪র্থ</span>
@@ -353,27 +364,27 @@ export function OfficialResultCard({
                         </td>
 
                         {/* Total Marks */}
-                        <td className="border border-slate-900 px-1.5 py-1.5 font-medium">
+                        <td className="border border-slate-900 px-1 py-1 font-medium">
                           {bn(sub.totalMarks)}
                         </td>
 
                         {/* Class Highest */}
-                        <td className="border border-slate-900 px-1.5 py-1.5 font-medium text-slate-700">
+                        <td className="border border-slate-900 px-1 py-1 font-medium text-slate-700">
                           {bn(sub.classHighest)}
                         </td>
 
                         {/* Obtained */}
-                        <td className="border border-slate-900 px-1.5 py-1.5 font-bold text-slate-950">
+                        <td className="border border-slate-900 px-1 py-1 font-bold text-slate-950">
                           {bn(sub.obtained)}
                         </td>
 
                         {/* Grade */}
-                        <td className="border border-slate-900 px-1 py-1.5 font-bold text-slate-900">
+                        <td className="border border-slate-900 px-1 py-1 font-bold text-slate-900">
                           {sub.grade}
                         </td>
 
                         {/* GPA */}
-                        <td className="border border-slate-900 px-1 py-1.5 font-bold text-slate-900">
+                        <td className="border border-slate-900 px-1 py-1 font-bold text-slate-900">
                           {fmtGpa(sub.gpa)}
                         </td>
 
@@ -382,31 +393,31 @@ export function OfficialResultCard({
                           <>
                             <td
                               rowSpan={totalRowsSpan}
-                              className="border border-slate-900 px-2 py-4 align-middle bg-[#fff7ed] text-center font-bold text-slate-900 text-sm sm:text-base"
+                              className="border border-slate-900 px-1 py-3 align-middle bg-[#fff7ed] text-center font-bold text-slate-900 text-sm sm:text-base print:text-sm"
                             >
                               <div>{bn(overall.classHighestTotal || overall.totalMarks)}</div>
-                              <div className="mt-4 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
+                              <div className="mt-3 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
                             </td>
                             <td
                               rowSpan={totalRowsSpan}
-                              className="border border-slate-900 px-2 py-4 align-middle bg-[#fff7ed] text-center font-bold text-slate-950 text-sm sm:text-base"
+                              className="border border-slate-900 px-1 py-3 align-middle bg-[#fff7ed] text-center font-bold text-slate-950 text-sm sm:text-base print:text-sm"
                             >
                               <div>{bn(overall.obtained)}</div>
-                              <div className="mt-4 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
+                              <div className="mt-3 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
                             </td>
                             <td
                               rowSpan={totalRowsSpan}
-                              className="border border-slate-900 px-1 py-4 align-middle bg-[#fff7ed] text-center font-extrabold text-slate-950 text-sm sm:text-base"
+                              className="border border-slate-900 px-1 py-3 align-middle bg-[#fff7ed] text-center font-extrabold text-slate-950 text-sm sm:text-base print:text-sm"
                             >
                               <div>{overall.grade}</div>
-                              <div className="mt-4 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
+                              <div className="mt-3 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
                             </td>
                             <td
                               rowSpan={totalRowsSpan}
-                              className="border border-slate-900 px-2 py-4 align-middle bg-[#fff7ed] text-center font-extrabold text-blue-700 text-sm sm:text-base"
+                              className="border border-slate-900 px-1 py-3 align-middle bg-[#fff7ed] text-center font-extrabold text-blue-700 text-sm sm:text-base print:text-sm"
                             >
                               <div>{fmtGpa(overall.gpa)}</div>
-                              <div className="mt-4 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
+                              <div className="mt-3 border-b border-dotted border-slate-400 w-3/4 mx-auto" />
                             </td>
                           </>
                         )}
@@ -417,14 +428,14 @@ export function OfficialResultCard({
 
                 {/* Extra blank rows as seen in physical printed Image 1 */}
                 {Array.from({ length: blankRowsCount }).map((_, i) => (
-                  <tr key={`blank-row-${i}`} className="bg-white/70 h-8">
-                    <td className="border border-slate-900 px-2 py-1.5 bg-[#f5faf5]" />
-                    <td className="border border-slate-900 px-2 py-1.5" />
-                    <td className="border border-slate-900 px-1.5 py-1.5" />
-                    <td className="border border-slate-900 px-1.5 py-1.5" />
-                    <td className="border border-slate-900 px-1.5 py-1.5" />
-                    <td className="border border-slate-900 px-1 py-1.5" />
-                    <td className="border border-slate-900 px-1 py-1.5" />
+                  <tr key={`blank-row-${i}`} className="bg-white/70 h-8 sm:h-9 print:h-8.5">
+                    <td className="border border-slate-900 px-1 py-1 bg-[#f5faf5]" />
+                    <td className="border border-slate-900 px-1 py-1" />
+                    <td className="border border-slate-900 px-1 py-1" />
+                    <td className="border border-slate-900 px-1 py-1" />
+                    <td className="border border-slate-900 px-1 py-1" />
+                    <td className="border border-slate-900 px-1 py-1" />
+                    <td className="border border-slate-900 px-1 py-1" />
                   </tr>
                 ))}
               </tbody>
@@ -432,7 +443,7 @@ export function OfficialResultCard({
           </div>
 
           {/* Bottom Section: Signatures on Left, Position & Fine on Right */}
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="mt-3 print:mt-auto pt-2 flex flex-wrap items-end justify-between gap-4">
             
             {/* Left: Director & Guardian Signature Boxes */}
             <div className="flex flex-1 flex-wrap items-end gap-6 sm:gap-10">
@@ -463,7 +474,7 @@ export function OfficialResultCard({
                   ))}
                 </div>
               ) : (
-                <div className="min-w-[200px] text-center">
+                <div className="min-w-[190px] text-center">
                   <div className="h-12 flex items-end justify-center mb-1">
                     {activeSignatureUrl ? (
                       <img
@@ -486,7 +497,7 @@ export function OfficialResultCard({
               )}
 
               {/* Guardian Signature */}
-              <div className="min-w-[140px] text-center">
+              <div className="min-w-[130px] text-center">
                 <div className="h-12 border-b border-dotted border-slate-400" />
                 <div className="border-t border-slate-900 pt-1 text-[11px] sm:text-[12px] font-bold text-slate-950">
                   অভিভাবকের স্বাক্ষর
@@ -517,9 +528,9 @@ export function OfficialResultCard({
           SECTION 2: OFFICIAL RESULT CARD BOOKLET (Image 1 Top - Front & Back Covers)
           ========================================================================= */}
       {(activeView === "BOOKLET" || activeView === "ALL") && (
-        <div className="official-result-booklet print-page mx-auto w-full max-w-[850px] overflow-hidden rounded-md border-[2.5px] border-slate-900 bg-[#fdfbf7] p-3 sm:p-5 shadow-md print:m-0 print:w-full print:max-w-none print:border-[2px] print:border-black print:p-4 print:shadow-none">
+        <div className="official-result-booklet print-page mx-auto w-full max-w-[850px] overflow-hidden rounded-md border-[2.5px] border-slate-900 bg-[#fdfbf7] p-3 sm:p-5 shadow-md print:m-0 print:w-full print:max-w-none print:border-[3px] print:border-black print:p-2.5 print:shadow-none">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <div className="booklet-grid grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 print:grid-cols-2 print:gap-5 print:h-full">
             
             {/* -------------------------------------------------------------
                 LEFT HALF: COMMENTS & QUOTES (Image 1 Top Left)

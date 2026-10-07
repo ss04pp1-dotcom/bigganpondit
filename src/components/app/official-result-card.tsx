@@ -82,6 +82,10 @@ export interface OfficialResultCardProps {
     gpa?: number;
   };
   defaultTab?: "SHEET" | "BOOKLET" | "ALL";
+  bgTheme?: BgTheme;
+  onBgThemeChange?: (theme: BgTheme) => void;
+  isLastCard?: boolean;
+  hideCardControls?: boolean;
 }
 
 /* ---- ফিক্সড মাপ (px, 96dpi) ---- */
@@ -168,9 +172,18 @@ export function OfficialResultCard({
   teacherComments,
   topStudent,
   defaultTab = "ALL",
+  bgTheme: propBgTheme,
+  onBgThemeChange,
+  isLastCard = true,
+  hideCardControls = false,
 }: OfficialResultCardProps) {
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
-  const [bgTheme, setBgTheme] = useState<BgTheme>("FLORAL");
+  const [localBgTheme, setLocalBgTheme] = useState<BgTheme>("FLORAL");
+  const bgTheme = propBgTheme ?? localBgTheme;
+  const handleBgThemeChange = (newTheme: BgTheme) => {
+    setLocalBgTheme(newTheme);
+    onBgThemeChange?.(newTheme);
+  };
   const [wrapRef, scale] = useFitScale();
 
   const [activeDirectorId, setActiveDirectorId] = useState<number | "BOTH">(() => {
@@ -304,77 +317,157 @@ export function OfficialResultCard({
     }`;
 
   return (
-    <div ref={wrapRef} className="w-full space-y-4 font-sans text-slate-900 print:space-y-0">
-      {/* কন্ট্রোল বার (প্রিন্টে লুকানো) */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <button onClick={() => setActiveView("BOOKLET")} className={tabCls(activeView === "BOOKLET", "bg-teal-700")}>
-            <BookOpen className="h-4 w-4" />
-            <span>পৃষ্ঠা ১ — কভার ও মন্তব্য</span>
-          </button>
-          <button onClick={() => setActiveView("SHEET")} className={tabCls(activeView === "SHEET", "bg-emerald-600")}>
-            <FileText className="h-4 w-4" />
-            <span>পৃষ্ঠা ২ — রেজাল্ট শিট</span>
-          </button>
-          <button onClick={() => setActiveView("ALL")} className={tabCls(activeView === "ALL", "bg-slate-900")}>
-            <Layers className="h-4 w-4" />
-            <span>দুই পৃষ্ঠা একসাথে</span>
-          </button>
-        </div>
+    <div ref={wrapRef} className="w-full space-y-4 font-sans text-slate-900 print:space-y-0 print:m-0 print:p-0">
+      {/* ইনজেক্টেড প্রিন্ট স্টাইল — নিশ্চিত করবে A4 Landscape, মার্জিন ০ এবং কোনো অতিরিক্ত ৩য় সাদা পেজ বা নোটিশ থাকবে না */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media print {
+              @page {
+                size: 297mm 210mm !important;
+                margin: 0mm !important;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 297mm !important;
+                min-width: 297mm !important;
+                height: 100% !important;
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                overflow: visible !important;
+              }
+              .app-sidebar,
+              .app-topbar,
+              header,
+              nav,
+              .no-print,
+              .notice-ticker,
+              [class*="NoticeTicker"],
+              .marquee-container {
+                display: none !important;
+              }
+              .app-shell,
+              .app-main,
+              main,
+              .lg\\:pl-\\[176px\\] {
+                margin: 0 !important;
+                padding: 0 !important;
+                max-width: none !important;
+                width: 297mm !important;
+                display: block !important;
+              }
+              .rc-slot {
+                width: 297mm !important;
+                height: 209.5mm !important;
+                max-height: 209.5mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              .rc-slot-cover {
+                break-after: page !important;
+                page-break-after: always !important;
+              }
+              .rc-slot-sheet.rc-break,
+              .rc-slot.rc-break {
+                break-after: page !important;
+                page-break-after: always !important;
+              }
+              .rc-slot-sheet.rc-last,
+              .rc-slot.rc-last {
+                break-after: auto !important;
+                page-break-after: auto !important;
+              }
+              .rc-page {
+                transform: scale(0.998) !important;
+                transform-origin: 0 0 !important;
+                overflow: hidden !important;
+              }
+            }
+          `,
+        }}
+      />
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* ব্যাকগ্রাউন্ড থিম নির্বাচক */}
-          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
-            <Palette className="h-3.5 w-3.5 text-slate-600" />
-            <span className="font-bold text-slate-700 whitespace-nowrap">ডিজাইন ব্যাকগ্রাউন্ড:</span>
-            <select
-              value={bgTheme}
-              onChange={(e) => setBgTheme(e.target.value as BgTheme)}
-              aria-label="ব্যাকগ্রাউন্ড থিম নির্বাচন"
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
-            >
-              <option value="FLORAL">১. ফ্লোরাল ও স্টুডেন্ট আর্ট (অফিশিয়াল)</option>
-              <option value="ROYAL">২. রয়্যাল ব্লু সার্টিফিকেট</option>
-              <option value="PARCHMENT">৩. ক্লাসিক পার্চমেন্ট পেপার</option>
-              <option value="CLEAN">৪. মিনিমালিস্ট ক্লিন হোয়াইট</option>
-            </select>
+      {/* কন্ট্রোল বার (প্রিন্টে লুকানো) */}
+      {!hideCardControls && (
+        <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <button onClick={() => setActiveView("BOOKLET")} className={tabCls(activeView === "BOOKLET", "bg-teal-700")}>
+              <BookOpen className="h-4 w-4" />
+              <span>পৃষ্ঠা ১ — কভার ও মন্তব্য</span>
+            </button>
+            <button onClick={() => setActiveView("SHEET")} className={tabCls(activeView === "SHEET", "bg-emerald-600")}>
+              <FileText className="h-4 w-4" />
+              <span>পৃষ্ঠা ২ — রেজাল্ট শিট</span>
+            </button>
+            <button onClick={() => setActiveView("ALL")} className={tabCls(activeView === "ALL", "bg-slate-900")}>
+              <Layers className="h-4 w-4" />
+              <span>দুই পৃষ্ঠা একসাথে</span>
+            </button>
           </div>
 
-          {availableDirectors && availableDirectors.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* ব্যাকগ্রাউন্ড থিম নির্বাচক */}
             <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
-              <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
+              <Palette className="h-3.5 w-3.5 text-slate-600" />
+              <span className="font-bold text-slate-700 whitespace-nowrap">ডিজাইন ব্যাকগ্রাউন্ড:</span>
               <select
-                value={String(activeDirectorId)}
-                onChange={(e) => {
-                  const val = e.target.value === "BOTH" ? "BOTH" : Number(e.target.value);
-                  setActiveDirectorId(val);
-                  onDirectorChange?.(val);
-                }}
-                aria-label="স্বাক্ষর নির্বাচন"
+                value={bgTheme}
+                onChange={(e) => handleBgThemeChange(e.target.value as BgTheme)}
+                aria-label="ব্যাকগ্রাউন্ড থিম নির্বাচন"
                 className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
               >
-                {availableDirectors.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} {d.institution ? `(${d.institution})` : ""}
-                  </option>
-                ))}
-                <option value="BOTH">উভয় পরিচালকের যৌথ স্বাক্ষর</option>
+                <option value="FLORAL">১. ফ্লোরাল ও স্টুডেন্ট আর্ট (অফিশিয়াল)</option>
+                <option value="ROYAL">২. রয়্যাল ব্লু সার্টিফিকেট</option>
+                <option value="PARCHMENT">৩. ক্লাসিক পার্চমেন্ট পেপার</option>
+                <option value="CLEAN">৪. মিনিমালিস্ট ক্লিন হোয়াইট</option>
               </select>
             </div>
-          )}
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
-          >
-            <Printer className="h-4 w-4" />
-            <span>প্রিন্ট করুন (A4 Landscape)</span>
-          </button>
+
+            {availableDirectors && availableDirectors.length > 1 && (
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
+                <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
+                <select
+                  value={String(activeDirectorId)}
+                  onChange={(e) => {
+                    const val = e.target.value === "BOTH" ? "BOTH" : Number(e.target.value);
+                    setActiveDirectorId(val);
+                    onDirectorChange?.(val);
+                  }}
+                  aria-label="স্বাক্ষর নির্বাচন"
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
+                >
+                  {availableDirectors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} {d.institution ? `(${d.institution})` : ""}
+                    </option>
+                  ))}
+                  <option value="BOTH">উভয় পরিচালকের যৌথ স্বাক্ষর</option>
+                </select>
+              </div>
+            )}
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+            >
+              <Printer className="h-4 w-4" />
+              <span>প্রিন্ট করুন (A4 Landscape)</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= পৃষ্ঠা ১ : কভার ================= */}
       {showCover && (
-        <div className={`rc-slot mx-auto ${showSheet ? "" : "rc-last"}`} style={slotStyle}>
+        <div className={`rc-slot rc-slot-cover mx-auto ${showSheet ? "" : "rc-last"}`} style={slotStyle}>
           <div className="rc-page" style={pageStyle}>
             {/* বাম প্যানেল */}
             <div className="rc-panel rc-pl" style={getPanelBg("LEFT")}>
@@ -468,7 +561,7 @@ export function OfficialResultCard({
 
       {/* ================= পৃষ্ঠা ২ : রেজাল্ট শিট ================= */}
       {showSheet && (
-        <div className="rc-slot rc-last mx-auto" style={slotStyle}>
+        <div className={`rc-slot rc-slot-sheet mx-auto ${isLastCard ? "rc-last" : "rc-break"}`} style={slotStyle}>
           <div className="rc-page" style={pageStyle}>
             <div className="rc-sheet" style={getPanelBg("SHEET")}>
               <div className="rc-a rc-stitle">
@@ -707,10 +800,12 @@ export function OfficialResultCard({
         </div>
       )}
 
-      <div className="no-print text-center text-xs text-slate-500">
-        💡 টিপস: প্রিন্ট ডায়ালগে <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b> এবং <b>Background graphics</b> টিক দিন —
-        ২ পৃষ্ঠার (কভার + রেজাল্ট শিট) সম্পূর্ণ নিখুঁত পিডিএফ হবে।
-      </div>
+      {!hideCardControls && (
+        <div className="no-print text-center text-xs text-slate-500">
+          💡 টিপস: প্রিন্ট ডায়ালগে <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b> এবং <b>Background graphics</b> টিক দিন —
+          ২ পৃষ্ঠার (কভার + রেজাল্ট শিট) সম্পূর্ণ নিখুঁত পিডিএফ হবে।
+        </div>
+      )}
     </div>
   );
 }

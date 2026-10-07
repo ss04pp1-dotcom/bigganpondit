@@ -1047,23 +1047,64 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 
 @media print {
+  body:has(.rc-slot) {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  body:has(.rc-slot) .app-shell,
+  body:has(.rc-slot) .app-main,
+  body:has(.rc-slot) main,
+  body:has(.rc-slot) [class*="lg:pl-"],
+  body:has(.rc-slot) .lg\:pl-\[176px\] {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 297mm !important;
+    display: block !important;
+  }
+  body:has(.rc-slot) .app-sidebar,
+  body:has(.rc-slot) .app-topbar,
+  body:has(.rc-slot) header,
+  body:has(.rc-slot) nav,
+  body:has(.rc-slot) .notice-ticker {
+    display: none !important;
+  }
   .rc-slot {
     page: rc;
     width: 297mm !important;
     height: 209.5mm !important;
+    max-height: 209.5mm !important;
     margin: 0 !important;
+    padding: 0 !important;
     box-shadow: none !important;
-    break-after: page;
-    page-break-after: always;
+    border: none !important;
+    overflow: hidden !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  .rc-slot-cover {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+  .rc-slot-sheet.rc-break,
+  .rc-slot.rc-break {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+  .rc-slot-sheet.rc-last,
   .rc-slot.rc-last {
-    break-after: auto;
-    page-break-after: auto;
+    break-after: auto !important;
+    page-break-after: auto !important;
   }
   .rc-page {
-    transform: none !important;
+    transform: scale(0.998) !important;
+    transform-origin: 0 0 !important;
+    overflow: hidden !important;
   }
 }
 

@@ -1,0 +1,6 @@
+{
+  "name": "Biggan Pondit (বিজ্ঞান পন্ডিত)",
+  "description": "Comprehensive Coaching and Academic Management System for Biggan Pondit, featuring multi-role portals for Director, Admin, Teacher, and Students with marks, attendance, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

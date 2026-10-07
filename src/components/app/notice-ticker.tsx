@@ -34,7 +34,7 @@ export function NoticeTicker() {
   if (dismissed || notices.length === 0) return null;
 
   return (
-    <div className="relative z-20 flex items-center bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 px-3 py-1.5 text-white shadow-xs overflow-hidden text-[12px] font-medium border-b border-amber-700/20">
+    <div className="no-print relative z-20 flex items-center bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 px-3 py-1.5 text-white shadow-xs overflow-hidden text-[12px] font-medium border-b border-amber-700/20">
       <div className="flex items-center gap-1.5 bg-amber-700/80 px-2 py-0.5 rounded text-[11px] font-bold shrink-0 shadow-xs mr-2">
         <Volume2 className="h-3.5 w-3.5 animate-pulse text-amber-200" />
         <span>জরুরি নোটিশ:</span>

@@ -263,15 +263,15 @@ export function AppShell({
   return (
     <div className="app-shell min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-40 hidden w-[176px] flex-col bg-[#0f172a] lg:flex">
+      <aside className="app-sidebar no-print fixed inset-y-0 left-0 z-40 hidden w-[176px] flex-col bg-[#0f172a] lg:flex">
         {brand}
         {navList}
         {userCard}
       </aside>
 
-      <div className="lg:pl-[176px]">
+      <div className="print:pl-0 lg:pl-[176px]">
         {/* Top bar */}
-        <header className="app-topbar sticky top-0 z-30 border-b border-border bg-white/90 backdrop-blur">
+        <header className="app-topbar no-print sticky top-0 z-30 border-b border-border bg-white/90 backdrop-blur">
           <div className="flex h-12 items-center gap-3 px-4 sm:px-6">
             {/* Mobile menu */}
             <Sheet open={open} onOpenChange={setOpen}>
@@ -318,10 +318,12 @@ export function AppShell({
         </header>
 
         {/* Floating Notice Ticker */}
-        <NoticeTicker />
+        <div className="no-print">
+          <NoticeTicker />
+        </div>
 
         {/* Content */}
-        <main className="app-main mx-auto w-full max-w-[1180px] px-4 py-5 sm:px-6 lg:py-6">{children}</main>
+        <main className="app-main mx-auto w-full max-w-[1180px] px-4 py-5 sm:px-6 lg:py-6 print:m-0 print:p-0 print:max-w-none print:w-auto">{children}</main>
       </div>
 
       {/* Password Change / Request Dialog */}

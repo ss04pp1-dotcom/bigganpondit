@@ -694,26 +694,35 @@ tbody tr:hover { background: #f7fbff !important; }
   border-radius: 0 0 8px 0;
 }
 .rc-tagline {
-  left: 80px;
-  top: 173px;
-  font-size: 17.5px;
-  font-weight: 600;
+  left: 0;
+  right: 0;
+  width: 100%;
+  top: 172px;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: #111;
+  text-align: center;
   white-space: nowrap;
 }
 .rc-addr {
-  left: 94px;
+  left: 50%;
+  transform: translateX(-50%);
   top: 195px;
-  width: 350px;
+  width: 410px;
+  max-width: 92%;
   height: 31px;
   border: 1.5px solid #222;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  font-size: 13.9px;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   white-space: nowrap;
+  padding: 0 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 .rc-badge {
   left: 167px;
@@ -912,6 +921,11 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-tbl th.rc-att {
   background: #e8f5e9;
+  font-size: 15.5px;
+  line-height: 1.2;
+  padding: 0 1px;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
 }
 .rc-tbl .rc-sp {
   background: #fff !important;

@@ -68,7 +68,7 @@ export function ImageUpload({
   compact = false,
   disabled = false,
 }: {
-  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature";
+  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg";
   studentId?: number;
   teacherId?: number;
   currentUrl?: string | null;

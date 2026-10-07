@@ -97,7 +97,8 @@ export const subjectCreateSchema = z.object({
 export const subjectUpdateSchema = subjectCreateSchema.partial();
 
 export const settingsUpdateSchema = z.object({
-  academyName: z.string().trim().min(1, "একাডেমির নাম লিখুন।").max(100),
+  academyName: z.string().trim().min(1, "একাডেমির নাম লিখুন।").max(100).optional(),
+  cardBgUrl: z.string().nullable().optional(),
 });
 
 export const backupActionSchema = z.object({

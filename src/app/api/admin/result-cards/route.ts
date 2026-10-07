@@ -39,6 +39,12 @@ export async function GET(req: Request) {
     const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
     const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
     const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
+    const cardBgKey = await getSetting("card_bg_image_key", "");
+    const cardBgUrl = cardBgKey
+      ? cardBgKey.startsWith("http") || cardBgKey.startsWith("data:") || cardBgKey.startsWith("/card")
+        ? cardBgKey
+        : `/api/files/${cardBgKey}`
+      : null;
     const availableDirectors = await getAllDirectorsList(db);
     const teacherMap = await getSubjectTeachersMap(db);
 
@@ -274,6 +280,7 @@ export async function GET(req: Request) {
       studentsList: students.map((s) => ({ id: s.id, name: s.name, roll: s.roll })),
       availableDirectors,
       logoUrl,
+      cardBgUrl,
       academyName,
       mode,
       month,

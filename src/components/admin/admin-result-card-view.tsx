@@ -72,6 +72,7 @@ export function AdminResultCardView() {
   const [selectedDirectorId, setSelectedDirectorId] = useState<number | "BOTH">(1);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
+  const [cardBgUrl, setCardBgUrl] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
 
   // Reset preview index when filters change
@@ -101,6 +102,7 @@ export function AdminResultCardView() {
         setStudentsList(json.studentsList || []);
         setAvailableDirectors(json.availableDirectors || []);
         setLogoUrl(json.logoUrl || null);
+        if (json.cardBgUrl !== undefined) setCardBgUrl(json.cardBgUrl);
         if (json.academyName) setAcademyName(json.academyName);
 
         // Keep or select first director if valid
@@ -426,6 +428,8 @@ export function AdminResultCardView() {
                       logoUrl={logoUrl}
                       academyName={academyName}
                       defaultTab="ALL"
+                      cardBgUrl={cardBgUrl}
+                      onCardBgChange={setCardBgUrl}
                       isLastCard={isLastCard}
                       hideCardControls={!isPreview}
                     />

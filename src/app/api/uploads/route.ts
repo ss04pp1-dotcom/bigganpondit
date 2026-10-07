@@ -205,6 +205,14 @@ export async function POST(req: Request) {
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
 
+    if (type === "card-bg") {
+      if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
+      const key = `academy/card-bg/${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await setSetting("card_bg_image_key", key);
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
     throw new ApiError(400, "অজানা আপলোড ধরন।");
   } catch (e) {
     return handleError(e);

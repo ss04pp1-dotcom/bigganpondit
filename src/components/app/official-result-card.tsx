@@ -10,9 +10,10 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { Printer, FileText, BookOpen, Layers } from "lucide-react";
+import { Printer, FileText, BookOpen, Layers, Palette, Image as ImageIcon } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa } from "@/lib/constants";
 import { TransparentSignature } from "@/components/app/transparent-signature";
+import { CardBgModal } from "@/components/app/card-bg-modal";
 
 export interface OfficialSubjectRow {
   subjectId: number;
@@ -85,6 +86,8 @@ export interface OfficialResultCardProps {
   defaultTab?: "SHEET" | "BOOKLET" | "ALL";
   bgTheme?: BgTheme;
   onBgThemeChange?: (theme: BgTheme) => void;
+  cardBgUrl?: string | null;
+  onCardBgChange?: (url: string | null) => void;
   isLastCard?: boolean;
   hideCardControls?: boolean;
   showPrintButton?: boolean;
@@ -176,12 +179,37 @@ export function OfficialResultCard({
   defaultTab = "ALL",
   bgTheme: propBgTheme,
   onBgThemeChange,
+  cardBgUrl: propCardBgUrl,
+  onCardBgChange,
   isLastCard = true,
   hideCardControls = false,
   showPrintButton = false,
 }: OfficialResultCardProps) {
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
   const bgTheme = propBgTheme ?? "FLORAL";
+  const [activeBgUrl, setActiveBgUrl] = useState<string | null>(propCardBgUrl || null);
+  const [bgModalOpen, setBgModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (propCardBgUrl !== undefined) {
+      setActiveBgUrl(propCardBgUrl || null);
+    } else {
+      fetch("/api/settings")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.ok && data.cardBgUrl) {
+            setActiveBgUrl(data.cardBgUrl);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [propCardBgUrl]);
+
+  const handleCustomBgChange = (newUrl: string | null) => {
+    setActiveBgUrl(newUrl);
+    onCardBgChange?.(newUrl);
+  };
+
   const [wrapRef, scale] = useFitScale();
 
   const [activeDirectorId, setActiveDirectorId] = useState<number | "BOTH">(() => {
@@ -277,6 +305,24 @@ export function OfficialResultCard({
 
   // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল
   const getPanelBg = (side: "LEFT" | "RIGHT" | "SHEET"): React.CSSProperties => {
+    if (activeBgUrl) {
+      if (side === "SHEET") {
+        return {
+          backgroundImage: `url(${activeBgUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundColor: "#f4f8ee",
+        };
+      }
+      return {
+        backgroundImage: `url(${activeBgUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#ffffff",
+      };
+    }
     if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
     if (bgTheme === "PARCHMENT") {
       return {
@@ -413,6 +459,16 @@ export function OfficialResultCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* ব্যাকগ্রাউন্ড ডিজাইন ও ছবি আপলোড বাটন */}
+            <button
+              type="button"
+              onClick={() => setBgModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 text-xs sm:text-sm font-bold text-emerald-800 hover:from-emerald-100 hover:to-teal-100 hover:border-emerald-400 transition shadow-2xs"
+            >
+              <Palette className="h-4 w-4 text-emerald-700" />
+              <span>কার্ড ব্যাকগ্রাউন্ড ছবি / ডিজাইন</span>
+            </button>
+
             {availableDirectors && availableDirectors.length > 1 && (
               <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
                 <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
@@ -447,6 +503,14 @@ export function OfficialResultCard({
           </div>
         </div>
       )}
+
+      {/* ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন মডাল */}
+      <CardBgModal
+        open={bgModalOpen}
+        onOpenChange={setBgModalOpen}
+        currentBgUrl={activeBgUrl}
+        onBgChange={handleCustomBgChange}
+      />
 
       {/* ================= পৃষ্ঠা ১ : কভার ================= */}
       {showCover && (
@@ -579,7 +643,7 @@ export function OfficialResultCard({
               {/* রেজাল্ট টেবিল: শিক্ষক, বিষয়, উপস্থিতি (P/An), মোট নম্বর, সর্বোচ্চ, প্রাপ্ত, গ্রেড, GPA */}
               <table className="rc-tbl">
                 <colgroup>
-                  {[75, 155, 52, 72, 80, 72, 50, 72, 16, 95, 95, 55, 70].map((w, i) => (
+                  {[70, 146, 66, 72, 80, 72, 50, 70, 16, 95, 95, 55, 75].map((w, i) => (
                     <col key={i} style={{ width: w }} />
                   ))}
                 </colgroup>

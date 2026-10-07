@@ -185,6 +185,9 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
           }}
           subjects={(report.subjects ?? []).map((s) => {
             const t = teacherMap.get(s.subjectId);
+            const exams = report.examRowsBySubject?.get(s.subjectId) ?? [];
+            const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
+            const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
             return {
               subjectId: s.subjectId,
               subjectName: s.subjectName,
@@ -196,6 +199,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
               grade: s.grade,
               gpa: s.gpa,
               isFourth: s.isFourth,
+              attendance,
             };
           })}
           overall={report.overall}
@@ -203,7 +207,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
           directorInfo={dirInfo}
           availableDirectors={availableDirectors}
           logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-          defaultTab="SHEET"
+          defaultTab="ALL"
         />
       ) : (
         /* ---- All students class summary ---- */

@@ -21,6 +21,7 @@ import {
   Bell,
   BookMarked,
   UserCheck,
+  Award,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -37,7 +38,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/director/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/director/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/director/results", label: "ফলাফল ও মার্কশিট", icon: Search },
-    { href: "/director/notebooks", label: "নোট বুক", icon: BookMarked },
+    { href: "/director/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
+    { href: "/director/notebooks", label: "প্রকাশনী", icon: BookMarked },
     { href: "/director/notices", label: "নোটিশ বোর্ড", icon: Bell },
   ],
   TEACHER: [
@@ -46,10 +48,11 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/teacher/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/teacher/marks", label: "নম্বর দিন", icon: ClipboardEdit },
     { href: "/teacher/results", label: "ফলাফল অনুসন্ধান", icon: Search },
+    { href: "/teacher/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
     { href: "/teacher/monthly-report", label: "মাসিক রিপোর্ট", icon: FileText },
     { href: "/teacher/annual-report", label: "বার্ষিক রিপোর্ট", icon: CalendarRange },
     { href: "/teacher/merit-list", label: "মেধা তালিকা", icon: Trophy },
-    { href: "/teacher/notebooks", label: "নোট বুক", icon: BookMarked },
+    { href: "/teacher/notebooks", label: "প্রকাশনী", icon: BookMarked },
     { href: "/teacher/notices", label: "নোটিশ বোর্ড", icon: Bell },
     { href: "/teacher/settings", label: "সেটিংস", icon: Settings },
   ],
@@ -61,7 +64,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/admin/subjects", label: "বিষয়", icon: BookOpen },
     { href: "/admin/results", label: "ফলাফল ও মার্কশিট", icon: Search },
-    { href: "/admin/notebooks", label: "নোট বুক", icon: BookMarked },
+    { href: "/admin/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
+    { href: "/admin/notebooks", label: "প্রকাশনী", icon: BookMarked },
     { href: "/admin/notices", label: "নোটিশ বোর্ড", icon: Bell },
     { href: "/admin/settings", label: "সেটিংস", icon: Settings },
     { href: "/admin/backup", label: "ব্যাকআপ", icon: DatabaseBackup },
@@ -72,7 +76,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/student/results", label: "ফলাফল", icon: Search },
     { href: "/student/monthly-result", label: "মাসিক ফলাফল", icon: FileText },
     { href: "/student/annual-result", label: "বার্ষিক ফলাফল", icon: CalendarRange },
-    { href: "/student/notebooks", label: "নোট বুক", icon: BookMarked },
+    { href: "/student/notebooks", label: "প্রকাশনী", icon: BookMarked },
     { href: "/student/notices", label: "নোটিশ বোর্ড", icon: Bell },
   ],
 };

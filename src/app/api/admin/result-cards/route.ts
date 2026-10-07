@@ -93,8 +93,27 @@ export async function GET(req: Request) {
           subjectIds: null,
         }).catch(() => null);
 
+        const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];
+        const topStudent = topEntry ? {
+          totalMarks: topEntry.totalMarks,
+          totalObtained: topEntry.totalObtained,
+          grade: topEntry.grade,
+          gpa: topEntry.gpa,
+        } : undefined;
+
+        let totalStudentAbsences = 0;
+        let totalStudentFails = 0;
+
         const officialSubjects = (report?.subjects ?? []).map((s) => {
           const t = teacherMap.get(s.subjectId);
+          const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
+          const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
+          totalStudentAbsences += absCount;
+          if (s.grade === "F" && !s.isFourth) {
+            totalStudentFails++;
+          }
+          const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
+
           return {
             subjectId: s.subjectId,
             subjectName: s.subjectName,
@@ -106,6 +125,7 @@ export async function GET(req: Request) {
             grade: s.grade,
             gpa: s.gpa,
             isFourth: s.isFourth,
+            attendance,
           };
         });
 
@@ -122,6 +142,8 @@ export async function GET(req: Request) {
           ? monthlySummary.entries.find((e: any) => e.studentId === st.id)?.position
           : undefined;
 
+        const calculatedFine = (totalStudentAbsences * 20) + (totalStudentFails * 50);
+
         cards.push({
           student: {
             id: st.id,
@@ -133,12 +155,13 @@ export async function GET(req: Request) {
           },
           subjects: officialSubjects,
           overall,
-          position: position ?? "১ম",
-          fine: "০০/-",
+          position: position ? `${position}ম` : "১ম",
+          fine: `${calculatedFine}.00৳`,
+          topStudent,
           teacherComments: {
-            comment1: "নিয়মিত ক্লাসে উপস্থিতি ও নিয়মিত পড়াশোনায় মনোযোগ দিতে হবে।",
-            comment2: "বিজ্ঞান বিষয়ে ফলাফল সন্তোষজনক, ধারাবাহিকতা বজায় রাখো।",
-            guardianComment: "বাসায় প্রতিদিন পড়ার টেবিলে নিয়মিত সময় দিচ্ছে।",
+            comment1: "আরো ভালো করা উচিত ছিল",
+            comment2: "পরীক্ষায় অনুপস্থিত থাকা অন্যায়",
+            guardianComment: "",
           },
         });
       } else {

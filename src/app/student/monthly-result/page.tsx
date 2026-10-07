@@ -53,6 +53,9 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
 
   const officialSubjects = (report?.subjects ?? []).map((s) => {
     const t = teacherMap.get(s.subjectId);
+    const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
+    const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
+    const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
     return {
       subjectId: s.subjectId,
       subjectName: s.subjectName,
@@ -64,6 +67,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
       grade: s.grade,
       gpa: s.gpa,
       isFourth: s.isFourth,
+      attendance,
     };
   });
 
@@ -128,7 +132,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         directorInfo={dirInfo}
         availableDirectors={availableDirectors}
         logoUrl={logoUrl}
-        defaultTab="SHEET"
+        defaultTab="ALL"
       />
     </div>
   );

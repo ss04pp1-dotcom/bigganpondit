@@ -2,7 +2,7 @@ import { requirePageUser } from "@/lib/auth/guards";
 import { NotebookViewer } from "@/components/app/notebook-viewer";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "নোট বুক" };
+export const metadata = { title: "প্রকাশনী" };
 
 export default async function StudentNotebooksPage() {
   const user = await requirePageUser(["STUDENT"]);

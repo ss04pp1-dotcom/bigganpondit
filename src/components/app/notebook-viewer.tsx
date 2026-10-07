@@ -214,9 +214,9 @@ export function NotebookViewer({
               <BookMarked className="h-6 w-6" />
             </span>
             <div>
-              <h2 className="text-[18px] font-bold text-slate-900">ডিজিটাল নোট বুক ও লাইব্রেরি</h2>
+              <h2 className="text-[18px] font-bold text-slate-900">প্রকাশনী ও ডিজিটাল লাইব্রেরি</h2>
               <p className="text-[12px] text-slate-500">
-                অনলাইনে পাঠ্যবই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)
+                অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)
               </p>
             </div>
           </div>

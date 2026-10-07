@@ -124,7 +124,7 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
         directorInfo={dirInfo}
         availableDirectors={availableDirectors}
         logoUrl={logoUrl}
-        defaultTab="SHEET"
+        defaultTab="ALL"
       />
 
       {/* 12 Months Progress & Graph */}

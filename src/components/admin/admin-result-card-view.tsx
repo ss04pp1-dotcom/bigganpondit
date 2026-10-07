@@ -42,6 +42,12 @@ interface CardData {
   overall: any;
   position?: number | string;
   fine?: number | string;
+  topStudent?: {
+    totalMarks?: number;
+    totalObtained?: number;
+    grade?: string;
+    gpa?: number;
+  };
   teacherComments?: {
     comment1?: string;
     comment2?: string;
@@ -352,13 +358,14 @@ export function AdminResultCardView() {
                 overall={card.overall}
                 position={card.position}
                 fine={card.fine}
+                topStudent={card.topStudent}
                 teacherComments={card.teacherComments}
                 availableDirectors={availableDirectors}
                 selectedDirectorId={selectedDirectorId}
                 onDirectorChange={(newDirId) => setSelectedDirectorId(newDirId)}
                 logoUrl={logoUrl}
                 academyName={academyName}
-                defaultTab="SHEET"
+                defaultTab="ALL"
               />
             </div>
           ))}

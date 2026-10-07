@@ -93,7 +93,19 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
     role: row.role,
   };
 
-  if (user.role === "TEACHER") {
+  // If user is in directors table, their effective role is DIRECTOR
+  const dirCheck = await db
+    .prepare("SELECT id, signature_key FROM directors WHERE user_id = ?")
+    .bind(row.id)
+    .first<{ id: number; signature_key: string | null }>()
+    .catch(() => null);
+
+  if (dirCheck) {
+    out.role = "DIRECTOR";
+    out.signatureKey = dirCheck.signature_key;
+  }
+
+  if (out.role === "TEACHER") {
     let t = await db
       .prepare("SELECT * FROM teachers WHERE user_id = ?")
       .bind(user.id)

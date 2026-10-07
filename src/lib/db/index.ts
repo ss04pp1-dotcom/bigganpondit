@@ -202,7 +202,7 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Already exists
   }
 
-  // Directors, Notices, Notebooks, Attendance tables & student privacy column
+  // Directors table
   try {
     await db.exec(`
       CREATE TABLE IF NOT EXISTS directors (
@@ -214,7 +214,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         remarks         TEXT,
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
       );
+    `);
+  } catch {
+    // Already exists
+  }
 
+  // Notices table
+  try {
+    await db.exec(`
       CREATE TABLE IF NOT EXISTS notices (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         title           TEXT NOT NULL,
@@ -228,7 +235,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         approved_at     TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status);
+    `);
+  } catch {
+    // Already exists
+  }
 
+  // Notebooks table
+  try {
+    await db.exec(`
       CREATE TABLE IF NOT EXISTS notebooks (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         title           TEXT NOT NULL,
@@ -242,7 +256,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         description     TEXT,
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
       );
+    `);
+  } catch {
+    // Already exists
+  }
 
+  // Attendance table
+  try {
+    await db.exec(`
       CREATE TABLE IF NOT EXISTS attendance (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,

@@ -37,10 +37,20 @@ export async function POST(req: Request) {
     await db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
 
     const { token } = await createSession(db, user.id);
+
+    // Check if user is registered in directors table
+    const dirRow = await db
+      .prepare("SELECT id FROM directors WHERE user_id = ?")
+      .bind(user.id)
+      .first<{ id: number }>()
+      .catch(() => null);
+
+    const effectiveRole: Role = dirRow ? "DIRECTOR" : user.role;
+
     const res = ok({
       name: user.name,
-      role: user.role,
-      redirect: roleHome(user.role),
+      role: effectiveRole,
+      redirect: roleHome(effectiveRole),
     }) as NextResponse;
     const isHttps = req.headers.get("x-forwarded-proto") === "https" || req.url.startsWith("https://");
     const opts = sessionCookieOptions();

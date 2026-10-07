@@ -435,17 +435,80 @@ export async function buildStudentAnnualReport(
   return { student, annual: buildAnnualResult(byMonth) };
 }
 
-export async function getDirectorSignatureInfo(db: D1Database) {
-  const d = await db
-    .prepare(
-      `SELECT d.signature_key, u.name, d.institution
-       FROM directors d
-       JOIN users u ON u.id = d.user_id
-       ORDER BY (d.signature_key IS NOT NULL) DESC, d.id ASC
-       LIMIT 1`
-    )
-    .first<{ signature_key: string | null; name: string; institution: string | null }>()
+export interface DirectorSignatureItem {
+  id: number;
+  name: string;
+  institution: string | null;
+  signatureUrl: string | null;
+}
+
+export async function getAllDirectorsList(db: D1Database): Promise<DirectorSignatureItem[]> {
+  const rows = (
+    await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         ORDER BY d.id ASC`
+      )
+      .all<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null)
+  )?.results ?? [];
+
+  const fallbackKey = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_DIRECTOR_SIGNATURE)
+    .first<{ value: string | null }>()
     .catch(() => null);
+
+  const fallbackUrl = fallbackKey?.value ? `/api/files/${fallbackKey.value}` : null;
+
+  const result: DirectorSignatureItem[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    institution: r.institution,
+    signatureUrl: r.signature_key ? `/api/files/${r.signature_key}` : fallbackUrl,
+  }));
+
+  if (result.length === 0) {
+    result.push({
+      id: 1,
+      name: "ডাঃ মোঃ শাহিন",
+      institution: "এম.বি.বি.এস, রামেক",
+      signatureUrl: fallbackUrl,
+    });
+  }
+
+  return result;
+}
+
+export async function getDirectorSignatureInfo(db: D1Database, directorId?: number | null) {
+  let d: { id: number; signature_key: string | null; name: string; institution: string | null } | null = null;
+  if (directorId) {
+    d = await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         WHERE d.id = ?`
+      )
+      .bind(directorId)
+      .first<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null);
+  }
+
+  if (!d) {
+    d = await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         ORDER BY (d.signature_key IS NOT NULL) DESC, d.id ASC
+         LIMIT 1`
+      )
+      .first<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null);
+  }
 
   const fallbackKey = await db
     .prepare("SELECT value FROM settings WHERE key = ?")
@@ -455,6 +518,7 @@ export async function getDirectorSignatureInfo(db: D1Database) {
 
   const key = d?.signature_key || fallbackKey?.value || null;
   return {
+    id: d?.id ?? null,
     signatureUrl: key ? `/api/files/${key}` : null,
     name: d?.name || "পরিচালক",
     institution: d?.institution || null,

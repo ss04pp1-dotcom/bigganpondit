@@ -1,13 +1,18 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses, getTeacherSubjects } from "@/lib/permissions";
-import { buildMonthlyClassSummary, buildMonthlyReport, getDirectorSignatureInfo } from "@/lib/results/reports";
+import {
+  buildMonthlyClassSummary,
+  buildMonthlyReport,
+  getDirectorSignatureInfo,
+  getAllDirectorsList,
+  getSubjectTeachersMap,
+} from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
 import { OfficialResultCard } from "@/components/app/official-result-card";
-import { getSubjectTeachersMap } from "@/lib/results/reports";
 import { CommentBox } from "@/components/reports/comment-box";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -75,6 +80,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const dirInfo = await getDirectorSignatureInfo(db);
+  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
 
   const report = studentId && classId
@@ -195,6 +201,8 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
           overall={report.overall}
           position={position}
           directorInfo={dirInfo}
+          availableDirectors={availableDirectors}
+          logoUrl={logoKey ? `/api/files/${logoKey}` : null}
           defaultTab="SHEET"
         />
       ) : (

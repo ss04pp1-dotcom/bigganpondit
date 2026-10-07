@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Printer, FileText, BookOpen, Layers, CheckCircle2 } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa, fmtNum } from "@/lib/constants";
 
@@ -15,6 +15,13 @@ export interface OfficialSubjectRow {
   grade: string;
   gpa: number;
   isFourth?: boolean;
+}
+
+export interface DirectorOption {
+  id: number;
+  name: string;
+  institution?: string | null;
+  signatureUrl?: string | null;
 }
 
 export interface OfficialResultCardProps {
@@ -45,6 +52,11 @@ export interface OfficialResultCardProps {
     signatureUrl?: string | null;
     institution?: string | null;
   };
+  availableDirectors?: DirectorOption[];
+  selectedDirectorId?: number | null | "BOTH";
+  onDirectorChange?: (directorId: number | "BOTH") => void;
+  logoUrl?: string | null;
+  academyName?: string | null;
   teacherComments?: {
     comment1?: string;
     comment2?: string;
@@ -63,10 +75,36 @@ export function OfficialResultCard({
   position,
   fine = "০০/-",
   directorInfo,
+  availableDirectors,
+  selectedDirectorId,
+  onDirectorChange,
+  logoUrl,
+  academyName,
   teacherComments,
   defaultTab = "SHEET",
 }: OfficialResultCardProps) {
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
+
+  // Active director selection (supports choosing between 2 or more directors or both)
+  const [activeDirectorId, setActiveDirectorId] = useState<number | "BOTH">(() => {
+    if (selectedDirectorId !== undefined && selectedDirectorId !== null) return selectedDirectorId;
+    if (availableDirectors && availableDirectors.length > 0) return availableDirectors[0].id;
+    return 1;
+  });
+
+  useEffect(() => {
+    if (selectedDirectorId !== undefined && selectedDirectorId !== null) {
+      setActiveDirectorId(selectedDirectorId);
+    }
+  }, [selectedDirectorId]);
+
+  const activeDirector = availableDirectors?.find((d) => d.id === activeDirectorId);
+  const directorName = activeDirector?.name || directorInfo?.name || "ডাঃ মোঃ শাহিন";
+  const directorTitle = activeDirector
+    ? (activeDirector.institution ? `-${activeDirector.institution}` : "-এম.বি.বি.এস, রামেক")
+    : (directorInfo?.institution ? `-${directorInfo.institution}` : "-এম.বি.বি.এস, রামেক");
+  const activeSignatureUrl = activeDirector ? activeDirector.signatureUrl : (directorInfo?.signatureUrl ?? null);
+  const isBothDirectors = activeDirectorId === "BOTH" && (availableDirectors?.length ?? 0) >= 2;
 
   const curYear = year;
   const yearSuffix = String(curYear).slice(-2);
@@ -112,9 +150,6 @@ export function OfficialResultCard({
   // Pad with blank rows to reach at least 7 rows for authentic physical sheet look
   const blankRowsCount = Math.max(0, 7 - totalSubjectRows);
 
-  const directorName = directorInfo?.name || "ডাঃ মোঃ শাহিন";
-  const directorTitle = directorInfo?.institution ? `-${directorInfo.institution}` : "-এম.বি.বি.এস, রামেক";
-
   const handlePrint = () => {
     window.print();
   };
@@ -159,13 +194,39 @@ export function OfficialResultCard({
           </button>
         </div>
 
-        <button
-          onClick={handlePrint}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
-        >
-          <Printer className="h-4 w-4" />
-          <span>প্রিন্ট করুন (A4 — হুবহু অফিশিয়াল কপি)</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Director Signature Selector (Active when 2 or more directors exist) */}
+          {availableDirectors && availableDirectors.length > 1 && (
+            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
+              <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
+              <select
+                value={String(activeDirectorId)}
+                onChange={(e) => {
+                  const val = e.target.value === "BOTH" ? "BOTH" : Number(e.target.value);
+                  setActiveDirectorId(val);
+                  onDirectorChange?.(val);
+                }}
+                aria-label="স্বাক্ষর নির্বাচন"
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
+              >
+                {availableDirectors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} {d.institution ? `(${d.institution})` : ""}
+                  </option>
+                ))}
+                <option value="BOTH">উভয় পরিচালকের যৌথ স্বাক্ষর</option>
+              </select>
+            </div>
+          )}
+
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+          >
+            <Printer className="h-4 w-4" />
+            <span>প্রিন্ট করুন (A4 — হুবহু অফিশিয়াল কপি)</span>
+          </button>
+        </div>
       </div>
 
       {/* =========================================================================
@@ -174,8 +235,17 @@ export function OfficialResultCard({
       {(activeView === "SHEET" || activeView === "ALL") && (
         <div className="official-result-sheet print-page mx-auto w-full max-w-[850px] overflow-hidden rounded-md border-[2.5px] border-slate-900 bg-[#edf6ed] p-3 sm:p-5 shadow-md print:m-0 print:w-full print:max-w-none print:border-[2px] print:border-black print:p-4 print:shadow-none">
           
-          {/* Header Title */}
-          <div className="text-center">
+          {/* Header Title with Uploaded Logo Seamlessly Integrated */}
+          <div className="relative text-center">
+            {logoUrl && (
+              <div className="sm:absolute sm:left-2 sm:top-0 mb-1 sm:mb-0 flex items-center justify-center">
+                <img
+                  src={logoUrl}
+                  alt="লোগো"
+                  className="h-11 sm:h-13 w-auto max-w-[70px] object-contain mix-blend-multiply filter contrast-110"
+                />
+              </div>
+            )}
             <h2 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-slate-900">
               <span className="inline-flex items-center gap-1.5">
                 <span className={`inline-block h-3.5 w-3.5 rounded-full border-[1.5px] border-black ${mode === "MONTHLY" ? "bg-black" : "bg-transparent"}`} />
@@ -368,26 +438,52 @@ export function OfficialResultCard({
             <div className="flex flex-1 flex-wrap items-end gap-6 sm:gap-10">
               
               {/* Director Signature (Point 08 Compliance) */}
-              <div className="min-w-[200px] text-center">
-                <div className="h-12 flex items-end justify-center mb-1">
-                  {directorInfo?.signatureUrl ? (
-                    <img
-                      src={directorInfo.signatureUrl}
-                      alt="ডিরেক্টরের স্বাক্ষর"
-                      className="max-h-12 max-w-[180px] object-contain"
-                    />
-                  ) : (
-                    // Authentic calligraphic digital signature stroke matching Image 1
-                    <svg className="w-36 h-10 text-slate-800" viewBox="0 0 160 40" fill="none" stroke="currentColor">
-                      <path d="M10 28 C 30 10, 45 35, 70 15 C 90 2, 110 38, 145 20 C 130 35, 115 35, 95 32" strokeWidth="2.2" strokeLinecap="round" />
-                      <path d="M40 25 L 140 25" strokeWidth="1.2" strokeDasharray="3 3" />
-                    </svg>
-                  )}
+              {isBothDirectors ? (
+                <div className="flex items-end gap-6 sm:gap-8">
+                  {availableDirectors?.slice(0, 2).map((d) => (
+                    <div key={d.id} className="min-w-[130px] sm:min-w-[150px] text-center">
+                      <div className="h-12 flex items-end justify-center mb-1">
+                        {d.signatureUrl ? (
+                          <img
+                            src={d.signatureUrl}
+                            alt={`${d.name}-এর স্বাক্ষর`}
+                            className="max-h-12 max-w-[140px] object-contain mix-blend-multiply filter contrast-125 brightness-95"
+                          />
+                        ) : (
+                          <svg className="w-28 sm:w-32 h-10 text-slate-800" viewBox="0 0 160 40" fill="none" stroke="currentColor">
+                            <path d="M10 28 C 30 10, 45 35, 70 15 C 90 2, 110 38, 145 20 C 130 35, 115 35, 95 32" strokeWidth="2.2" strokeLinecap="round" />
+                            <path d="M40 25 L 140 25" strokeWidth="1.2" strokeDasharray="3 3" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="border-t border-slate-900 pt-1 text-[10px] sm:text-[11px] font-bold text-slate-950">
+                        স্বাক্ষর ({d.name} {d.institution ? `-${d.institution}` : ""})
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="border-t border-slate-900 pt-1 text-[11px] sm:text-[12px] font-bold text-slate-950">
-                  ডিরেক্টরের স্বাক্ষর ({directorName} {directorTitle})
+              ) : (
+                <div className="min-w-[200px] text-center">
+                  <div className="h-12 flex items-end justify-center mb-1">
+                    {activeSignatureUrl ? (
+                      <img
+                        src={activeSignatureUrl}
+                        alt="ডিরেক্টরের স্বাক্ষর"
+                        className="max-h-12 max-w-[180px] object-contain mix-blend-multiply filter contrast-125 brightness-95"
+                      />
+                    ) : (
+                      // Authentic calligraphic digital signature stroke matching Image 1
+                      <svg className="w-36 h-10 text-slate-800" viewBox="0 0 160 40" fill="none" stroke="currentColor">
+                        <path d="M10 28 C 30 10, 45 35, 70 15 C 90 2, 110 38, 145 20 C 130 35, 115 35, 95 32" strokeWidth="2.2" strokeLinecap="round" />
+                        <path d="M40 25 L 140 25" strokeWidth="1.2" strokeDasharray="3 3" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="border-t border-slate-900 pt-1 text-[11px] sm:text-[12px] font-bold text-slate-950">
+                    ডিরেক্টরের স্বাক্ষর ({directorName} {directorTitle})
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Guardian Signature */}
               <div className="min-w-[140px] text-center">
@@ -501,6 +597,15 @@ export function OfficialResultCard({
 
               {/* Branding Section */}
               <div className="text-center pt-2">
+                {logoUrl && (
+                  <div className="flex items-center justify-center mb-1.5">
+                    <img
+                      src={logoUrl}
+                      alt="লোগো"
+                      className="h-12 sm:h-14 w-auto max-w-[120px] object-contain mix-blend-multiply filter contrast-110"
+                    />
+                  </div>
+                )}
                 <div className="flex items-center justify-center gap-1.5">
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
                     <span className="text-[#059669]">বিজ্ঞান </span>

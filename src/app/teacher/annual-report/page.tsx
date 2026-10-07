@@ -1,7 +1,7 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses } from "@/lib/permissions";
-import { buildStudentAnnualReport, getDirectorSignatureInfo } from "@/lib/results/reports";
+import { buildStudentAnnualReport, getDirectorSignatureInfo, getAllDirectorsList } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
@@ -67,6 +67,7 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const dirInfo = await getDirectorSignatureInfo(db);
+  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
   const examRows = studentId ? await getStudentExamRows(db, { studentId, year, subjectIds: null }) : [];
   const bySub = new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
@@ -182,6 +183,8 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
               percentage: report.annual.overall.percentage ?? 0,
             }}
             directorInfo={dirInfo}
+            availableDirectors={availableDirectors}
+            logoUrl={logoKey ? `/api/files/${logoKey}` : null}
             defaultTab="SHEET"
           />
         

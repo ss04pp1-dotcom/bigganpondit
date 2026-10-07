@@ -1,8 +1,9 @@
 import { requirePageUser } from "@/lib/auth/guards";
-import { getDb } from "@/lib/db";
+import { getDb, getSetting } from "@/lib/db";
 import {
   buildStudentAnnualReport,
   getDirectorSignatureInfo,
+  getAllDirectorsList,
   getStudentExamRows,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import {
   MONTHS_BN,
+  SETTING_ACADEMY_LOGO,
   bn,
   fmtGpa,
   fmtNum,
@@ -36,7 +38,10 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
 
   const report = await buildStudentAnnualReport(db, { studentId: user.studentId!, year, subjectIds: null });
   const dirInfo = await getDirectorSignatureInfo(db);
+  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
+  const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
 
   const examRows = await getStudentExamRows(db, {
     studentId: user.studentId!,
@@ -117,6 +122,8 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
         subjects={officialSubjects}
         overall={overall}
         directorInfo={dirInfo}
+        availableDirectors={availableDirectors}
+        logoUrl={logoUrl}
         defaultTab="SHEET"
       />
 

@@ -44,7 +44,7 @@ export function PrintSignatures({
                 <img
                   src={teacherSignatureUrl}
                   alt="শিক্ষকের স্বাক্ষর"
-                  className="max-h-12 max-w-full object-contain"
+                  className="max-h-12 max-w-full object-contain mix-blend-multiply filter contrast-125 brightness-95"
                 />
               ) : (
                 <div className="w-full border-b border-dashed border-slate-300" />
@@ -66,7 +66,7 @@ export function PrintSignatures({
               <img
                 src={directorSignatureUrl}
                 alt="পরিচালকের স্বাক্ষর"
-                className="max-h-12 max-w-full object-contain"
+                className="max-h-12 max-w-full object-contain mix-blend-multiply filter contrast-125 brightness-95"
               />
             ) : (
               <div className="w-full border-b border-dashed border-slate-300" />

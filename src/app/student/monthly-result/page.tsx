@@ -1,9 +1,10 @@
 import { requirePageUser } from "@/lib/auth/guards";
-import { getDb } from "@/lib/db";
+import { getDb, getSetting } from "@/lib/db";
 import {
   buildMonthlyClassSummary,
   buildMonthlyReport,
   getDirectorSignatureInfo,
+  getAllDirectorsList,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
 import { OfficialResultCard } from "@/components/app/official-result-card";
@@ -11,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { MONTHS_BN, bn } from "@/lib/constants";
+import { MONTHS_BN, SETTING_ACADEMY_LOGO, bn } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "মাসিক ফলাফল" };
@@ -45,7 +46,10 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === user.studentId)?.position : undefined;
 
   const dirInfo = await getDirectorSignatureInfo(db);
+  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
+  const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
 
   const officialSubjects = (report?.subjects ?? []).map((s) => {
     const t = teacherMap.get(s.subjectId);
@@ -122,6 +126,8 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         overall={overall}
         position={position}
         directorInfo={dirInfo}
+        availableDirectors={availableDirectors}
+        logoUrl={logoUrl}
         defaultTab="SHEET"
       />
     </div>

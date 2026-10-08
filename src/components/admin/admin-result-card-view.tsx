@@ -397,16 +397,6 @@ export function AdminResultCardView() {
               পরবর্তী
               <ChevronRight className="h-4 w-4" />
             </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              onClick={handlePrint}
-              className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
-            >
-              <Printer className="h-4 w-4" />
-              সব কার্ড প্রিন্ট ({bn(cards.length)})
-            </Button>
           </div>
         </div>
       )}

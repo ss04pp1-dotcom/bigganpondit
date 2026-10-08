@@ -3,7 +3,8 @@
 // Results management (admin): exam list with filters + per-mark edit/delete.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Pencil, Search, Trash2, Printer } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Pencil, Search, Trash2, Printer, ClipboardEdit } from "lucide-react";
 import { PrintSignatures } from "@/components/app/print-signatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -233,13 +234,24 @@ export function ResultsManager() {
       {active && (
         <Card>
           <CardContent className="pt-4">
-            <h3 className="mb-1 text-[15px] font-bold">
-              {active.subject_name} — {active.title} ({classLabel(active.class_name)}
-              {active.division ? ` — ${divisionLabel(active.division)}` : ""})
-            </h3>
-            <p className="mb-3 text-[12px] text-muted-foreground">
-              {MONTHS_BN[active.month - 1]} {bn(active.year)} • তারিখ: {bn(active.exam_date)} • মোট নম্বর: {fmtNum(active.total_marks)}
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <div>
+                <h3 className="text-[15px] font-bold">
+                  {active.subject_name} — {active.title} ({classLabel(active.class_name)}
+                  {active.division ? ` — ${divisionLabel(active.division)}` : ""})
+                </h3>
+                <p className="text-[12px] text-muted-foreground mt-0.5">
+                  {MONTHS_BN[active.month - 1]} {bn(active.year)} • তারিখ: {bn(active.exam_date)} • মোট নম্বর: {fmtNum(active.total_marks)}
+                </p>
+              </div>
+              <Link
+                href={`/admin/marks?class=${active.class_name}${active.division ? `&division=${active.division}` : ""}`}
+                className="inline-flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold hover:bg-emerald-100 transition shadow-2xs"
+              >
+                <ClipboardEdit className="h-3.5 w-3.5 text-emerald-600" />
+                স্মার্ট নম্বর এন্ট্রি পেজে খুলুন
+              </Link>
+            </div>
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-[13px]">
                 <thead>

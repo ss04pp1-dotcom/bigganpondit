@@ -55,6 +55,7 @@ export const directorCreateSchema = z.object({
 export const directorUpdateSchema = directorCreateSchema.partial();
 
 export const markSaveSchema = z.object({
+  examId: z.number().int().positive().optional(),
   classId: z.number().int().positive(),
   division: z.enum(["SCIENCE", "HUMANITIES"]).nullish(),
   subjectId: z.number().int().positive("বিষয় নির্বাচন করুন।"),
@@ -64,10 +65,19 @@ export const markSaveSchema = z.object({
   title: z.string().trim().min(1, "পরীক্ষার নাম লিখুন।").max(100),
   totalMarks: z.number().int().positive("মোট নম্বর ০-এর বেশি হতে হবে।").max(1000),
   examType: z.enum(["MONTHLY", "MODEL"]).optional().default("MONTHLY"),
-  studentId: z.number().int().positive("শিক্ষার্থী নির্বাচন করুন।"),
-  attendance: z.enum(["PRESENT", "ABSENT"]),
-  obtainedMarks: z.number().min(0, "ভুল নম্বর প্রদান করা হয়েছে।").max(1000),
+  studentId: z.number().int().positive("শিক্ষার্থী নির্বাচন করুন।").optional(),
+  attendance: z.enum(["PRESENT", "ABSENT"]).optional().default("PRESENT"),
+  obtainedMarks: z.number().min(0, "ভুল নম্বর প্রদান করা হয়েছে।").max(1000).optional().default(0),
   confirmUpdate: z.boolean().optional(),
+  batch: z
+    .array(
+      z.object({
+        studentId: z.number().int().positive(),
+        attendance: z.enum(["PRESENT", "ABSENT"]),
+        obtainedMarks: z.number().min(0).max(1000),
+      })
+    )
+    .optional(),
 });
 
 export const markUpdateSchema = z.object({

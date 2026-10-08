@@ -42,6 +42,141 @@ export async function POST(req: Request) {
       throw new ApiError(400, "বিভাগ নির্বাচন করুন।");
     }
 
+    const effectiveExamType = (
+      body.examType === "MODEL" ||
+      body.title.includes("মডেল") ||
+      body.title.toLowerCase().includes("model")
+    ) ? "MODEL" : "MONTHLY";
+
+    // ---- find or create the exam (natural key or explicit examId) ----
+    let exam: { id: number; total_marks: number } | null = null;
+
+    if (body.examId) {
+      const existingById = await db
+        .prepare("SELECT id, total_marks, class_id, subject_id FROM exams WHERE id = ?")
+        .bind(body.examId)
+        .first<{ id: number; total_marks: number; class_id: number; subject_id: number }>()
+        .catch(() => null);
+      if (existingById && existingById.class_id === body.classId && existingById.subject_id === body.subjectId) {
+        exam = { id: existingById.id, total_marks: existingById.total_marks };
+      }
+    }
+
+    if (!exam) {
+      exam = await db
+        .prepare(
+          `SELECT id, total_marks FROM exams
+           WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
+             AND subject_id = ? AND month = ? AND year = ?
+             AND title = ?
+             AND COALESCE(exam_type, 'MONTHLY') = ?`
+        )
+        .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.title, effectiveExamType)
+        .first<{ id: number; total_marks: number }>(undefined as never)
+        .catch(() => null);
+    }
+
+    if (exam) {
+      // Sync total_marks or exam_date if updated in the UI
+      if (exam.total_marks !== body.totalMarks) {
+        await db
+          .prepare("UPDATE exams SET total_marks = ?, exam_date = ?, updated_at = datetime('now') WHERE id = ?")
+          .bind(body.totalMarks, body.examDate, exam.id)
+          .run()
+          .catch(() => null);
+        exam.total_marks = body.totalMarks;
+      }
+    } else {
+      try {
+        const res = await db
+          .prepare(
+            `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by, exam_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id, effectiveExamType)
+          .run();
+        const examId = Number(res.meta.last_row_id ?? 0);
+        if (examId) {
+          exam = { id: examId, total_marks: body.totalMarks };
+        }
+      } catch {
+        // Handled by concurrency recheck below
+      }
+
+      if (!exam) {
+        // Concurrent race mitigation: re-fetch exam if already inserted by a parallel request
+        const recheck = await db
+          .prepare(
+            `SELECT id, total_marks FROM exams
+             WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
+               AND subject_id = ? AND month = ? AND year = ?
+               AND title = ?
+               AND COALESCE(exam_type, 'MONTHLY') = ?`
+          )
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.title, effectiveExamType)
+          .first<{ id: number; total_marks: number }>()
+          .catch(() => null);
+        if (recheck) {
+          exam = { id: recheck.id, total_marks: recheck.total_marks };
+        } else {
+          throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
+        }
+      }
+    }
+
+    // ---- BATCH SAVE (Spreadsheet Grid Mode) ----
+    if (body.batch && body.batch.length > 0) {
+      let savedCount = 0;
+      for (const item of body.batch) {
+        const obtained = item.attendance === "ABSENT" ? 0 : Math.min(body.totalMarks, Math.max(0, Math.round(item.obtainedMarks * 100) / 100));
+        await db
+          .prepare(
+            `INSERT INTO marks (exam_id, student_id, attendance, obtained_marks)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(exam_id, student_id) DO UPDATE SET
+               attendance = excluded.attendance,
+               obtained_marks = excluded.obtained_marks,
+               updated_at = datetime('now')`
+          )
+          .bind(exam.id, item.studentId, item.attendance, obtained)
+          .run();
+        savedCount++;
+      }
+
+      const highestRow = await db
+        .prepare("SELECT MAX(obtained_marks) as h FROM marks WHERE exam_id = ?")
+        .bind(exam.id)
+        .first<{ h: number }>(undefined as never)
+        .catch(() => null);
+      const highest = highestRow?.h ?? 0;
+
+      const marks = (
+        await db
+          .prepare(
+            `SELECT m.id, m.student_id, m.attendance, m.obtained_marks, st.name, st.roll, st.section
+             FROM marks m JOIN students st ON st.id = m.student_id
+             WHERE m.exam_id = ? ORDER BY st.roll`
+          )
+          .bind(exam.id)
+          .all<Record<string, unknown>>()
+      ).results;
+
+      return ok({
+        saved: true,
+        batch: true,
+        savedCount,
+        examId: exam.id,
+        highest,
+        marks,
+        message: `${savedCount} জন শিক্ষার্থীর নম্বর সফলভাবে সংরক্ষণ করা হয়েছে।`,
+      });
+    }
+
+    // ---- SINGLE STUDENT SAVE ----
+    if (!body.studentId) {
+      throw new ApiError(400, "শিক্ষার্থী নির্বাচন করুন।");
+    }
+
     // ---- student must belong to the chosen class + division ----
     const student = await db
       .prepare("SELECT id, class_id, division FROM students WHERE id = ?")
@@ -61,63 +196,6 @@ export async function POST(req: Request) {
       throw new ApiError(400, `প্রাপ্ত নম্বর ${body.totalMarks}-এর বেশি হতে পারে না।`);
     }
     const obtained = Math.round(body.obtainedMarks * 100) / 100;
-
-    const effectiveExamType = (
-      body.examType === "MODEL" ||
-      body.title.includes("মডেল") ||
-      body.title.toLowerCase().includes("model")
-    ) ? "MODEL" : "MONTHLY";
-
-    // ---- find or create the exam (natural key) ----
-    let exam = await db
-      .prepare(
-        `SELECT id, total_marks FROM exams
-         WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
-           AND subject_id = ? AND month = ? AND year = ?
-           AND exam_date = ? AND title = ? AND total_marks = ?
-           AND COALESCE(exam_type, 'MONTHLY') = ?`
-      )
-      .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, effectiveExamType)
-      .first<{ id: number }>(undefined as never)
-      .catch(() => null);
-
-    if (!exam) {
-      try {
-        const res = await db
-          .prepare(
-            `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by, exam_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          )
-          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id, effectiveExamType)
-          .run();
-        const examId = Number(res.meta.last_row_id ?? 0);
-        if (examId) {
-          exam = { id: examId } as { id: number };
-        }
-      } catch {
-        // Handled by concurrency recheck below
-      }
-
-      if (!exam) {
-        // Concurrent race mitigation: re-fetch exam if already inserted by a parallel request
-        const recheck = await db
-          .prepare(
-            `SELECT id, total_marks FROM exams
-             WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
-               AND subject_id = ? AND month = ? AND year = ?
-               AND exam_date = ? AND title = ? AND total_marks = ?
-               AND COALESCE(exam_type, 'MONTHLY') = ?`
-          )
-          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, effectiveExamType)
-          .first<{ id: number }>()
-          .catch(() => null);
-        if (recheck) {
-          exam = { id: recheck.id };
-        } else {
-          throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
-        }
-      }
-    }
 
     // ---- duplicate prevention (UNIQUE exam_id + student_id) ----
     const existing = await db
@@ -172,6 +250,47 @@ export async function GET(req: Request) {
   try {
     const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
     const url = new URL(req.url);
+
+    // /api/marks?checkExam=1&... -> find existing exam & its marks for the current filter
+    const checkExam = url.searchParams.get("checkExam");
+    if (checkExam) {
+      const classId = num(url.searchParams.get("classId"));
+      const division = url.searchParams.get("division");
+      const subjectId = num(url.searchParams.get("subjectId"));
+      const month = num(url.searchParams.get("month"));
+      const year = num(url.searchParams.get("year"));
+      const title = url.searchParams.get("title");
+      const examType = url.searchParams.get("examType") === "MODEL" ? "MODEL" : "MONTHLY";
+
+      if (classId && subjectId && month && year && title) {
+        const exam = await db
+          .prepare(
+            `SELECT e.*, s.name as subject_name, c.name as class_name
+             FROM exams e JOIN subjects s ON s.id = e.subject_id JOIN classes c ON c.id = e.class_id
+             WHERE e.class_id = ? AND COALESCE(e.division,'') = COALESCE(?, '')
+               AND e.subject_id = ? AND e.month = ? AND e.year = ?
+               AND e.title = ? AND COALESCE(e.exam_type, 'MONTHLY') = ?`
+          )
+          .bind(classId, division ?? null, subjectId, month, year, title, examType)
+          .first<Record<string, unknown>>(undefined as never)
+          .catch(() => null);
+
+        if (exam) {
+          const marks = (
+            await db
+              .prepare(
+                `SELECT m.id, m.student_id, m.attendance, m.obtained_marks, st.name, st.roll, st.section
+                 FROM marks m JOIN students st ON st.id = m.student_id
+                 WHERE m.exam_id = ? ORDER BY st.roll`
+              )
+              .bind((exam as { id: number }).id)
+              .all<Record<string, unknown>>()
+          ).results;
+          return ok({ exists: true, exam, marks });
+        }
+        return ok({ exists: false, exam: null, marks: [] });
+      }
+    }
 
     // /api/marks?examId=X -> marks of one exam (with student info)
     const examId = num(url.searchParams.get("examId"));

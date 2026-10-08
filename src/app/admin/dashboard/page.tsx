@@ -65,7 +65,7 @@ export default async function AdminDashboard() {
     { label: "শিক্ষার্থী", value: bn(studentCount), href: "/admin/students", icon: Users, tint: "bg-emerald-50 text-emerald-600" },
     { label: "বিষয়", value: bn(subjectCount), href: "/admin/subjects", icon: BookOpen, tint: "bg-amber-50 text-amber-600" },
     { label: "পরীক্ষা", value: bn(examCount), href: "/admin/results", icon: ClipboardEdit, tint: "bg-violet-50 text-violet-600" },
-    { label: "নম্বর এন্ট্রি", value: bn(markCount), href: "/admin/results", icon: Database, tint: "bg-rose-50 text-rose-600" },
+    { label: "নম্বর এন্ট্রি", value: bn(markCount), href: "/admin/marks", icon: Database, tint: "bg-rose-50 text-rose-600" },
   ];
 
   return (

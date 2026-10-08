@@ -125,14 +125,46 @@ export async function GET(req: Request) {
     if (type === "recent") {
       const className = url.searchParams.get("class");
       const division = url.searchParams.get("division");
+      const subjectId = num(url.searchParams.get("subjectId"));
+      const examId = num(url.searchParams.get("examId"));
 
-      // Find the most recently conducted/graded exam
+      // 1. Fetch available subjects for the selected class/division
+      let subjectsList: Array<{ id: number; name: string; hasResults: boolean; markCount: number }> = [];
+      if (className && className !== "ALL") {
+        const subRows = (
+          await db
+            .prepare(
+              `SELECT s.id, s.name, COUNT(m.id) as mark_count
+               FROM subjects s
+               JOIN classes c ON c.id = s.class_id
+               LEFT JOIN exams e ON e.subject_id = s.id
+               LEFT JOIN marks m ON m.exam_id = e.id
+               WHERE c.name = ?
+                 AND (s.division IS NULL OR s.division = ? OR ? IS NULL)
+               GROUP BY s.id
+               ORDER BY s.id ASC`
+            )
+            .bind(className, division ?? null, division ?? null)
+            .all<any>()
+            .catch(() => null)
+        )?.results ?? [];
+
+        subjectsList = subRows.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          hasResults: Number(r.mark_count) > 0,
+          markCount: Number(r.mark_count) || 0,
+        }));
+      }
+
+      // 2. Build the query to find the target / most recently published exam
       let examQuery = `
         SELECT e.id, e.title, e.exam_date, e.month, e.year, e.total_marks,
-               c.id as class_id, c.name as class_name, c.division,
+               c.id as class_id, c.name as class_name, e.division,
                s.id as subject_id, s.name as subject_name,
                COUNT(m.id) as mark_count,
-               MAX(m.obtained_marks) as highest_mark
+               MAX(m.obtained_marks) as highest_mark,
+               MAX(COALESCE(m.updated_at, m.created_at, e.updated_at, e.exam_date)) as last_activity
         FROM exams e
         JOIN classes c ON c.id = e.class_id
         JOIN subjects s ON s.id = e.subject_id
@@ -141,31 +173,105 @@ export async function GET(req: Request) {
       const examParams: any[] = [];
       const examWhere: string[] = [];
 
-      if (className) {
-        examWhere.push("c.name = ?");
-        examParams.push(className);
-      }
-      if (division) {
-        examWhere.push("c.division = ?");
-        examParams.push(division);
+      if (examId) {
+        examWhere.push("e.id = ?");
+        examParams.push(examId);
+      } else {
+        if (className && className !== "ALL") {
+          examWhere.push("c.name = ?");
+          examParams.push(className);
+        }
+        if (division && (className === "9" || className === "10")) {
+          examWhere.push("(e.division IS NULL OR e.division = ?)");
+          examParams.push(division);
+        }
+        if (subjectId) {
+          examWhere.push("s.id = ?");
+          examParams.push(subjectId);
+        }
       }
 
       if (examWhere.length > 0) {
         examQuery += ` WHERE ${examWhere.join(" AND ")}`;
       }
 
-      examQuery += " GROUP BY e.id ORDER BY e.exam_date DESC, e.id DESC LIMIT 1";
+      // Priority 1: Pick exam that actually has published marks (mark_count > 0)
+      // Ordered by latest mark insertion/update activity first, then exam date, then ID
+      const queryWithMarks =
+        examQuery +
+        ` GROUP BY e.id HAVING COUNT(m.id) > 0 ORDER BY last_activity DESC, e.exam_date DESC, e.id DESC LIMIT 1`;
 
-      const examStmt = db.prepare(examQuery);
-      const latestExam = examParams.length > 0
-        ? await examStmt.bind(...examParams).first<any>(undefined as never).catch(() => null)
-        : await examStmt.first<any>(undefined as never).catch(() => null);
+      let latestExam =
+        examParams.length > 0
+          ? await db
+              .prepare(queryWithMarks)
+              .bind(...examParams)
+              .first<any>(undefined as never)
+              .catch(() => null)
+          : await db
+              .prepare(queryWithMarks)
+              .first<any>(undefined as never)
+              .catch(() => null);
 
+      // Priority 2: Fallback to any exam if no exam with marks exists
       if (!latestExam) {
-        return ok({ exam: null, top3: [], results: [], myResult: null });
+        const queryAny =
+          examQuery + ` GROUP BY e.id ORDER BY e.exam_date DESC, e.id DESC LIMIT 1`;
+        latestExam =
+          examParams.length > 0
+            ? await db
+                .prepare(queryAny)
+                .bind(...examParams)
+                .first<any>(undefined as never)
+                .catch(() => null)
+            : await db
+                .prepare(queryAny)
+                .first<any>(undefined as never)
+                .catch(() => null);
       }
 
-      // Fetch all marks for this exam with student info and photo privacy flag
+      // 3. Fetch available exams list for the subject so user can switch exams if multiple exist
+      let availableExams: Array<{ id: number; title: string; examDate: string; markCount: number }> = [];
+      const targetSubjectId = subjectId || latestExam?.subject_id;
+      if (targetSubjectId) {
+        const exRows = (
+          await db
+            .prepare(
+              `SELECT e.id, e.title, e.exam_date, COUNT(m.id) as mark_count
+               FROM exams e
+               LEFT JOIN marks m ON m.exam_id = e.id
+               WHERE e.subject_id = ?
+               GROUP BY e.id
+               HAVING COUNT(m.id) > 0
+               ORDER BY e.exam_date DESC, e.id DESC
+               LIMIT 8`
+            )
+            .bind(targetSubjectId)
+            .all<any>()
+            .catch(() => null)
+        )?.results ?? [];
+
+        availableExams = exRows.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          examDate: r.exam_date,
+          markCount: Number(r.mark_count) || 0,
+        }));
+      }
+
+      if (!latestExam) {
+        return ok({
+          exam: null,
+          subjects: subjectsList,
+          exams: [],
+          top3: [],
+          results: [],
+          myResult: null,
+          isStudentView: user.role === "STUDENT",
+        });
+      }
+
+      // 4. Fetch all marks for this exam with student info and photo privacy flag
       const marksRows = (
         await db
           .prepare(
@@ -185,7 +291,6 @@ export async function GET(req: Request) {
       const totalMarks = Number(latestExam.total_marks) || 100;
 
       // Compute rank, percentage, grade
-      let currentRank = 1;
       const allRanked = marksRows.map((row: any, idx: number) => {
         const obtained = Number(row.obtained_marks) || 0;
         const pct = Math.round((obtained / totalMarks) * 100);
@@ -248,10 +353,15 @@ export async function GET(req: Request) {
           year: latestExam.year,
           totalMarks: latestExam.total_marks,
           className: latestExam.class_name,
+          classId: latestExam.class_id,
           division: latestExam.division,
+          subjectId: latestExam.subject_id,
           subjectName: latestExam.subject_name,
-          markCount: latestExam.mark_count,
+          markCount: Number(latestExam.mark_count) || 0,
+          highestMark: Number(latestExam.highest_mark) || 0,
         },
+        subjects: subjectsList,
+        exams: availableExams,
         top3,
         results: resultsToReturn,
         myResult,

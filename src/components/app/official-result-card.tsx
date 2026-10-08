@@ -37,7 +37,7 @@ export interface DirectorOption {
 }
 
 export interface OfficialResultCardProps {
-  mode?: "MONTHLY" | "ANNUAL" | "MODEL";
+  mode?: "MONTHLY" | "ANNUAL";
   month?: number | string;
   year?: number | string;
   student: {
@@ -654,11 +654,6 @@ export function OfficialResultCard({
                 </span>{" "}
                 <span className={mode === "MONTHLY" ? "text-red-700 font-bold" : ""}>মাসিক</span>
                 {" / "}
-                <span className={mode === "MODEL" ? "text-red-600 font-bold" : "text-slate-400 font-normal"}>
-                  {mode === "MODEL" ? "●" : "○"}
-                </span>{" "}
-                <span className={mode === "MODEL" ? "text-red-700 font-bold" : ""}>মডেল টেস্ট</span>
-                {" / "}
                 <span className={mode === "ANNUAL" ? "text-red-600 font-bold" : "text-slate-400 font-normal"}>
                   {mode === "ANNUAL" ? "●" : "○"}
                 </span>{" "}
@@ -736,10 +731,16 @@ export function OfficialResultCard({
                       <>
                         <td className="rc-sp" rowSpan={rows.length} />
                         <td className="rc-top" rowSpan={rows.length}>
-                          <div className="flex flex-col items-center justify-center space-y-0.5">
-                            <div className="rc-vv">{bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}</div>
-                            <div className="text-[13px] font-bold text-slate-800 leading-tight">{topStudent?.grade || "A+"}</div>
-                            <div className="text-[12px] font-bold text-blue-700 leading-tight">{fmtGpa(topStudent?.gpa ?? 5)}</div>
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
+                              {bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}
+                            </div>
+                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
+                              {topStudent?.grade || "A+"}
+                            </div>
+                            <div className="text-[20px] font-bold text-blue-700 leading-tight">
+                              {fmtGpa(topStudent?.gpa ?? 5)}
+                            </div>
                           </div>
                           <div className="rc-dd" />
                         </td>

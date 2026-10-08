@@ -11,8 +11,6 @@ import {
   CheckCircle2,
   Building2,
   Sparkles,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -73,17 +71,9 @@ export function AdminResultCardView() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
   const [cardBgUrl, setCardBgUrl] = useState<string | null>(null);
-  const [previewIndex, setPreviewIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"SHEET" | "BOOKLET" | "ALL">("ALL");
 
   const requiresDiv = className === "9" || className === "10";
-
-  // Reset preview index when filters change
-  useEffect(() => {
-    setPreviewIndex(0);
-  }, [studentId, className, division, month, year, mode]);
-
-  const safePreviewIndex = Math.min(Math.max(0, previewIndex), Math.max(0, cards.length - 1));
 
   const fetchCards = useCallback(async () => {
     setLoading(true);
@@ -333,79 +323,11 @@ export function AdminResultCardView() {
         </Card>
       )}
 
-      {/* একাধিক শিক্ষার্থী থাকলে: স্ক্রিন প্রিভিউ নেভিগেশন বার (প্রিন্টে লুকানো) */}
-      {!loading && cards.length > 1 && (
-        <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-emerald-50/90 p-3 sm:p-4 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white font-bold text-sm shadow-xs">
-              {bn(safePreviewIndex + 1)}
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs sm:text-sm font-bold text-slate-900">
-                  কার্ড প্রিভিউ: {bn(safePreviewIndex + 1)} / {bn(cards.length)}
-                </span>
-                <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] sm:text-xs font-bold text-blue-800">
-                  {cards[safePreviewIndex]?.student.name} (রোল {bn(cards[safePreviewIndex]?.student.roll)})
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] sm:text-xs text-slate-600 font-medium">
-                স্ক্রিনে প্রিভিউ হিসেবে ১টি কার্ড প্রদর্শিত হচ্ছে। উপরের <span className="font-bold text-emerald-700">“সব কার্ড প্রিন্ট ({bn(cards.length)})”</span> বাটনে ক্লিক করলে সকল শিক্ষার্থীর কার্ড একসাথে প্রিন্ট হবে।
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
-              disabled={safePreviewIndex === 0}
-              className="h-9 gap-1 bg-white text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              পূর্ববর্তী
-            </Button>
-
-            <div className="w-44 sm:w-52">
-              <Select
-                value={String(safePreviewIndex)}
-                onValueChange={(val) => setPreviewIndex(Number(val))}
-              >
-                <SelectTrigger className="h-9 bg-white text-xs font-semibold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {cards.map((c, i) => (
-                    <SelectItem key={`preview-sel-${c.student.id}-${i}`} value={String(i)}>
-                      {bn(i + 1)}. {c.student.name} (রোল {bn(c.student.roll)})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreviewIndex((prev) => Math.min(cards.length - 1, prev + 1))}
-              disabled={safePreviewIndex >= cards.length - 1}
-              className="h-9 gap-1 bg-white text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              পরবর্তী
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Render Cards */}
       {!loading && cards.length > 0 && (
         <div className="space-y-8 print:space-y-0 print:m-0 print:p-0">
           {cards.map((card, idx) => {
-            const isPreviewCard = idx === safePreviewIndex;
+            const isPreviewCard = idx === 0;
             const isLastCard = idx === cards.length - 1;
 
             return (

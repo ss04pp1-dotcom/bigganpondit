@@ -88,7 +88,7 @@ export async function GET(req: Request) {
       }).catch(() => null);
     }
 
-    const cards = [];
+    const cards: any[] = [];
 
     for (const st of studentsToProcess) {
       if (mode === "MONTHLY") {
@@ -115,9 +115,17 @@ export async function GET(req: Request) {
           const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
           const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
           totalStudentAbsences += absCount;
-          if (s.grade === "F" && !s.isFourth) {
-            totalStudentFails++;
+
+          const examFails = exams.filter(
+            (e) => e.attendance !== "ABSENT" && (e.grade === "F" || (e.total > 0 && e.obtained / e.total < 0.33))
+          ).length;
+
+          if (examFails > 0) {
+            totalStudentFails += examFails;
+          } else if (s.grade === "F") {
+            totalStudentFails += 1;
           }
+
           const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
 
           return {

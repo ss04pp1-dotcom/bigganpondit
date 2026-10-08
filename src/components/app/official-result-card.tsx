@@ -260,7 +260,7 @@ export function OfficialResultCard({
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    if (s.grade === "F" && !s.isFourth) {
+    if (s.grade === "F") {
       totalFails++;
     }
   }
@@ -736,12 +736,22 @@ export function OfficialResultCard({
                       <>
                         <td className="rc-sp" rowSpan={rows.length} />
                         <td className="rc-top" rowSpan={rows.length}>
-                          <div className="rc-vv">{bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}</div>
-                          <div className="text-[12px] font-bold text-slate-700">{topStudent?.grade || "A+"} ({fmtGpa(topStudent?.gpa ?? 5)})</div>
+                          <div className="flex flex-col items-center justify-center space-y-0.5">
+                            <div className="rc-vv">{bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}</div>
+                            <div className="text-[13px] font-bold text-slate-800 leading-tight">{topStudent?.grade || "A+"}</div>
+                            <div className="text-[12px] font-bold text-blue-700 leading-tight">{fmtGpa(topStudent?.gpa ?? 5)}</div>
+                          </div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
-                          <div className="rc-vv">{bn(overall.obtained)}/{bn(overall.totalMarks)}</div>
+                          <div className="inline-flex flex-col items-center justify-center font-bold">
+                            <span className="text-[20px] font-bold leading-tight text-slate-900 border-b-[1.5px] border-slate-900 px-1 pb-0.5 min-w-[36px] text-center">
+                              {bn(overall.obtained)}
+                            </span>
+                            <span className="text-[18px] font-bold leading-tight text-slate-800 pt-0.5 px-1 min-w-[36px] text-center">
+                              {bn(overall.totalMarks)}
+                            </span>
+                          </div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
@@ -752,7 +762,7 @@ export function OfficialResultCard({
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
                           <div className="rc-vv rc-gpa">
-                            {totalFails > 0 ? "০.০০" : fmtGpa(overall.gpa)}
+                            {totalFails > 0 ? "0.00" : fmtGpa(overall.gpa)}
                           </div>
                           <div className="rc-dd" />
                         </td>

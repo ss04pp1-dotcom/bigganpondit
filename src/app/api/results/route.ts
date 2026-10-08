@@ -59,11 +59,13 @@ export async function GET(req: Request) {
       }
       const month = num(url.searchParams.get("month"));
       const year = num(url.searchParams.get("year"), new Date().getFullYear()) ?? new Date().getFullYear();
+      const isPrivileged = user.role === "ADMIN" || user.role === "TEACHER" || user.role === "DIRECTOR";
       const rows = await getStudentExamRows(db, {
         studentId,
         subjectIds: subjectId !== null ? [subjectId] : teacherSubjectIds,
         month: month ?? null,
         year,
+        publishedOnly: !isPrivileged,
       });
       return ok({ rows });
     }
@@ -128,7 +130,7 @@ export async function GET(req: Request) {
       const subjectId = num(url.searchParams.get("subjectId"));
       const examId = num(url.searchParams.get("examId"));
 
-      // 1. Fetch available subjects for the selected class/division
+      // 1. Fetch available subjects for the selected class/division (with published results)
       let subjectsList: Array<{ id: number; name: string; hasResults: boolean; markCount: number }> = [];
       if (className && className !== "ALL") {
         const subRows = (
@@ -137,7 +139,7 @@ export async function GET(req: Request) {
               `SELECT s.id, s.name, COUNT(m.id) as mark_count
                FROM subjects s
                JOIN classes c ON c.id = s.class_id
-               LEFT JOIN exams e ON e.subject_id = s.id
+               LEFT JOIN exams e ON e.subject_id = s.id AND COALESCE(e.is_published, 0) = 1
                LEFT JOIN marks m ON m.exam_id = e.id
                WHERE c.name = ?
                  AND (s.division IS NULL OR s.division = ? OR ? IS NULL)
@@ -162,6 +164,7 @@ export async function GET(req: Request) {
         SELECT e.id, e.title, e.exam_date, e.month, e.year, e.total_marks,
                c.id as class_id, c.name as class_name, e.division,
                s.id as subject_id, s.name as subject_name,
+               COALESCE(e.is_published, 0) as is_published,
                COUNT(m.id) as mark_count,
                MAX(m.obtained_marks) as highest_mark,
                MAX(COALESCE(m.updated_at, m.created_at, e.updated_at, e.exam_date)) as last_activity
@@ -171,7 +174,7 @@ export async function GET(req: Request) {
         LEFT JOIN marks m ON m.exam_id = e.id
       `;
       const examParams: any[] = [];
-      const examWhere: string[] = [];
+      const examWhere: string[] = ["COALESCE(e.is_published, 0) = 1"];
 
       if (examId) {
         examWhere.push("e.id = ?");
@@ -240,7 +243,7 @@ export async function GET(req: Request) {
               `SELECT e.id, e.title, e.exam_date, COUNT(m.id) as mark_count
                FROM exams e
                LEFT JOIN marks m ON m.exam_id = e.id
-               WHERE e.subject_id = ?
+               WHERE e.subject_id = ? AND COALESCE(e.is_published, 0) = 1
                GROUP BY e.id
                HAVING COUNT(m.id) > 0
                ORDER BY e.exam_date DESC, e.id DESC
@@ -359,6 +362,7 @@ export async function GET(req: Request) {
           subjectName: latestExam.subject_name,
           markCount: Number(latestExam.mark_count) || 0,
           highestMark: Number(latestExam.highest_mark) || 0,
+          isPublished: Number(latestExam.is_published) === 1,
         },
         subjects: subjectsList,
         exams: availableExams,

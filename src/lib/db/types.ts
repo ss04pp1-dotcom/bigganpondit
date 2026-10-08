@@ -82,6 +82,8 @@ export interface ExamRow {
   exam_date: string;
   title: string;
   total_marks: number;
+  exam_type?: string;
+  is_published?: number;
   created_by: number | null;
 }
 

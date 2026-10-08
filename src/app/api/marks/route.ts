@@ -366,6 +366,7 @@ export async function GET(req: Request) {
       await db
         .prepare(
           `SELECT e.id, e.title, e.exam_date, e.month, e.year, e.total_marks, e.division,
+                  COALESCE(e.is_published, 0) as is_published,
                   s.name as subject_name, c.name as class_name,
                   (SELECT COUNT(*) FROM marks m WHERE m.exam_id = e.id) as mark_count,
                   (SELECT MAX(m2.obtained_marks) FROM marks m2 WHERE m2.exam_id = e.id) as highest

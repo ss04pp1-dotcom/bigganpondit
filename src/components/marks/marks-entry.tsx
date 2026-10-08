@@ -130,6 +130,7 @@ export function MarksEntry({
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [existingExamId, setExistingExamId] = useState<number | null>(null);
+  const [existingExamPublished, setExistingExamPublished] = useState<boolean>(false);
   const [marksState, setMarksState] = useState<Record<number, StudentMarkState>>({});
 
   // Single Student Mode selection
@@ -215,6 +216,7 @@ export function MarksEntry({
       const json = await res.json();
       if (json.ok && json.exists && json.exam) {
         setExistingExamId(json.exam.id);
+        setExistingExamPublished(Number(json.exam.is_published) === 1);
         if (json.exam.total_marks && String(json.exam.total_marks) !== totalMarks) {
           setTotalMarks(String(json.exam.total_marks));
         }
@@ -645,13 +647,29 @@ export function MarksEntry({
                     <Loader2 className="h-3 w-3 animate-spin" /> ডেটা যাচাই হচ্ছে...
                   </span>
                 ) : existingExamId ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                    <CheckCircle2 className="h-3 w-3" /> সংরক্ষিত পরীক্ষা লোড হয়েছে ({bn(stats.completedCount)} জনের নম্বর আছে)
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <CheckCircle2 className="h-3 w-3" /> সংরক্ষিত পরীক্ষা ({bn(stats.completedCount)} জনের নম্বর আছে)
+                    </span>
+                    {existingExamPublished ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        📢 এডমিন কর্তৃক প্রকাশিত
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-300">
+                        ⏳ ড্রাফট (এডমিন অনুমোদনের পর প্রকাশিত হবে)
+                      </span>
+                    )}
+                  </div>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                    নতুন পরীক্ষার এন্ট্রি
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      নতুন পরীক্ষার এন্ট্রি
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                      ℹ️ শিক্ষকের নম্বর সংরক্ষণ শেষে এডমিন প্রকাশ করবেন
+                    </span>
+                  </div>
                 )}
               </div>
             </div>

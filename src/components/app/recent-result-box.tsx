@@ -51,6 +51,7 @@ interface RecentResultData {
     subjectName: string;
     markCount: number;
     highestMark?: number;
+    isPublished?: boolean;
   } | null;
   subjects?: RecentSubject[];
   exams?: RecentExamOption[];
@@ -338,9 +339,13 @@ export function RecentResultBox({
                   {classLabel(data.exam.className)}{" "}
                   {data.exam.division ? `(${divisionLabel(data.exam.division)})` : ""}
                 </span>
-                {selectedSubject === "ALL" && (
+                {selectedSubject === "ALL" ? (
                   <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
                     <Sparkles className="h-2.5 w-2.5" /> সর্বশেষ প্রকাশিত
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">
+                    <Check className="h-2.5 w-2.5" /> প্রকাশিত ফলাফল
                   </span>
                 )}
               </div>

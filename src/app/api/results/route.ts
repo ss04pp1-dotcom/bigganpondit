@@ -165,12 +165,26 @@ export async function GET(req: Request) {
                c.id as class_id, c.name as class_name, e.division,
                s.id as subject_id, s.name as subject_name,
                COALESCE(e.is_published, 0) as is_published,
+               e.created_by,
+               t_creator.id as creator_teacher_id,
+               u_creator.name as creator_name,
+               u_creator.username as creator_username,
+               t_creator.photo_key as creator_photo_key,
+               t_subj.id as subj_teacher_id,
+               u_subj.name as subj_teacher_name,
+               u_subj.username as subj_teacher_username,
+               t_subj.photo_key as subj_photo_key,
                COUNT(m.id) as mark_count,
                MAX(m.obtained_marks) as highest_mark,
                MAX(COALESCE(m.updated_at, m.created_at, e.updated_at, e.exam_date)) as last_activity
         FROM exams e
         JOIN classes c ON c.id = e.class_id
         JOIN subjects s ON s.id = e.subject_id
+        LEFT JOIN users u_creator ON u_creator.id = e.created_by
+        LEFT JOIN teachers t_creator ON t_creator.user_id = u_creator.id
+        LEFT JOIN teacher_subjects ts ON ts.subject_id = e.subject_id
+        LEFT JOIN teachers t_subj ON t_subj.id = ts.teacher_id
+        LEFT JOIN users u_subj ON u_subj.id = t_subj.user_id
         LEFT JOIN marks m ON m.exam_id = e.id
       `;
       const examParams: any[] = [];
@@ -347,6 +361,22 @@ export async function GET(req: Request) {
         resultsToReturn = myResult ? [myResult] : [];
       }
 
+      // Resolve teacher who took / manages the exam
+      const teacherName = latestExam.creator_name || latestExam.subj_teacher_name || null;
+      const teacherUsername = latestExam.creator_username || latestExam.subj_teacher_username || null;
+      const teacherId = latestExam.creator_teacher_id || latestExam.subj_teacher_id || null;
+      const teacherPhotoKey = latestExam.creator_photo_key || latestExam.subj_photo_key || null;
+
+      const teacher = teacherName
+        ? {
+            id: teacherId,
+            name: teacherName,
+            username: teacherUsername,
+            photoKey: teacherPhotoKey,
+            photoUrl: teacherPhotoKey ? `/api/files/${teacherPhotoKey}` : null,
+          }
+        : null;
+
       return ok({
         exam: {
           id: latestExam.id,
@@ -363,6 +393,7 @@ export async function GET(req: Request) {
           markCount: Number(latestExam.mark_count) || 0,
           highestMark: Number(latestExam.highest_mark) || 0,
           isPublished: Number(latestExam.is_published) === 1,
+          teacher,
         },
         subjects: subjectsList,
         exams: availableExams,

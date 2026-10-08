@@ -15,6 +15,8 @@ import {
   RefreshCw,
   ClipboardEdit,
   Check,
+  GraduationCap,
+  User,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -52,6 +54,13 @@ interface RecentResultData {
     markCount: number;
     highestMark?: number;
     isPublished?: boolean;
+    teacher?: {
+      id: number | null;
+      name: string;
+      username?: string | null;
+      photoKey?: string | null;
+      photoUrl?: string | null;
+    } | null;
   } | null;
   subjects?: RecentSubject[];
   exams?: RecentExamOption[];
@@ -351,6 +360,39 @@ export function RecentResultBox({
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-slate-500 text-[11px]">
+                {/* Teacher Badge / Info Card */}
+                {data.exam.teacher && (
+                  <div className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1 border border-slate-200/80 shadow-2xs">
+                    <div className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-blue-200 bg-blue-50 text-blue-700">
+                      {data.exam.teacher.photoUrl ? (
+                        <img
+                          src={data.exam.teacher.photoUrl}
+                          alt={data.exam.teacher.name}
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <span className="text-[11px] font-bold">
+                          {data.exam.teacher.name.slice(0, 1)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-[10px] text-slate-400 font-medium">পরীক্ষক শিক্ষক</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-slate-800 text-[11px]">{data.exam.teacher.name}</span>
+                        {data.exam.teacher.id && (
+                          <span className="rounded bg-blue-50 px-1 py-0.2 text-[9px] font-mono font-bold text-blue-700 border border-blue-200">
+                            ID: {bn(data.exam.teacher.id)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
                   তারিখ: {bn(data.exam.examDate)}

@@ -85,12 +85,12 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const teacherMap = await getSubjectTeachersMap(db);
 
   const report = studentId && classId
-    ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted })
+    ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted, mode })
     : null;
 
   // cohort-wide position (all subjects, whole class)
   const summaryAll = classId
-    ? await buildMonthlyClassSummary(db, { classId, division, month, year, subjectIds: null })
+    ? await buildMonthlyClassSummary(db, { classId, division, month, year, subjectIds: null, mode })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === studentId)?.position : undefined;
 

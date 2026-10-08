@@ -54,14 +54,20 @@ export async function getStudentExamRows(
     subjectIds?: number[] | null; // null = all
     month?: number | null; // null = all months
     year: number;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
   }
 ): Promise<SearchResultRow[]> {
-  const { studentId, subjectIds, month, year } = opts;
+  const { studentId, subjectIds, month, year, mode } = opts;
   const clauses = ["m.student_id = ?", "e.year = ?"];
   const params: unknown[] = [studentId, year];
   if (month != null) {
     clauses.push("e.month = ?");
     params.push(month);
+  }
+  if (mode === "MODEL") {
+    clauses.push("(COALESCE(e.exam_type, '') = 'MODEL' OR e.title LIKE '%মডেল টেস্ট%' OR e.title LIKE '%Model%')");
+  } else if (mode === "MONTHLY") {
+    clauses.push("(COALESCE(e.exam_type, 'MONTHLY') != 'MODEL' AND e.title NOT LIKE '%মডেল টেস্ট%' AND e.title NOT LIKE '%Model%')");
   }
   if (subjectIds !== null && subjectIds !== undefined) {
     if (subjectIds.length === 0) return [];
@@ -158,9 +164,10 @@ export async function getMonthlyClassData(
     month: number;
     year: number;
     subjectIds?: number[] | null;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
   }
 ): Promise<MonthlyClassData> {
-  const { classId, division, month, year, subjectIds } = opts;
+  const { classId, division, month, year, subjectIds, mode } = opts;
 
   const students = (
     await db
@@ -176,6 +183,11 @@ export async function getMonthlyClassData(
 
   const clauses = ["e.class_id = ?", "COALESCE(e.division, '') = COALESCE(?, '')", "e.month = ?", "e.year = ?"];
   const params: unknown[] = [classId, division, month, year];
+  if (mode === "MODEL") {
+    clauses.push("(COALESCE(e.exam_type, '') = 'MODEL' OR e.title LIKE '%মডেল টেস্ট%' OR e.title LIKE '%Model%')");
+  } else if (mode === "MONTHLY") {
+    clauses.push("(COALESCE(e.exam_type, 'MONTHLY') != 'MODEL' AND e.title NOT LIKE '%মডেল টেস্ট%' AND e.title NOT LIKE '%Model%')");
+  }
   if (subjectIds !== null && subjectIds !== undefined) {
     if (subjectIds.length === 0) {
       return { students: [], byStudent: new Map(), classHighest: new Map(), subjectNames: new Map() };
@@ -260,7 +272,7 @@ export interface MonthlyReport {
 
 export async function buildMonthlyReport(
   db: D1Database,
-  opts: { studentId: number; month: number; year: number; subjectIds?: number[] | null }
+  opts: { studentId: number; month: number; year: number; subjectIds?: number[] | null; mode?: "MONTHLY" | "MODEL" | "ALL" }
 ): Promise<MonthlyReport | null> {
   const student = await getStudentInfo(db, opts.studentId);
   if (!student) return null;
@@ -275,6 +287,7 @@ export async function buildMonthlyReport(
     month: opts.month,
     year: opts.year,
     subjectIds: opts.subjectIds ?? null,
+    mode: opts.mode,
   });
 
   const bySubject = data.byStudent.get(opts.studentId);
@@ -305,6 +318,7 @@ export async function buildMonthlyReport(
     subjectIds: opts.subjectIds ?? null,
     month: opts.month,
     year: opts.year,
+    mode: opts.mode,
   });
   const examRowsBySubject = new Map<number, SearchResultRow[]>();
   for (const row of detailedRows) {
@@ -345,9 +359,9 @@ export interface ClassSummaryEntry {
 
 export async function buildMonthlyClassSummary(
   db: D1Database,
-  opts: { classId: number; division: string | null; month: number; year: number; subjectIds?: number[] | null }
+  opts: { classId: number; division: string | null; month: number; year: number; subjectIds?: number[] | null; mode?: "MONTHLY" | "MODEL" | "ALL" }
 ): Promise<{ entries: ClassSummaryEntry[]; subjectNames: Map<number, { name: string; isFourth: boolean }> }> {
-  const data = await getMonthlyClassData(db, { ...opts, subjectIds: opts.subjectIds ?? null });
+  const data = await getMonthlyClassData(db, { ...opts, subjectIds: opts.subjectIds ?? null, mode: opts.mode });
   const rankEntries: (import("./engine").RankEntry & { photoKey: string | null; section: string | null })[] = [];
   const details = new Map<number, ClassSummaryEntry>();
 

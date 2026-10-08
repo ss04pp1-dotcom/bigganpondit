@@ -62,15 +62,22 @@ export async function POST(req: Request) {
     }
     const obtained = Math.round(body.obtainedMarks * 100) / 100;
 
+    const effectiveExamType = (
+      body.examType === "MODEL" ||
+      body.title.includes("মডেল") ||
+      body.title.toLowerCase().includes("model")
+    ) ? "MODEL" : "MONTHLY";
+
     // ---- find or create the exam (natural key) ----
     let exam = await db
       .prepare(
         `SELECT id, total_marks FROM exams
          WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
            AND subject_id = ? AND month = ? AND year = ?
-           AND exam_date = ? AND title = ? AND total_marks = ?`
+           AND exam_date = ? AND title = ? AND total_marks = ?
+           AND COALESCE(exam_type, 'MONTHLY') = ?`
       )
-      .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks)
+      .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, effectiveExamType)
       .first<{ id: number }>(undefined as never)
       .catch(() => null);
 
@@ -78,10 +85,10 @@ export async function POST(req: Request) {
       try {
         const res = await db
           .prepare(
-            `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by, exam_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id)
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, user.id, effectiveExamType)
           .run();
         const examId = Number(res.meta.last_row_id ?? 0);
         if (examId) {
@@ -98,9 +105,10 @@ export async function POST(req: Request) {
             `SELECT id, total_marks FROM exams
              WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
                AND subject_id = ? AND month = ? AND year = ?
-               AND exam_date = ? AND title = ? AND total_marks = ?`
+               AND exam_date = ? AND title = ? AND total_marks = ?
+               AND COALESCE(exam_type, 'MONTHLY') = ?`
           )
-          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks)
+          .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.examDate, body.title, body.totalMarks, effectiveExamType)
           .first<{ id: number }>()
           .catch(() => null);
         if (recheck) {

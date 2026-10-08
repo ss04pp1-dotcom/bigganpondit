@@ -6,7 +6,7 @@
 // All authoritative calculations happen server-side in /api/marks.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Sparkles, FileText, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,14 @@ export interface EntrySubject {
   isFourth: boolean;
 }
 
+const MODEL_TITLE_SUGGESTIONS = [
+  "মডেল টেস্ট ১",
+  "মডেল টেস্ট ২",
+  "মডেল টেস্ট ৩",
+  "মডেল টেস্ট ৪",
+  "পূর্ণাঙ্গ মডেল টেস্ট",
+];
+
 interface StudentOpt {
   id: number;
   name: string;
@@ -45,6 +53,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export function MarksEntry({ subjects }: { subjects: EntrySubject[] }) {
   const now = new Date();
+  const [examType, setExamType] = useState<"MONTHLY" | "MODEL">("MONTHLY");
   const [className, setClassName] = useState<string>("10");
   const [division, setDivision] = useState<string>("SCIENCE");
   const [subjectId, setSubjectId] = useState<number | null>(null);
@@ -120,6 +129,7 @@ export function MarksEntry({ subjects }: { subjects: EntrySubject[] }) {
       month,
       year,
       examDate,
+      examType,
       title: title.trim(),
       totalMarks: total,
       studentId,
@@ -182,8 +192,42 @@ export function MarksEntry({ subjects }: { subjects: EntrySubject[] }) {
     <div className="space-y-4">
       {/* ---- পরীক্ষার তথ্য ---- */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-[16px]">পরীক্ষার তথ্য</CardTitle>
+          <div className="inline-flex rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setExamType("MONTHLY");
+                setTitle("ক্লাস টেস্ট ১");
+                setTotalMarks("20");
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                examType === "MONTHLY"
+                  ? "bg-white text-emerald-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>মাসিক / ক্লাস টেস্ট</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExamType("MODEL");
+                setTitle("মডেল টেস্ট ১");
+                setTotalMarks("100");
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                examType === "MODEL"
+                  ? "bg-white text-purple-700 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Award className="h-3.5 w-3.5" />
+              <span>মডেল টেস্ট</span>
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
@@ -264,24 +308,33 @@ export function MarksEntry({ subjects }: { subjects: EntrySubject[] }) {
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>পরীক্ষার নাম</Label>
+            <Label className="flex items-center justify-between">
+              <span>পরীক্ষার নাম</span>
+              <span className={`text-[11px] font-semibold ${examType === "MODEL" ? "text-purple-700" : "text-emerald-700"}`}>
+                {examType === "MODEL" ? "[মডেল টেস্ট ক্যাটাগরি]" : "[মাসিক / ক্লাস টেস্ট ক্যাটাগরি]"}
+              </span>
+            </Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="যেমন: ক্লাস টেস্ট ১"
+              placeholder={examType === "MODEL" ? "যেমন: মডেল টেস্ট ১" : "যেমন: ক্লাস টেস্ট ১"}
               className="h-11"
               list="exam-titles"
             />
             <datalist id="exam-titles">
-              {EXAM_TITLE_SUGGESTIONS.map((t) => <option key={t} value={t} />)}
+              {(examType === "MODEL" ? MODEL_TITLE_SUGGESTIONS : EXAM_TITLE_SUGGESTIONS).map((t) => <option key={t} value={t} />)}
             </datalist>
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {EXAM_TITLE_SUGGESTIONS.slice(0, 4).map((t) => (
+              {(examType === "MODEL" ? MODEL_TITLE_SUGGESTIONS : EXAM_TITLE_SUGGESTIONS).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTitle(t)}
-                  className="rounded-full bg-accent px-3 py-1 text-[12px] text-accent-foreground hover:bg-primary hover:text-white"
+                  className={`rounded-full px-3 py-1 text-[12px] font-medium transition ${
+                    title === t
+                      ? (examType === "MODEL" ? "bg-purple-700 text-white" : "bg-emerald-700 text-white")
+                      : "bg-accent text-accent-foreground hover:bg-primary/20"
+                  }`}
                 >
                   {t}
                 </button>

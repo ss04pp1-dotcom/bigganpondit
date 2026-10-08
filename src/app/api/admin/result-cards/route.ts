@@ -86,6 +86,7 @@ export async function GET(req: Request) {
         month,
         year,
         subjectIds: null,
+        mode,
       }).catch(() => null);
     }
 
@@ -98,6 +99,7 @@ export async function GET(req: Request) {
           month,
           year,
           subjectIds: null,
+          mode,
         }).catch(() => null);
 
         const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];

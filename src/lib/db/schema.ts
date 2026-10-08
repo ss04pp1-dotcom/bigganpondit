@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS exams (
   exam_date   TEXT NOT NULL,
   title       TEXT NOT NULL,
   total_marks INTEGER NOT NULL CHECK (total_marks > 0),
+  exam_type   TEXT NOT NULL DEFAULT 'MONTHLY',
   created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))

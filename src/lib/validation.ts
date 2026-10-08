@@ -63,6 +63,7 @@ export const markSaveSchema = z.object({
   examDate: dateStr,
   title: z.string().trim().min(1, "পরীক্ষার নাম লিখুন।").max(100),
   totalMarks: z.number().int().positive("মোট নম্বর ০-এর বেশি হতে হবে।").max(1000),
+  examType: z.enum(["MONTHLY", "MODEL"]).optional().default("MONTHLY"),
   studentId: z.number().int().positive("শিক্ষার্থী নির্বাচন করুন।"),
   attendance: z.enum(["PRESENT", "ABSENT"]),
   obtainedMarks: z.number().min(0, "ভুল নম্বর প্রদান করা হয়েছে।").max(1000),

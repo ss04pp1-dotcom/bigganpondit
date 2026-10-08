@@ -38,11 +38,11 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const classId = classRow?.id ?? 0;
 
   const report = user.studentId && classId
-    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null })
+    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null, mode })
     : null;
 
   const summaryAll = classId
-    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null })
+    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null, mode })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === user.studentId)?.position : undefined;
 

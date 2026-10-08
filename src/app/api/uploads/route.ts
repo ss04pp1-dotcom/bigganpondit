@@ -5,7 +5,13 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
-import { ALLOWED_IMAGE_EXT, MAX_UPLOAD_BYTES, MSG, SETTING_ACADEMY_LOGO } from "@/lib/constants";
+import {
+  ALLOWED_IMAGE_EXT,
+  MAX_UPLOAD_BYTES,
+  MSG,
+  SETTING_ACADEMY_LOGO,
+  SETTING_PUBLICATION_LOGO,
+} from "@/lib/constants";
 import { setSetting } from "@/lib/db";
 import { getBucket } from "@/lib/storage/r2";
 import { teacherClassAllowed } from "@/lib/permissions";
@@ -76,7 +82,24 @@ export async function POST(req: Request) {
       });
     }
 
-    if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
+    // Type-specific file size limits
+    const maxBytes =
+      type === "banner"
+        ? 15 * 1024 * 1024 // 15 MB
+        : type === "publication-logo" || type === "logo"
+        ? 10 * 1024 * 1024 // 10 MB (supports 10mb jpg/png requested by user)
+        : MAX_UPLOAD_BYTES; // 5 MB
+
+    if (file.size > maxBytes) {
+      throw new ApiError(
+        400,
+        type === "banner"
+          ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
+          : type === "publication-logo" || type === "logo"
+          ? "লোগো ফাইলটি অনেক বড় (সর্বোচ্চ ১০ MB)।"
+          : MSG.fileTooLarge
+      );
+    }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const detected = detectImageType(bytes);
@@ -121,6 +144,22 @@ export async function POST(req: Request) {
       await setSetting(SETTING_ACADEMY_LOGO, key);
       if (current?.value) await bucket.delete(current.value).catch(() => {});
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "publication-logo") {
+      if (user.role !== "ADMIN") {
+        throw new ApiError(403, "শুধুমাত্র প্রশাসক প্রকাশনীর লোগো পরিবর্তন করতে পারেন।");
+      }
+      const current = await db
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .bind(SETTING_PUBLICATION_LOGO)
+        .first<{ value: string | null }>(undefined as never)
+        .catch(() => null);
+      const key = `academy/publication/logo-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await setSetting(SETTING_PUBLICATION_LOGO, key);
+      if (current?.value) await bucket.delete(current.value).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: "প্রকাশনীর লোগো সংরক্ষিত হয়েছে।" });
     }
 
     if (type === "signature") {

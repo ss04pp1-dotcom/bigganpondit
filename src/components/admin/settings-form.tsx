@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette } from "lucide-react";
+import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,9 @@ export function AdminSettingsForm({
   initialName,
   logoKey,
   cardBgKey = null,
+  initialPublicationName = "বিজ্ঞান পণ্ডিত প্রকাশনী",
+  publicationLogoKey = null,
+  initialPublicationDescription = "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
   adminUser,
   initialAdminEmail = "",
   hasResendKey = false,
@@ -36,6 +39,9 @@ export function AdminSettingsForm({
   initialName: string;
   logoKey: string | null;
   cardBgKey?: string | null;
+  initialPublicationName?: string;
+  publicationLogoKey?: string | null;
+  initialPublicationDescription?: string;
   adminUser?: { name: string; username: string };
   initialAdminEmail?: string;
   hasResendKey?: boolean;
@@ -46,6 +52,11 @@ export function AdminSettingsForm({
   const [cardBg, setCardBg] = useState<string | null>(cardBgKey);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  // Publication settings state
+  const [pubName, setPubName] = useState(initialPublicationName);
+  const [pubDesc, setPubDesc] = useState(initialPublicationDescription);
+  const [savingPub, setSavingPub] = useState(false);
 
   // Admin credentials state
   const [adminName, setAdminName] = useState(adminUser?.name ?? "প্রশাসক");
@@ -82,6 +93,33 @@ export function AdminSettingsForm({
       toast({ title: json.message });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function savePublication() {
+    if (!pubName.trim()) {
+      toast({ title: "প্রকাশনীর নাম লিখুন।", variant: "destructive" });
+      return;
+    }
+    setSavingPub(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          publicationName: pubName.trim(),
+          publicationDescription: pubDesc.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "সংরক্ষণ করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: "প্রকাশনীর তথ্য সফলভাবে সংরক্ষিত হয়েছে।" });
+      router.refresh();
+    } finally {
+      setSavingPub(false);
     }
   }
 
@@ -181,9 +219,69 @@ export function AdminSettingsForm({
           <CardContent className="pt-4">
             <ImageUpload
               type="logo"
-              label="লোগো (JPG/PNG/WebP)"
+              label="লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
               currentUrl={logoKey ? `/api/files/${logoKey}` : null}
             />
+          </CardContent>
+        </Card>
+
+        {/* প্রকাশনী সেটিংস কার্ড (নাম, লোগো, ডেসক্রিপশন - ১০ MB JPG/PNG) */}
+        <Card className="lg:col-span-2 border-cyan-200/80 shadow-xs">
+          <CardHeader className="border-b border-slate-100 bg-cyan-50/40 pb-3">
+            <CardTitle className="text-[16px] flex items-center gap-2 text-cyan-950 font-bold">
+              <BookMarked className="h-5 w-5 text-cyan-600" />
+              প্রকাশনী সেটিংস (নাম, লোগো ও ডেসক্রিপশন)
+            </CardTitle>
+            <CardDescription className="text-[12px] text-slate-500 mt-0.5">
+              ডিজিটাল লাইব্রেরি ও বুক রিডারে প্রদর্শিত প্রকাশনীর নাম, লোগো ও বর্ণনা কনফিগার করুন (১০ MB পর্যন্ত JPG/PNG/WebP লোগো সমর্থন করে)।
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-5 space-y-5">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">প্রকাশনীর নাম</Label>
+                  <Input
+                    value={pubName}
+                    onChange={(e) => setPubName(e.target.value)}
+                    placeholder="যেমন: বিজ্ঞান পণ্ডিত প্রকাশনী"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">প্রকাশনীর ডেসক্রিপশন / পরিচিতি</Label>
+                  <textarea
+                    value={pubDesc}
+                    onChange={(e) => setPubDesc(e.target.value)}
+                    placeholder="অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম..."
+                    rows={3}
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    * শিক্ষার্থী ও শিক্ষক প্যানেলে প্রকাশনী পেজে এই বিবরণটি প্রদর্শিত হবে।
+                  </p>
+                </div>
+                <Button
+                  className="h-10 gap-2 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold"
+                  onClick={savePublication}
+                  disabled={savingPub}
+                >
+                  {savingPub ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  প্রকাশনীর তথ্য সংরক্ষণ করুন
+                </Button>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-2 block">
+                  প্রকাশনীর অফিসিয়াল লোগো (১০ MB JPG/PNG)
+                </Label>
+                <ImageUpload
+                  type="publication-logo"
+                  label="প্রকাশনীর লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
+                  currentUrl={publicationLogoKey ? `/api/files/${publicationLogoKey}` : null}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 

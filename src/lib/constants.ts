@@ -3,8 +3,12 @@
 
 export const APP_TITLE = "নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার";
 export const DEFAULT_ACADEMY_NAME = "বিজ্ঞান পণ্ডিত একাডেমি";
+export const DEFAULT_PUBLICATION_NAME = "বিজ্ঞান পণ্ডিত প্রকাশনী";
 export const SETTING_ACADEMY_NAME = "academy_name";
 export const SETTING_ACADEMY_LOGO = "academy_logo_key";
+export const SETTING_PUBLICATION_NAME = "publication_name";
+export const SETTING_PUBLICATION_LOGO = "publication_logo_key";
+export const SETTING_PUBLICATION_DESCRIPTION = "publication_description";
 export const SETTING_SCHEMA_VERSION = "schema_version";
 export const SETTING_BACKUP_REGISTRY = "backup_registry";
 export const SETTING_ADMIN_EMAIL = "admin_recovery_email";

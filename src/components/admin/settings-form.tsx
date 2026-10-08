@@ -2,7 +2,7 @@
 
 // Academy settings form (admin).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ export function AdminSettingsForm({
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
+  const [currentLogoKey, setCurrentLogoKey] = useState<string | null>(logoKey);
   const [cardBg, setCardBg] = useState<string | null>(cardBgKey);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -56,7 +57,29 @@ export function AdminSettingsForm({
   // Publication settings state
   const [pubName, setPubName] = useState(initialPublicationName);
   const [pubDesc, setPubDesc] = useState(initialPublicationDescription);
+  const [pubLogoKey, setPubLogoKey] = useState<string | null>(publicationLogoKey ?? null);
   const [savingPub, setSavingPub] = useState(false);
+
+  // Sync state if props change (e.g. after router.refresh())
+  useEffect(() => {
+    setName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    setCurrentLogoKey(logoKey);
+  }, [logoKey]);
+
+  useEffect(() => {
+    setPubName(initialPublicationName);
+  }, [initialPublicationName]);
+
+  useEffect(() => {
+    setPubDesc(initialPublicationDescription);
+  }, [initialPublicationDescription]);
+
+  useEffect(() => {
+    setPubLogoKey(publicationLogoKey ?? null);
+  }, [publicationLogoKey]);
 
   // Admin credentials state
   const [adminName, setAdminName] = useState(adminUser?.name ?? "প্রশাসক");
@@ -109,6 +132,7 @@ export function AdminSettingsForm({
         body: JSON.stringify({
           publicationName: pubName.trim(),
           publicationDescription: pubDesc.trim(),
+          publicationLogoKey: pubLogoKey,
         }),
       });
       const json = await res.json();
@@ -220,7 +244,28 @@ export function AdminSettingsForm({
             <ImageUpload
               type="logo"
               label="লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
-              currentUrl={logoKey ? `/api/files/${logoKey}` : null}
+              currentUrl={currentLogoKey ? `/api/files/${currentLogoKey}` : null}
+              onUploaded={(key) => {
+                setCurrentLogoKey(key);
+                toast({ title: "একাডেমির লোগো সংরক্ষিত হয়েছে।" });
+                router.refresh();
+              }}
+              onRemove={async () => {
+                try {
+                  const res = await fetch("/api/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ academyLogoKey: "" }),
+                  });
+                  if (res.ok) {
+                    setCurrentLogoKey(null);
+                    toast({ title: "একাডেমির লোগো মুছে ফেলা হয়েছে।" });
+                    router.refresh();
+                  }
+                } catch {
+                  toast({ title: "লোগো মুছতে সমস্যা হয়েছে।", variant: "destructive" });
+                }
+              }}
             />
           </CardContent>
         </Card>
@@ -278,7 +323,28 @@ export function AdminSettingsForm({
                 <ImageUpload
                   type="publication-logo"
                   label="প্রকাশনীর লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
-                  currentUrl={publicationLogoKey ? `/api/files/${publicationLogoKey}` : null}
+                  currentUrl={pubLogoKey ? `/api/files/${pubLogoKey}` : null}
+                  onUploaded={(key) => {
+                    setPubLogoKey(key);
+                    toast({ title: "প্রকাশনীর লোগো সংরক্ষিত হয়েছে।" });
+                    router.refresh();
+                  }}
+                  onRemove={async () => {
+                    try {
+                      const res = await fetch("/api/settings", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ publicationLogoKey: "" }),
+                      });
+                      if (res.ok) {
+                        setPubLogoKey(null);
+                        toast({ title: "প্রকাশনীর লোগো মুছে ফেলা হয়েছে।" });
+                        router.refresh();
+                      }
+                    } catch {
+                      toast({ title: "লোগো মুছতে সমস্যা হয়েছে।", variant: "destructive" });
+                    }
+                  }}
                 />
               </div>
             </div>

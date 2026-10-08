@@ -54,19 +54,45 @@ function localSafePath(key: string): string {
 
 async function saveToD1(key: string, data: Uint8Array): Promise<void> {
   try {
-    // Cloudflare D1 statement payload limit is 1MB. Base64 expands by ~33%.
-    // Exclude large binaries (> 700 KB) to prevent worker unhandled exceptions.
-    if (data.length > 700 * 1024) {
-      console.warn();
-      return;
-    }
     const db = await getDb();
-    await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
-    const base64 = Buffer.from(data).toString("base64");
-    await db
-      .prepare("INSERT OR REPLACE INTO storage_files (key, data, updated_at) VALUES (?, ?, datetime('now'))")
-      .bind(key, base64)
-      .run();
+    // Ensure both legacy storage_files and chunked storage_chunks tables exist
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);
+      CREATE TABLE IF NOT EXISTS storage_chunks (
+        key TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (key, chunk_index)
+      );
+    `);
+
+    // Clean up any existing entries for this key
+    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run().catch(() => {});
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
+
+    // For files up to 500 KB, save directly to storage_files for single-query speed
+    const CHUNK_SIZE = 500 * 1024; // 500 KB raw -> ~667 KB base64 (well under D1 1MB limit)
+    if (data.length <= CHUNK_SIZE) {
+      const base64 = Buffer.from(data).toString("base64");
+      await db
+        .prepare("INSERT OR REPLACE INTO storage_files (key, data, updated_at) VALUES (?, ?, datetime('now'))")
+        .bind(key, base64)
+        .run();
+    } else {
+      // Chunked storage for larger files (supports up to 10MB - 15MB)
+      const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, data.length);
+        const slice = data.subarray(start, end);
+        const base64 = Buffer.from(slice).toString("base64");
+        await db
+          .prepare("INSERT OR REPLACE INTO storage_chunks (key, chunk_index, data, updated_at) VALUES (?, ?, ?, datetime('now'))")
+          .bind(key, i, base64)
+          .run();
+      }
+    }
   } catch (err) {
     console.warn("Storage fallback save to D1 notice:", err);
   }
@@ -75,6 +101,7 @@ async function saveToD1(key: string, data: Uint8Array): Promise<void> {
 async function getFromD1(key: string): Promise<StoredObject | null> {
   try {
     const db = await getDb();
+    // 1) First check single-row storage_files
     const row = await db
       .prepare("SELECT data FROM storage_files WHERE key = ?")
       .bind(key)
@@ -85,6 +112,25 @@ async function getFromD1(key: string): Promise<StoredObject | null> {
       const u8 = new Uint8Array(buf);
       return { key, data: u8, size: u8.length };
     }
+
+    // 2) Check chunked storage_chunks
+    const chunkRows = await db
+      .prepare("SELECT chunk_index, data FROM storage_chunks WHERE key = ? ORDER BY chunk_index ASC")
+      .bind(key)
+      .all<{ chunk_index: number; data: string }>()
+      .catch(() => null);
+
+    if (chunkRows?.results && chunkRows.results.length > 0) {
+      const buffers = chunkRows.results.map((r) => Buffer.from(r.data, "base64"));
+      const totalLen = buffers.reduce((sum, b) => sum + b.length, 0);
+      const combined = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const b of buffers) {
+        combined.set(new Uint8Array(b), offset);
+        offset += b.length;
+      }
+      return { key, data: combined, size: totalLen };
+    }
   } catch {
     // table or row doesn't exist
   }
@@ -94,7 +140,8 @@ async function getFromD1(key: string): Promise<StoredObject | null> {
 async function deleteFromD1(key: string): Promise<void> {
   try {
     const db = await getDb();
-    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run();
+    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run().catch(() => {});
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
   } catch {
     // ignore
   }

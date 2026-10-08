@@ -58,6 +58,9 @@ export async function PUT(req: Request) {
     if (body.academyName) {
       await setSetting(SETTING_ACADEMY_NAME, body.academyName);
     }
+    if (body.academyLogoKey !== undefined) {
+      await setSetting(SETTING_ACADEMY_LOGO, body.academyLogoKey ?? "");
+    }
     if (body.cardBgUrl !== undefined) {
       await setSetting("card_bg_image_key", body.cardBgUrl ?? "");
     }

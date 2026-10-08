@@ -109,6 +109,7 @@ export const subjectUpdateSchema = subjectCreateSchema.partial();
 
 export const settingsUpdateSchema = z.object({
   academyName: z.string().trim().min(1, "একাডেমির নাম লিখুন।").max(100).optional(),
+  academyLogoKey: z.string().nullable().optional(),
   cardBgUrl: z.string().nullable().optional(),
   publicationName: z.string().trim().max(120).optional(),
   publicationDescription: z.string().trim().max(1000).optional(),

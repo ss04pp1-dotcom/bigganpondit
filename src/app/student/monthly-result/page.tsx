@@ -12,7 +12,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { MONTHS_BN, SETTING_ACADEMY_LOGO, bn } from "@/lib/constants";
+import {
+  DEFAULT_PUBLICATION_NAME,
+  MONTHS_BN,
+  SETTING_ACADEMY_LOGO,
+  SETTING_PUBLICATION_LOGO,
+  SETTING_PUBLICATION_NAME,
+  bn,
+} from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "মাসিক ফলাফল" };
@@ -51,6 +58,9 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const teacherMap = await getSubjectTeachersMap(db);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
+  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
+  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
+  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
 
   const officialSubjects = (report?.subjects ?? []).map((s) => {
     const t = teacherMap.get(s.subjectId);
@@ -143,6 +153,8 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         directorInfo={dirInfo}
         availableDirectors={availableDirectors}
         logoUrl={logoUrl}
+        publicationLogoUrl={publicationLogoUrl}
+        publicationName={publicationName}
         defaultTab="ALL"
         showPrintButton={true}
       />

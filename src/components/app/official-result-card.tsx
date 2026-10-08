@@ -69,6 +69,8 @@ export interface OfficialResultCardProps {
   selectedDirectorId?: number | null | "BOTH";
   onDirectorChange?: (directorId: number | "BOTH") => void;
   logoUrl?: string | null;
+  publicationLogoUrl?: string | null;
+  publicationName?: string | null;
   academyName?: string | null;
   teacherComments?: {
     comment1?: string;
@@ -176,6 +178,9 @@ export function OfficialResultCard({
   selectedDirectorId,
   onDirectorChange,
   logoUrl,
+  publicationLogoUrl: propPublicationLogoUrl,
+  publicationName: propPublicationName,
+  academyName,
   teacherComments,
   topStudent,
   defaultTab = "ALL",
@@ -197,7 +202,21 @@ export function OfficialResultCard({
   };
   const bgTheme = propBgTheme ?? "FLORAL";
   const [activeBgUrl, setActiveBgUrl] = useState<string | null>(propCardBgUrl || null);
+  const [activePubLogoUrl, setActivePubLogoUrl] = useState<string | null>(propPublicationLogoUrl || null);
+  const [activePubName, setActivePubName] = useState<string>(propPublicationName || "পাণ্ডিত্য প্রকাশন");
   const [bgModalOpen, setBgModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (propPublicationLogoUrl !== undefined) {
+      setActivePubLogoUrl(propPublicationLogoUrl || null);
+    }
+  }, [propPublicationLogoUrl]);
+
+  useEffect(() => {
+    if (propPublicationName !== undefined) {
+      setActivePubName(propPublicationName || "পাণ্ডিত্য প্রকাশন");
+    }
+  }, [propPublicationName]);
 
   useEffect(() => {
     if (propCardBgUrl !== undefined) {
@@ -206,13 +225,19 @@ export function OfficialResultCard({
       fetch("/api/settings")
         .then((r) => r.json())
         .then((data) => {
-          if (data?.ok && data.cardBgUrl) {
-            setActiveBgUrl(data.cardBgUrl);
+          if (data?.ok) {
+            if (data.cardBgUrl) setActiveBgUrl(data.cardBgUrl);
+            if (propPublicationLogoUrl === undefined && data.publicationLogoUrl) {
+              setActivePubLogoUrl(data.publicationLogoUrl);
+            }
+            if (propPublicationName === undefined && data.publicationName) {
+              setActivePubName(data.publicationName);
+            }
           }
         })
         .catch(() => {});
     }
-  }, [propCardBgUrl]);
+  }, [propCardBgUrl, propPublicationLogoUrl, propPublicationName]);
 
   const handleCustomBgChange = (newUrl: string | null) => {
     setActiveBgUrl(newUrl);
@@ -549,19 +574,35 @@ export function OfficialResultCard({
                 “মুহাম্মাদ (সা:) বলেন, তোমার নিজের জন্য তোমার পরিশ্রমই উত্তম” – সহিহ বুখারি, ২০২৭
               </div>
               
-              {/* পাণ্ডিত্য প্রকাশন — বড় স্পষ্ট লোগো */}
+              {/* প্রকাশনী লোগো — ইউজারের আপলোড করা অফিশিয়াল লোগো অথবা টেক্সট লোগো */}
               <div className="rc-logo-p rc-a flex flex-col items-center justify-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
-                    পাণ্ডিত্য
-                  </span>
-                  <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
-                    প্রকাশন
-                  </span>
-                </div>
-                <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
-                  মুখস্থ নয়, মেধা অন্বেষণ
-                </div>
+                {activePubLogoUrl ? (
+                  <img
+                    src={activePubLogoUrl}
+                    alt={activePubName || "প্রকাশনী লোগো"}
+                    style={{
+                      maxHeight: "120px",
+                      maxWidth: "360px",
+                      width: "auto",
+                      height: "auto",
+                      objectFit: "contain",
+                    }}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
+                        {activePubName.replace(/প্রকাশনী|প্রকাশন/g, "").trim() || "পাণ্ডিত্য"}
+                      </span>
+                      <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
+                        প্রকাশন
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
+                      মুখস্থ নয়, মেধা অন্বেষণ
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -14,8 +14,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
+  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
+  SETTING_PUBLICATION_LOGO,
+  SETTING_PUBLICATION_NAME,
   bn,
   fmtGpa,
   fmtNum,
@@ -42,6 +45,9 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
   const teacherMap = await getSubjectTeachersMap(db);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
+  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
+  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
+  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
 
   const examRows = await getStudentExamRows(db, {
     studentId: user.studentId!,
@@ -124,6 +130,8 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
         directorInfo={dirInfo}
         availableDirectors={availableDirectors}
         logoUrl={logoUrl}
+        publicationLogoUrl={publicationLogoUrl}
+        publicationName={publicationName}
         defaultTab="ALL"
         showPrintButton={true}
       />

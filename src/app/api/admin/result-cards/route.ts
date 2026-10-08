@@ -4,8 +4,11 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { handleError, ok } from "@/lib/api";
 import {
   DEFAULT_ACADEMY_NAME,
+  DEFAULT_PUBLICATION_NAME,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
+  SETTING_PUBLICATION_LOGO,
+  SETTING_PUBLICATION_NAME,
 } from "@/lib/constants";
 import {
   buildMonthlyClassSummary,
@@ -40,6 +43,9 @@ export async function GET(req: Request) {
     const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
     const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
     const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
+    const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
+    const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
+    const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
     const cardBgKey = await getSetting("card_bg_image_key", "");
     const cardBgUrl = cardBgKey
       ? cardBgKey.startsWith("http") || cardBgKey.startsWith("data:") || cardBgKey.startsWith("/card")
@@ -291,6 +297,8 @@ export async function GET(req: Request) {
       studentsList: students.map((s) => ({ id: s.id, name: s.name, roll: s.roll })),
       availableDirectors,
       logoUrl,
+      publicationLogoUrl,
+      publicationName,
       cardBgUrl,
       academyName,
       mode,

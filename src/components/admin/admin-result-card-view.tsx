@@ -70,6 +70,8 @@ export function AdminResultCardView() {
   const [availableDirectors, setAvailableDirectors] = useState<DirectorOption[]>([]);
   const [selectedDirectorId, setSelectedDirectorId] = useState<number | "BOTH">(1);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [publicationLogoUrl, setPublicationLogoUrl] = useState<string | null>(null);
+  const [publicationName, setPublicationName] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
   const [cardBgUrl, setCardBgUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"SHEET" | "BOOKLET" | "ALL">("ALL");
@@ -96,6 +98,8 @@ export function AdminResultCardView() {
         setStudentsList(json.studentsList || []);
         setAvailableDirectors(json.availableDirectors || []);
         setLogoUrl(json.logoUrl || null);
+        setPublicationLogoUrl(json.publicationLogoUrl || null);
+        setPublicationName(json.publicationName || null);
         if (json.cardBgUrl !== undefined) setCardBgUrl(json.cardBgUrl);
         if (json.academyName) setAcademyName(json.academyName);
 
@@ -367,6 +371,8 @@ export function AdminResultCardView() {
                   selectedDirectorId={selectedDirectorId}
                   onDirectorChange={(newDirId) => setSelectedDirectorId(newDirId)}
                   logoUrl={logoUrl}
+                  publicationLogoUrl={publicationLogoUrl}
+                  publicationName={publicationName}
                   academyName={academyName}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}

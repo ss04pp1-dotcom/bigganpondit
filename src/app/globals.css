@@ -672,10 +672,21 @@ tbody tr:hover { background: #f7fbff !important; }
   height: 125px;
 }
 .rc-logo-b {
-  left: 50px;
-  top: 10px;
-  width: 420px;
-  height: 165px;
+  left: 20px;
+  top: 6px;
+  width: 480px;
+  height: 176px;
+}
+
+/* প্রিভিউতে একাধিক কার্ড থাকলে স্ক্রিনে শুধু ১টি প্রিভিউ দেখানো এবং প্রিন্টে সব কার্ড প্রদর্শন */
+.rc-print-card-hidden-screen {
+  display: none !important;
+}
+
+@media print {
+  .rc-print-card-hidden-screen {
+    display: block !important;
+  }
 }
 
 .rc-tag {
@@ -697,7 +708,7 @@ tbody tr:hover { background: #f7fbff !important; }
   left: 0;
   right: 0;
   width: 100%;
-  top: 172px;
+  top: 182px;
   font-size: 16.5px;
   font-weight: 700;
   color: #111;
@@ -707,10 +718,10 @@ tbody tr:hover { background: #f7fbff !important; }
 .rc-addr {
   left: 50%;
   transform: translateX(-50%);
-  top: 195px;
-  width: 410px;
+  top: 206px;
+  width: 420px;
   max-width: 92%;
-  height: 31px;
+  height: 32px;
   border: 1.5px solid #222;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.94);

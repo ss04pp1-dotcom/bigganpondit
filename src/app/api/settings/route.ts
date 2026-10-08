@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN"]);
+    await requireApiUser(["ADMIN", "DIRECTOR"]);
     const body = await parseJson(req, settingsUpdateSchema);
     if (body.academyName) {
       await setSetting(SETTING_ACADEMY_NAME, body.academyName);

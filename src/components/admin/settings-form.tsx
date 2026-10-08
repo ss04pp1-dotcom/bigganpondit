@@ -3,7 +3,8 @@
 // Academy settings form (admin).
 
 import { useState } from "react";
-import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 export function AdminSettingsForm({
   initialName,
   logoKey,
+  cardBgKey = null,
   adminUser,
   initialAdminEmail = "",
   hasResendKey = false,
@@ -33,12 +35,15 @@ export function AdminSettingsForm({
 }: {
   initialName: string;
   logoKey: string | null;
+  cardBgKey?: string | null;
   adminUser?: { name: string; username: string };
   initialAdminEmail?: string;
   hasResendKey?: boolean;
   initialResendFrom?: string;
 }) {
+  const router = useRouter();
   const [name, setName] = useState(initialName);
+  const [cardBg, setCardBg] = useState<string | null>(cardBgKey);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
 
@@ -178,6 +183,60 @@ export function AdminSettingsForm({
               type="logo"
               label="লোগো (JPG/PNG/WebP)"
               currentUrl={logoKey ? `/api/files/${logoKey}` : null}
+            />
+          </CardContent>
+        </Card>
+
+        {/* রেজাল্ট কার্ডের কভার ব্যাকগ্রাউন্ড কার্ড */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="border-b border-border pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-[16px] flex items-center gap-2">
+                <Palette className="h-4 w-4 text-emerald-600" />
+                রেজাল্ট কার্ডের কভার ব্যাকগ্রাউন্ড (স্থায়ী সংরক্ষণ)
+              </CardTitle>
+              <CardDescription className="text-[12px] text-slate-500 mt-0.5">
+                শুধুমাত্র কভার পেজে এই ব্যাকগ্রাউন্ড প্রদর্শিত হবে। রেজাল্ট কার্ড শিট (নম্বর টেবিল) স্বাভাবিক সাদা ও পরিষ্কার থাকবে।
+              </CardDescription>
+            </div>
+            {cardBg && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 gap-1.5"
+                onClick={async () => {
+                  await fetch("/api/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cardBgUrl: "" }),
+                  });
+                  setCardBg(null);
+                  toast({ title: "কভার ব্যাকগ্রাউন্ড রিমুভ করা হয়েছে (ডিফল্ট আর্ট বহাল)।" });
+                  router.refresh();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                ডিফল্টে ফিরুন
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ImageUpload
+              type="card-bg"
+              label="কভার ব্যাকগ্রাউন্ড ছবি (JPG / PNG / WebP — সর্বোচ্চ ৫ MB)"
+              currentUrl={
+                cardBg
+                  ? cardBg.startsWith("http") || cardBg.startsWith("data:") || cardBg.startsWith("/card")
+                    ? cardBg
+                    : `/api/files/${cardBg}`
+                  : null
+              }
+              onUploaded={(_, url) => {
+                setCardBg(url);
+                toast({ title: "নতুন কভার ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
+                router.refresh();
+              }}
             />
           </CardContent>
         </Card>

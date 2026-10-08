@@ -303,18 +303,34 @@ export function OfficialResultCard({
   const showCover = activeView === "BOOKLET" || activeView === "ALL";
   const showSheet = activeView === "SHEET" || activeView === "ALL";
 
-  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল
+  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — কাস্টম ব্যাকগ্রাউন্ড শুধুমাত্র কভার পেজে (RIGHT/LEFT) প্রযোজ্য হবে
   const getPanelBg = (side: "LEFT" | "RIGHT" | "SHEET"): React.CSSProperties => {
-    if (activeBgUrl) {
-      if (side === "SHEET") {
+    // ১. রেজাল্ট কার্ড শিট (SHEET) সবসময় স্বাভাবিক ও পরিষ্কার থাকবে, কাস্টম ব্যাকগ্রাউন্ড আসবে না
+    if (side === "SHEET") {
+      if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
+      if (bgTheme === "PARCHMENT") {
         return {
-          backgroundImage: `url(${activeBgUrl})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: "#f4f8ee",
+          backgroundColor: "#fdfbf7",
+          backgroundImage: "radial-gradient(#e2d9cc 0.75px, transparent 0.75px)",
+          backgroundSize: "16px 16px",
         };
       }
+      if (bgTheme === "ROYAL") {
+        return {
+          backgroundColor: "#f6f9fc",
+          backgroundImage: "radial-gradient(#d3e1ef 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        };
+      }
+      // FLORAL (Default)
+      return {
+        backgroundColor: "#eaf2dd",
+        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
+      };
+    }
+
+    // ২. শুধুমাত্র কভার পেজে (RIGHT এবং LEFT) কাস্টম ব্যাকগ্রাউন্ড ছবি প্রযোজ্য
+    if (activeBgUrl) {
       return {
         backgroundImage: `url(${activeBgUrl})`,
         backgroundSize: "cover",
@@ -323,6 +339,7 @@ export function OfficialResultCard({
         backgroundColor: "#ffffff",
       };
     }
+
     if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
     if (bgTheme === "PARCHMENT") {
       return {
@@ -339,12 +356,6 @@ export function OfficialResultCard({
       };
     }
     // FLORAL (Default)
-    if (side === "SHEET") {
-      return {
-        backgroundColor: "#eaf2dd",
-        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
-      };
-    }
     return {
       backgroundColor: "#f4f7fb",
       backgroundImage: "radial-gradient(circle at 10% 10%, rgba(180, 225, 190, 0.25) 0%, transparent 45%), radial-gradient(circle at 90% 90%, rgba(245, 190, 180, 0.22) 0%, transparent 45%)",
@@ -567,8 +578,12 @@ export function OfficialResultCard({
                 )}
               </div>
 
-              <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
-              <div className="rc-a rc-addr">সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ</div>
+              {!logoUrl && (
+                <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
+              )}
+              <div className="rc-a rc-addr" style={logoUrl ? { top: 178 } : undefined}>
+                সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ
+              </div>
               <div className="rc-a rc-badge">রেজাল্ট কার্ড</div>
               
               <div className="rc-a rc-my">

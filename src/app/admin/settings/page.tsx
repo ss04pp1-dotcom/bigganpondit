@@ -11,6 +11,7 @@ export default async function AdminSettingsPage() {
   const user = await requirePageUser(["ADMIN"]);
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const cardBgKey = await getSetting("card_bg_image_key", "");
   const adminEmail = await getSetting(SETTING_ADMIN_EMAIL, "");
   const hasResendKey = !!(await getResendApiKey());
   const resendFromEmail = await getSetting(SETTING_RESEND_FROM, "");
@@ -26,6 +27,7 @@ export default async function AdminSettingsPage() {
       <AdminSettingsForm
         initialName={academyName}
         logoKey={logoKey || null}
+        cardBgKey={cardBgKey || null}
         adminUser={{ name: user.name, username: user.username }}
         initialAdminEmail={adminEmail}
         hasResendKey={hasResendKey}

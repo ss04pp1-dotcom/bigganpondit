@@ -37,7 +37,7 @@ export interface DirectorOption {
 }
 
 export interface OfficialResultCardProps {
-  mode?: "MONTHLY" | "ANNUAL";
+  mode?: "MONTHLY" | "ANNUAL" | "MODEL";
   month?: number | string;
   year?: number | string;
   student: {
@@ -654,6 +654,11 @@ export function OfficialResultCard({
                 </span>{" "}
                 <span className={mode === "MONTHLY" ? "text-red-700 font-bold" : ""}>মাসিক</span>
                 {" / "}
+                <span className={mode === "MODEL" ? "text-red-600 font-bold" : "text-slate-400 font-normal"}>
+                  {mode === "MODEL" ? "●" : "○"}
+                </span>{" "}
+                <span className={mode === "MODEL" ? "text-red-700 font-bold" : ""}>মডেল টেস্ট</span>
+                {" / "}
                 <span className={mode === "ANNUAL" ? "text-red-600 font-bold" : "text-slate-400 font-normal"}>
                   {mode === "ANNUAL" ? "●" : "○"}
                 </span>{" "}
@@ -666,7 +671,7 @@ export function OfficialResultCard({
                 মাসঃ{" "}
                 {MONTHS_BN.map((m, i) => (
                   <React.Fragment key={m}>
-                    <span className={mode === "MONTHLY" && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
+                    <span className={(mode === "MONTHLY" || mode === "MODEL") && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
                     {i < MONTHS_BN.length - 1 ? " / " : ""}
                   </React.Fragment>
                 ))}

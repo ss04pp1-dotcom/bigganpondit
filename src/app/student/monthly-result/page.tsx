@@ -28,6 +28,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const curMonth = new Date().getMonth() + 1;
   const month = Number(one(sp.month)) || curMonth;
   const year = Number(one(sp.year)) || curYear;
+  const mode = one(sp.mode)?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
 
   const classRow = await db
     .prepare("SELECT id FROM classes WHERE name = ?")
@@ -86,6 +87,16 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         <CardContent className="pt-4">
           <form method="get" action="/student/monthly-result" className="grid grid-cols-2 gap-3 sm:w-96">
             <div className="space-y-1.5">
+              <Label className="text-[12px]">ফলাফলের ধরন</Label>
+              <Select name="mode" defaultValue={mode}>
+                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">মাসিক</SelectItem>
+                  <SelectItem value="MODEL">মডেল টেস্ট</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-[12px]">মাস</Label>
               <Select name="month" defaultValue={String(month)}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
@@ -116,7 +127,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
 
       {/* 100% Pixel to Pixel Official Result Card & Sheet */}
       <OfficialResultCard
-        mode="MONTHLY"
+        mode={mode}
         month={month}
         year={year}
         student={{

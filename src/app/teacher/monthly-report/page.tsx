@@ -56,6 +56,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const division = requiresDiv ? (one(sp.division) === "HUMANITIES" ? "HUMANITIES" : "SCIENCE") : null;
   const month = Number(one(sp.month)) || curMonth;
   const year = Number(one(sp.year)) || curYear;
+  const mode = one(sp.mode)?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
 
   const classRow = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(className).first<{ id: number }>(undefined as never).catch(() => null);
   const classId = classRow?.id ?? 0;
@@ -142,6 +143,16 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label className="text-[12px]">ধরনের রিপোর্ট</Label>
+              <Select name="mode" defaultValue={mode}>
+                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">মাসিক</SelectItem>
+                  <SelectItem value="MODEL">মডেল টেস্ট</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-[12px]">মাস</Label>
               <Select name="month" defaultValue={String(month)}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
@@ -173,7 +184,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
       {/* individual report card (100% pixel-to-pixel copy of Image 1) */}
       {report ? (
         <OfficialResultCard
-          mode="MONTHLY"
+          mode={mode}
           month={month}
           year={year}
           student={{

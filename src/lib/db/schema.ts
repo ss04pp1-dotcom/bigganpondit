@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS exams (
   title       TEXT NOT NULL,
   total_marks INTEGER NOT NULL CHECK (total_marks > 0),
   exam_type   TEXT NOT NULL DEFAULT 'MONTHLY',
+  is_published INTEGER NOT NULL DEFAULT 0,
   created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -134,6 +135,8 @@ CREATE INDEX IF NOT EXISTS idx_exams_class_div ON exams(class_id, (COALESCE(divi
 
 CREATE INDEX IF NOT EXISTS idx_marks_exam    ON marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
+CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
+CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_exams_lookup  ON exams(subject_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_teacher_subjects_subject ON teacher_subjects(subject_id);
 

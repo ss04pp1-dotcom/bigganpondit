@@ -49,6 +49,7 @@ export async function GET() {
       if (obj && obj.data) {
         let contentType = "image/png";
         if (logoKey.endsWith(".jpg") || logoKey.endsWith(".jpeg")) contentType = "image/jpeg";
+        else if (logoKey.endsWith(".webp")) contentType = "image/webp";
         else if (logoKey.endsWith(".svg")) contentType = "image/svg+xml";
 
         return new Response(obj.data as unknown as BodyInit, {

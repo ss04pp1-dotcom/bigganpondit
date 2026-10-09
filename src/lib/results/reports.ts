@@ -309,7 +309,7 @@ export async function buildMonthlyReport(
     publishedOnly?: boolean;
   }
 ): Promise<MonthlyReport | null> {
-  const student = await getStudentInfo(db, opts.studentId);
+  const student = await getStudentInfo(db, opts.studentId, opts.year);
   if (!student) return null;
   const classId = (
     await db.prepare("SELECT id FROM classes WHERE name = ?").bind(student.className).first<{ id: number }>(undefined as never).catch(() => null)

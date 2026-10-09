@@ -97,14 +97,24 @@ async function getFromD1(key: string): Promise<StoredObject | null> {
   try {
     const db = await getDb();
 
-    // 1) Try chunked storage
-    const chunks = (
+    // 1) Try chunked storage (support both chunk_idx and legacy chunk_index)
+    let chunks = (
       await db
         .prepare("SELECT data FROM storage_chunks WHERE key = ? ORDER BY chunk_idx ASC")
         .bind(key)
         .all<{ data: string }>()
         .catch(() => null)
     )?.results ?? [];
+
+    if (!chunks.length) {
+      chunks = (
+        await db
+          .prepare("SELECT data FROM storage_chunks WHERE key = ? ORDER BY chunk_index ASC")
+          .bind(key)
+          .all<{ data: string }>()
+          .catch(() => null)
+      )?.results ?? [];
+    }
 
     if (chunks.length > 0) {
       const fullBase64 = chunks.map((c) => c.data).join("");

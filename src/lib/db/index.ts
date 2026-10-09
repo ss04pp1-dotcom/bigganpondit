@@ -100,6 +100,23 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
+  // Ensure exams is_published column exists (0 = draft/unpublished, 1 = published by admin)
+  try {
+    await db.exec("ALTER TABLE exams ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0;");
+  } catch {
+    // Column already exists
+  }
+
+  // Ensure composite performance indexes exist
+  try {
+    await db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
+      CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
+    `);
+  } catch {
+    // Indexes already exist
+  }
+
   // Ensure storage_files table exists for fallback file persistence
   try {
     await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");

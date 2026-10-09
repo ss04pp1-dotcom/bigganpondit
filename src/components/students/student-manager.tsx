@@ -26,8 +26,10 @@ import {
   MessageSquare,
   Send,
   Fingerprint,
+  GraduationCap,
 } from "lucide-react";
 import { BiometricPasswordDialog } from "./biometric-password-dialog";
+import { StudentPromotionModal } from "./student-promotion-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -238,6 +240,9 @@ export function StudentManager({
 
   // Biometric fingerprint password reveal state for Admin
   const [bioStudent, setBioStudent] = useState<Row | null>(null);
+
+  // Student promotion modal state for Admin
+  const [promotionOpen, setPromotionOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -516,14 +521,25 @@ export function StudentManager({
 
         <div className="flex items-center gap-2">
           {role === "ADMIN" && mainTab === "students" && (
-            <Button
-              variant="outline"
-              className="h-10 gap-2 border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 shadow-xs text-xs font-bold"
-              onClick={() => setSmsOpen(true)}
-            >
-              <MessageSquare className="h-4 w-4 text-emerald-600" />
-              SMS পাঠান
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                className="h-10 gap-2 border-indigo-300 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 shadow-xs text-xs font-bold"
+                onClick={() => setPromotionOpen(true)}
+              >
+                <GraduationCap className="h-4 w-4 text-indigo-600" />
+                শ্রেণি প্রমোশন
+              </Button>
+
+              <Button
+                variant="outline"
+                className="h-10 gap-2 border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 shadow-xs text-xs font-bold"
+                onClick={() => setSmsOpen(true)}
+              >
+                <MessageSquare className="h-4 w-4 text-emerald-600" />
+                SMS পাঠান
+              </Button>
+            </>
           )}
 
           {canCreate && mainTab === "students" && (
@@ -1499,6 +1515,17 @@ export function StudentManager({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* Student Class Promotion Modal for Admin */}
+    {role === "ADMIN" && (
+      <StudentPromotionModal
+        open={promotionOpen}
+        onClose={() => setPromotionOpen(false)}
+        onSuccess={() => {
+          load();
+        }}
+      />
+    )}
     </div>
   );
 }

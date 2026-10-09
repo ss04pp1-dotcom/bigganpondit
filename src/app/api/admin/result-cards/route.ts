@@ -6,6 +6,7 @@ import {
   DEFAULT_ACADEMY_NAME,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
+  cleanCardBgUrl,
 } from "@/lib/constants";
 import {
   buildMonthlyClassSummary,
@@ -41,11 +42,10 @@ export async function GET(req: Request) {
     const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
     const cardBgKey =
       (await getSetting("card_cover_bg_url", "")) || (await getSetting("card_bg_image_key", ""));
-    const cardBgUrl = cardBgKey
-      ? cardBgKey.startsWith("http") || cardBgKey.startsWith("data:") || cardBgKey.startsWith("/card")
-        ? cardBgKey
-        : `/api/files/${cardBgKey}`
-      : null;
+    const cardBgUrl = cleanCardBgUrl(cardBgKey);
+    const publicationName = await getSetting("publication_name", "বিজ্ঞান পণ্ডিত প্রকাশনী");
+    const publicationLogoKey = await getSetting("publication_logo_key", "");
+    const publicationLogoUrl = publicationLogoKey ? `/api/files/${publicationLogoKey}` : null;
     const availableDirectors = await getAllDirectorsList(db);
     const teacherMap = await getSubjectTeachersMap(db);
 
@@ -281,6 +281,8 @@ export async function GET(req: Request) {
       studentsList: students.map((s) => ({ id: s.id, name: s.name, roll: s.roll })),
       availableDirectors,
       logoUrl,
+      publicationLogoUrl,
+      publicationName,
       cardBgUrl,
       academyName,
       mode,

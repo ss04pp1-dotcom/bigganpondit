@@ -11,7 +11,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Printer, FileText, BookOpen, Layers, Palette, Image as ImageIcon, Lock } from "lucide-react";
-import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa } from "@/lib/constants";
+import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa, cleanCardBgUrl } from "@/lib/constants";
 import { TransparentSignature } from "@/components/app/transparent-signature";
 import { CardBgModal } from "@/components/app/card-bg-modal";
 
@@ -69,6 +69,8 @@ export interface OfficialResultCardProps {
   selectedDirectorId?: number | null | "BOTH";
   onDirectorChange?: (directorId: number | "BOTH") => void;
   logoUrl?: string | null;
+  publicationLogoUrl?: string | null;
+  publicationName?: string | null;
   academyName?: string | null;
   teacherComments?: {
     comment1?: string;
@@ -176,6 +178,9 @@ export function OfficialResultCard({
   selectedDirectorId,
   onDirectorChange,
   logoUrl,
+  publicationLogoUrl: propPublicationLogoUrl,
+  publicationName: propPublicationName,
+  academyName,
   teacherComments,
   topStudent,
   defaultTab = "ALL",
@@ -196,7 +201,23 @@ export function OfficialResultCard({
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
   const bgTheme = propBgTheme ?? "FLORAL";
   const [activeBgUrl, setActiveBgUrl] = useState<string | null>(propCardBgUrl || null);
+  const [activePubLogoUrl, setActivePubLogoUrl] = useState<string | null>(propPublicationLogoUrl || null);
+  const [activePubName, setActivePubName] = useState<string>(propPublicationName || "পাণ্ডিত্য প্রকাশন");
   const [bgModalOpen, setBgModalOpen] = useState(false);
+
+  const resolvedBgUrl = cleanCardBgUrl(activeBgUrl);
+
+  useEffect(() => {
+    if (propPublicationLogoUrl !== undefined) {
+      setActivePubLogoUrl(propPublicationLogoUrl || null);
+    }
+  }, [propPublicationLogoUrl]);
+
+  useEffect(() => {
+    if (propPublicationName !== undefined) {
+      setActivePubName(propPublicationName || "পাণ্ডিত্য প্রকাশন");
+    }
+  }, [propPublicationName]);
 
   useEffect(() => {
     if (propCardBgUrl !== undefined) {
@@ -205,13 +226,19 @@ export function OfficialResultCard({
       fetch("/api/settings")
         .then((r) => r.json())
         .then((data) => {
-          if (data?.ok && data.cardBgUrl) {
-            setActiveBgUrl(data.cardBgUrl);
+          if (data?.ok) {
+            if (data.cardBgUrl) setActiveBgUrl(data.cardBgUrl);
+            if (propPublicationLogoUrl === undefined && data.publicationLogoUrl) {
+              setActivePubLogoUrl(data.publicationLogoUrl);
+            }
+            if (propPublicationName === undefined && data.publicationName) {
+              setActivePubName(data.publicationName);
+            }
           }
         })
         .catch(() => {});
     }
-  }, [propCardBgUrl]);
+  }, [propCardBgUrl, propPublicationLogoUrl, propPublicationName]);
 
   const handleCustomBgChange = (newUrl: string | null) => {
     setActiveBgUrl(newUrl);
@@ -311,19 +338,18 @@ export function OfficialResultCard({
   const showCover = activeView === "BOOKLET" || activeView === "ALL";
   const showSheet = activeView === "SHEET" || activeView === "ALL";
 
-  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — ব্যাকগ্রাউন্ড পরিবর্তন শুধুমাত্র কভার পেজের (LEFT ও RIGHT) জন্য প্রযোজ্য, রেজাল্ট শিট (SHEET)-এর নয়!
+  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — কাস্টম বা আপলোডকৃত ব্যাকগ্রাউন্ড কভার ও রেজাল্ট শিট উভয়টিতে কার্যকর
   const getPanelBg = (side: "LEFT" | "RIGHT" | "SHEET"): React.CSSProperties => {
-    // শুধুমাত্র কভার পেজের (বাম ও ডান প্যানেল) ব্যাকগ্রাউন্ড ছবি পরিবর্তিত হবে
-    if (side !== "SHEET" && activeBgUrl) {
+    if (resolvedBgUrl) {
       return {
-        backgroundImage: `url(${activeBgUrl})`,
+        backgroundImage: `url("${resolvedBgUrl}")`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         backgroundColor: "#ffffff",
       };
     }
-    // রেজাল্ট শিট (পৃষ্ঠা ২) সর্বদা অফিশিয়াল স্ট্যান্ডার্ড ব্যাকগ্রাউন্ডে থাকবে
+    // ডিফল্ট ব্যাকগ্রাউন্ড
     if (side === "SHEET") {
       return {
         backgroundColor: "#eaf2dd",
@@ -534,19 +560,35 @@ export function OfficialResultCard({
                 “মুহাম্মাদ (সা:) বলেন, তোমার নিজের জন্য তোমার পরিশ্রমই উত্তম” – সহিহ বুখারি, ২০২৭
               </div>
               
-              {/* পাণ্ডিত্য প্রকাশন — বড় স্পষ্ট লোগো */}
+              {/* প্রকাশনী লোগো — ইউজারের আপলোড করা অফিশিয়াল লোগো অথবা টেক্সট লোগো */}
               <div className="rc-logo-p rc-a flex flex-col items-center justify-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
-                    পাণ্ডিত্য
-                  </span>
-                  <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
-                    প্রকাশন
-                  </span>
-                </div>
-                <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
-                  মুখস্থ নয়, মেধা অন্বেষণ
-                </div>
+                {activePubLogoUrl ? (
+                  <img
+                    src={activePubLogoUrl}
+                    alt={activePubName || "প্রকাশনী লোগো"}
+                    style={{
+                      maxHeight: "120px",
+                      maxWidth: "360px",
+                      width: "auto",
+                      height: "auto",
+                      objectFit: "contain",
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
+                        {activePubName && activePubName.includes(" ") ? activePubName.split(" ")[0] : "পাণ্ডিত্য"}
+                      </span>
+                      <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
+                        {activePubName && activePubName.includes(" ") ? activePubName.split(" ").slice(1).join(" ") : "প্রকাশন"}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
+                      মুখস্থ নয়, মেধা অন্বেষণ
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

@@ -160,10 +160,9 @@ export function CardBgModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cardBgUrl: json.url, cardCoverBgUrl: json.url }),
         });
-        toast({ title: "✅ কভার পেজের ব্যাকগ্রাউন্ড ছবি স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
+        toast({ title: "✅ রেজাল্ট কার্ডের ব্যাকগ্রাউন্ড ছবি স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
       } else {
-        // Still keep local preview URL
-        toast({ title: "কভার ব্যাকগ্রাউন্ড ছবি প্রয়োগ করা হয়েছে।" });
+        toast({ title: json?.error || "ছবি আপলোড করা যায়নি।", variant: "destructive" });
       }
     } catch (e) {
       toast({ title: "কভার ব্যাকগ্রাউন্ড ছবি প্রিভিউতে যুক্ত হয়েছে।" });
@@ -192,10 +191,10 @@ export function CardBgModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl font-bold text-slate-900">
             <Palette className="h-5 w-5 text-emerald-600" />
-            কভার পেজের ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন
+            রেজাল্ট কার্ডের ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm text-slate-600">
-            আপনার পছন্দের যেকোনো ফটো/সার্টিফিকেট বর্ডার আপলোড করুন। এটি শুধুমাত্র কভার পেজের ব্যাকগ্রাউন্ডে স্থায়ীভাবে প্রয়োগ হবে, রেজাল্ট শিট অফিশিয়াল স্ট্যান্ডার্ড থাকবে।
+            আপনার পছন্দের যেকোনো ফটো/সার্টিফিকেট বর্ডার আপলোড করুন। এটি রেজাল্ট কার্ড শিট ও কভার পেজের ব্যাকগ্রাউন্ডে স্থায়ীভাবে প্রয়োগ হবে।
           </DialogDescription>
         </DialogHeader>
 

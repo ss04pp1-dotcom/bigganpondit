@@ -54,19 +54,40 @@ function localSafePath(key: string): string {
 
 async function saveToD1(key: string, data: Uint8Array): Promise<void> {
   try {
-    // Cloudflare D1 statement payload limit is 1MB. Base64 expands by ~33%.
-    // Exclude large binaries (> 700 KB) to prevent worker unhandled exceptions.
-    if (data.length > 700 * 1024) {
-      console.warn();
-      return;
-    }
     const db = await getDb();
-    await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS storage_chunks (
+        key TEXT,
+        chunk_idx INTEGER,
+        data TEXT,
+        updated_at TEXT,
+        PRIMARY KEY (key, chunk_idx)
+      );
+    `);
+
+    // Clean old chunks
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
+
     const base64 = Buffer.from(data).toString("base64");
-    await db
-      .prepare("INSERT OR REPLACE INTO storage_files (key, data, updated_at) VALUES (?, ?, datetime('now'))")
-      .bind(key, base64)
-      .run();
+    // 300,000 characters per chunk (~225 KB), safely within D1 statement limits
+    const chunkSize = 300000;
+    const numChunks = Math.ceil(base64.length / chunkSize);
+    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+
+    for (let i = 0; i < numChunks; i++) {
+      const slice = base64.slice(i * chunkSize, (i + 1) * chunkSize);
+      stmts.push(
+        db
+          .prepare(
+            "INSERT INTO storage_chunks (key, chunk_idx, data, updated_at) VALUES (?, ?, ?, datetime('now'))"
+          )
+          .bind(key, i, slice)
+      );
+    }
+
+    if (stmts.length > 0) {
+      await db.batch(stmts);
+    }
   } catch (err) {
     console.warn("Storage fallback save to D1 notice:", err);
   }
@@ -75,6 +96,24 @@ async function saveToD1(key: string, data: Uint8Array): Promise<void> {
 async function getFromD1(key: string): Promise<StoredObject | null> {
   try {
     const db = await getDb();
+
+    // 1) Try chunked storage
+    const chunks = (
+      await db
+        .prepare("SELECT data FROM storage_chunks WHERE key = ? ORDER BY chunk_idx ASC")
+        .bind(key)
+        .all<{ data: string }>()
+        .catch(() => null)
+    )?.results ?? [];
+
+    if (chunks.length > 0) {
+      const fullBase64 = chunks.map((c) => c.data).join("");
+      const buf = Buffer.from(fullBase64, "base64");
+      const u8 = new Uint8Array(buf);
+      return { key, data: u8, size: u8.length };
+    }
+
+    // 2) Fallback to legacy storage_files table
     const row = await db
       .prepare("SELECT data FROM storage_files WHERE key = ?")
       .bind(key)
@@ -94,7 +133,8 @@ async function getFromD1(key: string): Promise<StoredObject | null> {
 async function deleteFromD1(key: string): Promise<void> {
   try {
     const db = await getDb();
-    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run();
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
+    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run().catch(() => {});
   } catch {
     // ignore
   }

@@ -23,7 +23,7 @@ export interface StudentInfo {
   photoKey: string | null;
 }
 
-export async function getStudentInfo(db: D1Database, studentId: number): Promise<StudentInfo | null> {
+export async function getStudentInfo(db: D1Database, studentId: number, year?: number): Promise<StudentInfo | null> {
   const row = await db
     .prepare(
       `SELECT st.id as student_id, st.name, st.roll, st.division, st.section, st.photo_key, c.name as class_name
@@ -33,12 +33,32 @@ export async function getStudentInfo(db: D1Database, studentId: number): Promise
     .first<StudentInfo & { student_id: number; class_name: string; photo_key: string | null }>(undefined as never)
     .catch(() => null);
   if (!row) return null;
+
+  let className = row.class_name;
+  let division = row.division;
+
+  if (year) {
+    const historical = await db
+      .prepare(
+        `SELECT c.name as class_name, e.division
+         FROM marks m JOIN exams e ON e.id = m.exam_id JOIN classes c ON c.id = e.class_id
+         WHERE m.student_id = ? AND e.year = ? LIMIT 1`
+      )
+      .bind(studentId, year)
+      .first<{ class_name: string; division: string | null }>(undefined as never)
+      .catch(() => null);
+    if (historical?.class_name) {
+      className = historical.class_name;
+      if (historical.division) division = historical.division;
+    }
+  }
+
   return {
     studentId: row.student_id,
     name: row.name,
     roll: row.roll,
-    className: row.class_name,
-    division: row.division,
+    className,
+    division,
     section: row.section,
     photoKey: row.photo_key,
   };
@@ -406,7 +426,7 @@ export async function buildStudentAnnualReport(
   db: D1Database,
   opts: { studentId: number; year: number; subjectIds?: number[] | null }
 ): Promise<{ student: StudentInfo; annual: ReturnType<typeof buildAnnualResult> } | null> {
-  const student = await getStudentInfo(db, opts.studentId);
+  const student = await getStudentInfo(db, opts.studentId, opts.year);
   if (!student) return null;
 
   const clauses = ["m.student_id = ?", "e.year = ?"];

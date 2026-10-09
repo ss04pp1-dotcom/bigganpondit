@@ -3,7 +3,8 @@
 // Results management (admin): exam list with filters + per-mark edit/delete.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Pencil, Search, Trash2, Printer, ClipboardEdit, Globe, EyeOff, CheckCircle2 } from "lucide-react";
 import { PrintSignatures } from "@/components/app/print-signatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,6 +30,7 @@ interface ExamRowT {
   class_name: string;
   mark_count: number;
   highest: number | null;
+  is_published?: number;
 }
 
 interface MarkRowT {
@@ -54,7 +56,39 @@ export function ResultsManager() {
   const [editObtained, setEditObtained] = useState("");
   const [editAttendance, setEditAttendance] = useState<"PRESENT" | "ABSENT">("PRESENT");
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const { toast } = useToast();
+
+  const togglePublish = async (examId: number, currentPublishStatus: boolean) => {
+    setPublishing(true);
+    try {
+      const res = await fetch("/api/admin/results/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examId,
+          publish: !currentPublishStatus,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "পাবলিশ স্ট্যাটাস পরিবর্তন করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({ title: json.message });
+      // Update local exams state
+      setExams((prev) =>
+        prev.map((e) => (e.id === examId ? { ...e, is_published: !currentPublishStatus ? 1 : 0 } : e))
+      );
+      if (active && active.id === examId) {
+        setActive((prev) => (prev ? { ...prev, is_published: !currentPublishStatus ? 1 : 0 } : null));
+      }
+    } catch {
+      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const loadExams = useCallback(async () => {
     setLoading(true);
@@ -200,28 +234,68 @@ export function ResultsManager() {
                   <th className="px-3 py-2 text-right font-semibold">মোট</th>
                   <th className="px-3 py-2 text-right font-semibold">সর্বোচ্চ</th>
                   <th className="px-3 py-2 text-center font-semibold">নম্বর সংখ্যা</th>
+                  <th className="px-3 py-2 text-center font-semibold">পাবলিশ স্ট্যাটাস</th>
+                  <th className="px-3 py-2 text-center font-semibold">অ্যাকশন</th>
                   <th />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-white">
                 {exams.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">এই তথ্য পাওয়া যায়নি।</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">এই তথ্য পাওয়া যায়নি।</td></tr>
                 ) : (
-                  exams.map((ex) => (
-                    <tr
-                      key={ex.id}
-                      className={cn("cursor-pointer hover:bg-accent/40", active?.id === ex.id && "bg-accent/60")}
-                      onClick={() => openExam(ex)}
-                    >
-                      <td className="px-3 py-2 font-medium">{ex.subject_name}</td>
-                      <td className="px-3 py-2">{ex.title}</td>
-                      <td className="px-3 py-2">{bn(ex.exam_date)}</td>
-                      <td className="px-3 py-2 text-right">{fmtNum(ex.total_marks)}</td>
-                      <td className="px-3 py-2 text-right">{fmtNum(ex.highest ?? 0)}</td>
-                      <td className="px-3 py-2 text-center">{bn(ex.mark_count)}</td>
-                      <td className="px-3 py-2 text-right text-primary">দেখুন →</td>
-                    </tr>
-                  ))
+                  exams.map((ex) => {
+                    const isPub = Number(ex.is_published) === 1;
+                    return (
+                      <tr
+                        key={ex.id}
+                        className={cn("cursor-pointer hover:bg-accent/40", active?.id === ex.id && "bg-accent/60")}
+                        onClick={() => openExam(ex)}
+                      >
+                        <td className="px-3 py-2 font-medium">{ex.subject_name}</td>
+                        <td className="px-3 py-2">{ex.title}</td>
+                        <td className="px-3 py-2">{bn(ex.exam_date)}</td>
+                        <td className="px-3 py-2 text-right">{fmtNum(ex.total_marks)}</td>
+                        <td className="px-3 py-2 text-right">{fmtNum(ex.highest ?? 0)}</td>
+                        <td className="px-3 py-2 text-center">{bn(ex.mark_count)}</td>
+                        <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          {isPub ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                              <Globe className="h-3 w-3" /> প্রকাশিত
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                              <EyeOff className="h-3 w-3" /> অপ্রকাশিত (ড্রাফট)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant={isPub ? "outline" : "default"}
+                            className={cn(
+                              "h-7 text-[11px] font-bold gap-1",
+                              isPub
+                                ? "text-amber-700 border-amber-300 hover:bg-amber-50"
+                                : "bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
+                            )}
+                            disabled={publishing}
+                            onClick={() => togglePublish(ex.id, isPub)}
+                          >
+                            {isPub ? (
+                              <>
+                                <EyeOff className="h-3 w-3" /> অপ্রকাশিত করুন
+                              </>
+                            ) : (
+                              <>
+                                <Globe className="h-3 w-3" /> প্রকাশ করুন
+                              </>
+                            )}
+                          </Button>
+                        </td>
+                        <td className="px-3 py-2 text-right text-primary font-medium">দেখুন →</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -233,13 +307,59 @@ export function ResultsManager() {
       {active && (
         <Card>
           <CardContent className="pt-4">
-            <h3 className="mb-1 text-[15px] font-bold">
-              {active.subject_name} — {active.title} ({classLabel(active.class_name)}
-              {active.division ? ` — ${divisionLabel(active.division)}` : ""})
-            </h3>
-            <p className="mb-3 text-[12px] text-muted-foreground">
-              {MONTHS_BN[active.month - 1]} {bn(active.year)} • তারিখ: {bn(active.exam_date)} • মোট নম্বর: {fmtNum(active.total_marks)}
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[15px] font-bold">
+                    {active.subject_name} — {active.title} ({classLabel(active.class_name)}
+                    {active.division ? ` — ${divisionLabel(active.division)}` : ""})
+                  </h3>
+                  {Number(active.is_published) === 1 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+                      <Globe className="h-3 w-3" /> প্রকাশিত
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                      <EyeOff className="h-3 w-3" /> ড্রাফট
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12px] text-muted-foreground mt-0.5">
+                  {MONTHS_BN[active.month - 1]} {bn(active.year)} • তারিখ: {bn(active.exam_date)} • মোট নম্বর: {fmtNum(active.total_marks)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <Button
+                  size="sm"
+                  variant={Number(active.is_published) === 1 ? "outline" : "default"}
+                  className={cn(
+                    "text-xs font-bold gap-1.5 shadow-xs",
+                    Number(active.is_published) === 1
+                      ? "text-amber-700 border-amber-300 hover:bg-amber-50"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
+                  disabled={publishing}
+                  onClick={() => togglePublish(active.id, Number(active.is_published) === 1)}
+                >
+                  {Number(active.is_published) === 1 ? (
+                    <>
+                      <EyeOff className="h-3.5 w-3.5" /> ফলাফল অপ্রকাশিত করুন
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="h-3.5 w-3.5" /> ফলাফল প্রকাশ করুন
+                    </>
+                  )}
+                </Button>
+                <Link
+                  href={`/admin/marks?class=${active.class_name}${active.division ? `&division=${active.division}` : ""}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold hover:bg-emerald-100 transition shadow-2xs"
+                >
+                  <ClipboardEdit className="h-3.5 w-3.5 text-emerald-600" />
+                  স্মার্ট নম্বর এন্ট্রি
+                </Link>
+              </div>
+            </div>
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-[13px]">
                 <thead>
@@ -308,6 +428,19 @@ export function ResultsManager() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="mt-4 flex justify-between items-center no-print">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => window.print()}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                ফলাফল শিট প্রিন্ট করুন
+              </Button>
             </div>
 
             {/* Point 08: Automatic Director signature on printed sheet */}

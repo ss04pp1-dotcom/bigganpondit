@@ -2,14 +2,14 @@
 
 // Academy settings form (admin).
 
-import { useState } from "react";
-import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/app/image-upload";
-import { CardBgModal } from "@/components/app/card-bg-modal";
 import { PasswordRequestsManager } from "@/components/admin/password-requests-manager";
 import {
   AlertDialog,
@@ -27,7 +27,10 @@ import { useToast } from "@/hooks/use-toast";
 export function AdminSettingsForm({
   initialName,
   logoKey,
-  initialCoverBg = null,
+  cardBgKey = null,
+  initialPublicationName = "বিজ্ঞান পণ্ডিত প্রকাশনী",
+  publicationLogoKey = null,
+  initialPublicationDescription = "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
   adminUser,
   initialAdminEmail = "",
   hasResendKey = false,
@@ -35,18 +38,48 @@ export function AdminSettingsForm({
 }: {
   initialName: string;
   logoKey: string | null;
-  initialCoverBg?: string | null;
+  cardBgKey?: string | null;
+  initialPublicationName?: string;
+  publicationLogoKey?: string | null;
+  initialPublicationDescription?: string;
   adminUser?: { name: string; username: string };
   initialAdminEmail?: string;
   hasResendKey?: boolean;
   initialResendFrom?: string;
 }) {
+  const router = useRouter();
   const [name, setName] = useState(initialName);
-  const [coverBgUrl, setCoverBgUrl] = useState<string | null>(initialCoverBg ?? null);
-  const [bgModalOpen, setBgModalOpen] = useState(false);
-  const [savingCoverBg, setSavingCoverBg] = useState(false);
+  const [currentLogoKey, setCurrentLogoKey] = useState<string | null>(logoKey);
+  const [cardBg, setCardBg] = useState<string | null>(cardBgKey);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  // Publication settings state
+  const [pubName, setPubName] = useState(initialPublicationName);
+  const [pubDesc, setPubDesc] = useState(initialPublicationDescription);
+  const [pubLogoKey, setPubLogoKey] = useState<string | null>(publicationLogoKey ?? null);
+  const [savingPub, setSavingPub] = useState(false);
+
+  // Sync state if props change (e.g. after router.refresh())
+  useEffect(() => {
+    setName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    setCurrentLogoKey(logoKey);
+  }, [logoKey]);
+
+  useEffect(() => {
+    setPubName(initialPublicationName);
+  }, [initialPublicationName]);
+
+  useEffect(() => {
+    setPubDesc(initialPublicationDescription);
+  }, [initialPublicationDescription]);
+
+  useEffect(() => {
+    setPubLogoKey(publicationLogoKey ?? null);
+  }, [publicationLogoKey]);
 
   // Admin credentials state
   const [adminName, setAdminName] = useState(adminUser?.name ?? "প্রশাসক");
@@ -86,25 +119,31 @@ export function AdminSettingsForm({
     }
   }
 
-  async function saveCoverBg(url: string | null) {
-    setSavingCoverBg(true);
+  async function savePublication() {
+    if (!pubName.trim()) {
+      toast({ title: "প্রকাশনীর নাম লিখুন।", variant: "destructive" });
+      return;
+    }
+    setSavingPub(true);
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardBgUrl: url || "", cardCoverBgUrl: url || "" }),
+        body: JSON.stringify({
+          publicationName: pubName.trim(),
+          publicationDescription: pubDesc.trim(),
+          publicationLogoKey: pubLogoKey,
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        toast({ title: json.error ?? "কভার ব্যাকগ্রাউন্ড সংরক্ষণ করা যায়নি।", variant: "destructive" });
+        toast({ title: json.error ?? "সংরক্ষণ করা যায়নি।", variant: "destructive" });
         return;
       }
-      setCoverBgUrl(url || null);
-      toast({ title: url ? "✅ রেজাল্ট কার্ড কভারের স্থায়ী ব্যাকগ্রাউন্ড সংরক্ষিত হয়েছে!" : "ডিফল্ট ব্যাকগ্রাউন্ডে ফিরিয়ে নেওয়া হয়েছে।" });
-    } catch {
-      toast({ title: "সংরক্ষণে সমস্যা হয়েছে।", variant: "destructive" });
+      toast({ title: "প্রকাশনীর তথ্য সফলভাবে সংরক্ষিত হয়েছে।" });
+      router.refresh();
     } finally {
-      setSavingCoverBg(false);
+      setSavingPub(false);
     }
   }
 
@@ -204,77 +243,168 @@ export function AdminSettingsForm({
           <CardContent className="pt-4">
             <ImageUpload
               type="logo"
-              label="লোগো (JPG/PNG/WebP)"
-              currentUrl={logoKey ? `/api/files/${logoKey}` : null}
+              label="লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
+              currentUrl={currentLogoKey ? `/api/files/${currentLogoKey}` : null}
+              onUploaded={(key) => {
+                setCurrentLogoKey(key);
+                toast({ title: "একাডেমির লোগো সংরক্ষিত হয়েছে।" });
+                router.refresh();
+              }}
+              onRemove={async () => {
+                try {
+                  const res = await fetch("/api/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ academyLogoKey: "" }),
+                  });
+                  if (res.ok) {
+                    setCurrentLogoKey(null);
+                    toast({ title: "একাডেমির লোগো মুছে ফেলা হয়েছে।" });
+                    router.refresh();
+                  }
+                } catch {
+                  toast({ title: "লোগো মুছতে সমস্যা হয়েছে।", variant: "destructive" });
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        {/* প্রকাশনী সেটিংস কার্ড (নাম, লোগো, ডেসক্রিপশন - ১০ MB JPG/PNG) */}
+        <Card className="lg:col-span-2 border-cyan-200/80 shadow-xs">
+          <CardHeader className="border-b border-slate-100 bg-cyan-50/40 pb-3">
+            <CardTitle className="text-[16px] flex items-center gap-2 text-cyan-950 font-bold">
+              <BookMarked className="h-5 w-5 text-cyan-600" />
+              প্রকাশনী সেটিংস (নাম, লোগো ও ডেসক্রিপশন)
+            </CardTitle>
+            <CardDescription className="text-[12px] text-slate-500 mt-0.5">
+              ডিজিটাল লাইব্রেরি ও বুক রিডারে প্রদর্শিত প্রকাশনীর নাম, লোগো ও বর্ণনা কনফিগার করুন (১০ MB পর্যন্ত JPG/PNG/WebP লোগো সমর্থন করে)।
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-5 space-y-5">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">প্রকাশনীর নাম</Label>
+                  <Input
+                    value={pubName}
+                    onChange={(e) => setPubName(e.target.value)}
+                    placeholder="যেমন: বিজ্ঞান পণ্ডিত প্রকাশনী"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700">প্রকাশনীর ডেসক্রিপশন / পরিচিতি</Label>
+                  <textarea
+                    value={pubDesc}
+                    onChange={(e) => setPubDesc(e.target.value)}
+                    placeholder="অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম..."
+                    rows={3}
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    * শিক্ষার্থী ও শিক্ষক প্যানেলে প্রকাশনী পেজে এই বিবরণটি প্রদর্শিত হবে।
+                  </p>
+                </div>
+                <Button
+                  className="h-10 gap-2 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold"
+                  onClick={savePublication}
+                  disabled={savingPub}
+                >
+                  {savingPub ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  প্রকাশনীর তথ্য সংরক্ষণ করুন
+                </Button>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-2 block">
+                  প্রকাশনীর অফিসিয়াল লোগো (১০ MB JPG/PNG)
+                </Label>
+                <ImageUpload
+                  type="publication-logo"
+                  label="প্রকাশনীর লোগো (JPG/PNG/WebP, সর্বোচ্চ ১০ MB)"
+                  currentUrl={pubLogoKey ? `/api/files/${pubLogoKey}` : null}
+                  onUploaded={(key) => {
+                    setPubLogoKey(key);
+                    toast({ title: "প্রকাশনীর লোগো সংরক্ষিত হয়েছে।" });
+                    router.refresh();
+                  }}
+                  onRemove={async () => {
+                    try {
+                      const res = await fetch("/api/settings", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ publicationLogoKey: "" }),
+                      });
+                      if (res.ok) {
+                        setPubLogoKey(null);
+                        toast({ title: "প্রকাশনীর লোগো মুছে ফেলা হয়েছে।" });
+                        router.refresh();
+                      }
+                    } catch {
+                      toast({ title: "লোগো মুছতে সমস্যা হয়েছে।", variant: "destructive" });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* রেজাল্ট কার্ডের কভার ব্যাকগ্রাউন্ড কার্ড */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="border-b border-border pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-[16px] flex items-center gap-2">
+                <Palette className="h-4 w-4 text-emerald-600" />
+                রেজাল্ট কার্ডের কভার ব্যাকগ্রাউন্ড (স্থায়ী সংরক্ষণ)
+              </CardTitle>
+              <CardDescription className="text-[12px] text-slate-500 mt-0.5">
+                শুধুমাত্র কভার পেজে এই ব্যাকগ্রাউন্ড প্রদর্শিত হবে। রেজাল্ট কার্ড শিট (নম্বর টেবিল) স্বাভাবিক সাদা ও পরিষ্কার থাকবে।
+              </CardDescription>
+            </div>
+            {cardBg && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 gap-1.5"
+                onClick={async () => {
+                  await fetch("/api/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cardBgUrl: "" }),
+                  });
+                  setCardBg(null);
+                  toast({ title: "কভার ব্যাকগ্রাউন্ড রিমুভ করা হয়েছে (ডিফল্ট আর্ট বহাল)।" });
+                  router.refresh();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                ডিফল্টে ফিরুন
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ImageUpload
+              type="card-bg"
+              label="কভার ব্যাকগ্রাউন্ড ছবি (JPG / PNG / WebP — সর্বোচ্চ ৫ MB)"
+              currentUrl={
+                cardBg
+                  ? cardBg.startsWith("http") || cardBg.startsWith("data:") || cardBg.startsWith("/card")
+                    ? cardBg
+                    : `/api/files/${cardBg}`
+                  : null
+              }
+              onUploaded={(_, url) => {
+                setCardBg(url);
+                toast({ title: "নতুন কভার ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
+                router.refresh();
+              }}
             />
           </CardContent>
         </Card>
       </div>
-
-      {/* রেজাল্ট কার্ড কভার পেজের স্থায়ী ব্যাকগ্রাউন্ড ও ডিজাইন */}
-      <Card className="border-indigo-200 bg-white shadow-xs">
-        <CardHeader className="border-b border-indigo-100 pb-3 bg-indigo-50/40 rounded-t-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <CardTitle className="text-[16px] text-slate-900 flex items-center gap-2">
-              <Palette className="h-5 w-5 text-indigo-600" />
-              রেজাল্ট কার্ড কভার পেজের স্থায়ী ব্যাকগ্রাউন্ড ও ডিজাইন
-            </CardTitle>
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 w-fit">
-              শুধুমাত্র কভার পেজে কার্যকর (পৃষ্ঠা ১)
-            </span>
-          </div>
-          <CardDescription className="text-[12px] text-slate-600 mt-1">
-            রেজাল্ট কার্ডের ১ম পৃষ্ঠা (কভার)-এর ব্যাকগ্রাউন্ড ছবি বা শৈল্পিক ফ্রেম এখান থেকে নির্বাচন বা আপলোড করে স্থায়ীভাবে সংরক্ষণ করতে পারেন। <strong>রেজাল্ট শিট (পৃষ্ঠা ২) সর্বদা অফিশিয়াল স্ট্যান্ডার্ড ব্যাকগ্রাউন্ডে থাকবে, কোনোভাবেই পরিবর্তন হবে না।</strong>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/70">
-            <div className="flex items-center gap-4">
-              <div
-                className="h-16 w-24 rounded-lg border border-slate-300 shadow-xs flex items-center justify-center overflow-hidden bg-cover bg-center shrink-0"
-                style={
-                  coverBgUrl
-                    ? { backgroundImage: `url(${coverBgUrl})` }
-                    : { background: "linear-gradient(135deg, #f4f7fb 0%, #eaf2dd 100%)" }
-                }
-              >
-                {!coverBgUrl && <span className="text-[10px] text-slate-500 font-medium">ডিফল্ট আর্ট</span>}
-              </div>
-              <div>
-                <p className="text-[13px] font-bold text-slate-800">
-                  {coverBgUrl ? "কাস্টম / প্রিসেট ব্যাকগ্রাউন্ড সংরক্ষিত" : "ডিফল্ট ব্যাকগ্রাউন্ড সক্রিয়"}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  সব শিক্ষার্থীর রেজাল্ট কার্ডের কভার পেজে এটি স্থায়ীভাবে সংরক্ষিত থাকবে।
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10 text-[12px] gap-1.5 border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-medium"
-                onClick={() => setBgModalOpen(true)}
-              >
-                <Palette className="h-4 w-4 text-indigo-600" />
-                ডিজাইন পরিবর্তন / আপলোড
-              </Button>
-              {coverBgUrl && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-10 text-[12px] text-slate-500 hover:text-red-600 hover:bg-red-50"
-                  onClick={() => saveCoverBg(null)}
-                  disabled={savingCoverBg}
-                >
-                  ডিফল্টে ফিরুন
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Admin Account & Security Settings Card */}
       <Card className="border-blue-200 bg-white shadow-xs">
@@ -520,18 +650,6 @@ export function AdminSettingsForm({
           </div>
         </CardContent>
       </Card>
-
-      <CardBgModal
-        open={bgModalOpen}
-        onOpenChange={setBgModalOpen}
-        currentBgUrl={coverBgUrl}
-        onBgChange={(newUrl) => {
-          setCoverBgUrl(newUrl);
-          if (newUrl !== undefined) {
-            saveCoverBg(newUrl);
-          }
-        }}
-      />
     </div>
   );
 }

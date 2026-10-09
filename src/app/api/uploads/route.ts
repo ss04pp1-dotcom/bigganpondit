@@ -76,7 +76,14 @@ export async function POST(req: Request) {
       });
     }
 
-    if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
+    // Type-specific file size limits
+    const maxBytes =
+      type === "banner"
+        ? 15 * 1024 * 1024 // 15 MB
+        : type === "publication-logo" || type === "logo" || type === "card-bg"
+        ? 15 * 1024 * 1024 // 15 MB
+        : MAX_UPLOAD_BYTES; // 5 MB
+    if (file.size > maxBytes) throw new ApiError(400, MSG.fileTooLarge);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const detected = detectImageType(bytes);
@@ -119,6 +126,22 @@ export async function POST(req: Request) {
       const key = `academy/logos/main-${uuid}.${detected}`;
       await bucket.put(key, bytes);
       await setSetting(SETTING_ACADEMY_LOGO, key);
+      if (current?.value) await bucket.delete(current.value).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "publication-logo") {
+      if (user.role !== "ADMIN") {
+        throw new ApiError(403, "শুধুমাত্র প্রশাসক প্রকাশনীর লোগো পরিবর্তন করতে পারেন।");
+      }
+      const current = await db
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .bind("publication_logo_key")
+        .first<{ value: string | null }>(undefined as never)
+        .catch(() => null);
+      const key = `academy/publication/logo-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await setSetting("publication_logo_key", key);
       if (current?.value) await bucket.delete(current.value).catch(() => {});
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
@@ -210,6 +233,7 @@ export async function POST(req: Request) {
       const key = `academy/card-bg/${uuid}.${detected}`;
       await bucket.put(key, bytes);
       await setSetting("card_bg_image_key", key);
+      await setSetting("card_cover_bg_url", `/api/files/${key}`);
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
 

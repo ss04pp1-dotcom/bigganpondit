@@ -16,6 +16,36 @@ export const SETTING_BANNER_SUBTITLE = "banner_subtitle";
 export const SETTING_BANNER_LINK = "banner_link";
 export const SETTING_BANNER_ACTIVE = "banner_active";
 export const SETTING_DIRECTOR_SIGNATURE = "director_default_signature_key";
+export const SETTING_CARD_COVER_BG = "card_cover_bg_url";
+export const SETTING_CARD_BG_KEY = "card_bg_image_key";
+
+export const DEFAULT_PUBLICATION_NAME = "বিজ্ঞান পণ্ডিত প্রকাশনী";
+export const SETTING_PUBLICATION_NAME = "publication_name";
+export const SETTING_PUBLICATION_LOGO = "publication_logo_key";
+export const SETTING_PUBLICATION_DESCRIPTION = "publication_description";
+
+export function cleanCardBgUrl(val: string | null | undefined): string | null {
+  if (!val || !val.trim()) return null;
+  let str = val.trim();
+  while (str.startsWith("/api/files//api/files/")) {
+    str = str.replace("/api/files//api/files/", "/api/files/");
+  }
+  while (str.startsWith("/api/files/api/files/")) {
+    str = str.replace("/api/files/api/files/", "/api/files/");
+  }
+  if (
+    str.startsWith("http://") ||
+    str.startsWith("https://") ||
+    str.startsWith("data:") ||
+    str.startsWith("blob:")
+  ) {
+    return str;
+  }
+  if (str.startsWith("/")) {
+    return str;
+  }
+  return `/api/files/${str}`;
+}
 
 export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "DIRECTOR";
 export const ROLE_LABELS: Record<Role, string> = {
@@ -42,11 +72,13 @@ const CLASS_NAMES: Record<string, string> = {
   "8": "অষ্টম",
   "9": "নবম",
   "10": "দশম",
+  "ALUMNI": "উত্তীর্ণ / প্রাক্তন",
 };
 export function classNameLabel(n: string): string {
   return CLASS_NAMES[n] ?? n;
 }
 export function classLabel(n: string): string {
+  if (n === "ALUMNI") return "উত্তীর্ণ / প্রাক্তন ব্যাচ";
   return `${CLASS_NAMES[n] ?? n} শ্রেণি`;
 }
 /** e.g. groupLabel('9','SCIENCE') -> '৯ম বিজ্ঞান' (used by list filters) */
@@ -57,6 +89,7 @@ export function groupLabel(classNum: string, division: string | null): string {
     "8": "৮ম",
     "9": "৯ম",
     "10": "১০ম",
+    "ALUMNI": "উত্তীর্ণ",
   };
   const base = `${ord[classNum] ?? classNum}`;
   return division ? `${base} ${divisionLabel(division)}` : base;
@@ -120,6 +153,14 @@ const BN_DIGITS: Record<string, string> = {
   "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
   "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
 };
+const EN_DIGITS: Record<string, string> = {
+  "০": "0", "১": "1", "২": "2", "৩": "3", "৪": "4",
+  "৫": "5", "৬": "6", "৭": "7", "৮": "8", "৯": "9",
+};
+export function toEnDigits(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/[০-৯]/g, (d) => EN_DIGITS[d] ?? d);
+}
 export function bn(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
   return String(value).replace(/[0-9]/g, (d) => BN_DIGITS[d] ?? d);

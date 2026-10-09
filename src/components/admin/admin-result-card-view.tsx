@@ -73,6 +73,8 @@ export function AdminResultCardView() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
   const [cardBgUrl, setCardBgUrl] = useState<string | null>(null);
+  const [publicationLogoUrl, setPublicationLogoUrl] = useState<string | null>(null);
+  const [publicationName, setPublicationName] = useState<string>("বিজ্ঞান পণ্ডিত প্রকাশনী");
   const [previewIndex, setPreviewIndex] = useState(0);
 
   // Reset preview index when filters change
@@ -102,6 +104,8 @@ export function AdminResultCardView() {
         setStudentsList(json.studentsList || []);
         setAvailableDirectors(json.availableDirectors || []);
         setLogoUrl(json.logoUrl || null);
+        if (json.publicationLogoUrl !== undefined) setPublicationLogoUrl(json.publicationLogoUrl || null);
+        if (json.publicationName) setPublicationName(json.publicationName);
         if (json.cardBgUrl !== undefined) setCardBgUrl(json.cardBgUrl);
         if (json.academyName) setAcademyName(json.academyName);
 
@@ -426,6 +430,8 @@ export function AdminResultCardView() {
                       selectedDirectorId={selectedDirectorId}
                       onDirectorChange={(newDirId) => setSelectedDirectorId(newDirId)}
                       logoUrl={logoUrl}
+                      publicationLogoUrl={publicationLogoUrl}
+                      publicationName={publicationName}
                       academyName={academyName}
                       defaultTab="ALL"
                       cardBgUrl={cardBgUrl}

@@ -13,6 +13,27 @@ export default function ErrorBoundary({
 }) {
   useEffect(() => {
     console.error("Application error captured by boundary:", error);
+
+    // If it's a redirect that bubbled up
+    if (error?.digest?.startsWith("NEXT_REDIRECT") || error?.message?.includes("NEXT_REDIRECT")) {
+      const parts = (error.digest || "").split(";");
+      const url = parts[2] || "/login";
+      if (typeof window !== "undefined") {
+        window.location.href = url;
+      }
+      return;
+    }
+
+    // If it's a chunk loading failure due to deployment update
+    if (
+      error?.message?.includes("Failed to fetch dynamically imported module") ||
+      error?.message?.includes("Loading chunk") ||
+      error?.message?.includes("ChunkLoadError")
+    ) {
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
+    }
   }, [error]);
 
   function handleReload() {
@@ -39,6 +60,15 @@ export default function ErrorBoundary({
         <p className="mt-2 text-sm text-slate-600">
           অ্যাপ্লিকেশন লোড করার সময় একটি ত্রুটি ঘটেছে। ব্রাউজার ক্যাশ রিফ্রেশ করতে পুনরায় চেষ্টা করুন।
         </p>
+
+        {error?.message && (
+          <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-left">
+            <p className="text-xs font-bold text-rose-700">ত্রুটির বিবরণ (Error details):</p>
+            <p className="mt-1 text-xs font-mono text-rose-800 break-all select-all">
+              {error.name}: {error.message}
+            </p>
+          </div>
+        )}
 
         {error?.digest && (
           <p className="mt-2 text-xs font-mono text-slate-400 bg-slate-100 py-1 px-2 rounded">

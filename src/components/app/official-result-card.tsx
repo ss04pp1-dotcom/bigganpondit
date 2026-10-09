@@ -343,8 +343,33 @@ export function OfficialResultCard({
   const showCover = activeView === "BOOKLET" || activeView === "ALL";
   const showSheet = activeView === "SHEET" || activeView === "ALL";
 
-  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — কাস্টম বা আপলোডকৃত ব্যাকগ্রাউন্ড কভার ও রেজাল্ট শিট উভয়টিতে কার্যকর
+  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — কাস্টম ব্যাকগ্রাউন্ড শুধুমাত্র কভার পেজে (RIGHT/LEFT) প্রযোজ্য হবে
   const getPanelBg = (side: "LEFT" | "RIGHT" | "SHEET"): React.CSSProperties => {
+    // ১. রেজাল্ট কার্ড শিট (SHEET - পাতা ২) সবসময় স্বাভাবিক ও পরিষ্কার থাকবে, কাস্টম ব্যাকগ্রাউন্ড আসবে না
+    if (side === "SHEET") {
+      if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
+      if (bgTheme === "PARCHMENT") {
+        return {
+          backgroundColor: "#fdfbf7",
+          backgroundImage: "radial-gradient(#e2d9cc 0.75px, transparent 0.75px)",
+          backgroundSize: "16px 16px",
+        };
+      }
+      if (bgTheme === "ROYAL") {
+        return {
+          backgroundColor: "#f6f9fc",
+          backgroundImage: "radial-gradient(#d3e1ef 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        };
+      }
+      // FLORAL (Default)
+      return {
+        backgroundColor: "#eaf2dd",
+        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
+      };
+    }
+
+    // ২. শুধুমাত্র কভার পেজে (RIGHT এবং LEFT) কাস্টম আপলোডকৃত ব্যাকগ্রাউন্ড ছবি প্রযোজ্য
     if (resolvedBgUrl) {
       return {
         backgroundImage: `url("${resolvedBgUrl}")`,
@@ -354,13 +379,23 @@ export function OfficialResultCard({
         backgroundColor: "#ffffff",
       };
     }
-    // ডিফল্ট ব্যাকগ্রাউন্ড
-    if (side === "SHEET") {
+
+    if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
+    if (bgTheme === "PARCHMENT") {
       return {
-        backgroundColor: "#eaf2dd",
-        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
+        backgroundColor: "#fdfbf7",
+        backgroundImage: "radial-gradient(#e2d9cc 0.75px, transparent 0.75px)",
+        backgroundSize: "16px 16px",
       };
     }
+    if (bgTheme === "ROYAL") {
+      return {
+        backgroundColor: "#f6f9fc",
+        backgroundImage: "radial-gradient(#d3e1ef 1px, transparent 1px)",
+        backgroundSize: "20px 20px",
+      };
+    }
+    // FLORAL (Default)
     return {
       backgroundColor: "#f4f7fb",
       backgroundImage: "radial-gradient(circle at 10% 10%, rgba(180, 225, 190, 0.25) 0%, transparent 45%), radial-gradient(circle at 90% 90%, rgba(245, 190, 180, 0.22) 0%, transparent 45%)",
@@ -604,17 +639,27 @@ export function OfficialResultCard({
               {/* বিজ্ঞান পণ্ডিত — বড় আকর্ষণীয় অফিশিয়াল লোগো (Tutor Center ব্যাজ সহ) */}
               <div className="rc-logo-b rc-a flex flex-col items-center justify-center">
                 {logoUrl ? (
-                  <img src={logoUrl} alt="বিজ্ঞান পণ্ডিত" style={{ maxHeight: "150px", width: "auto", objectFit: "contain" }} />
+                  <img
+                    src={logoUrl}
+                    alt="বিজ্ঞান পণ্ডিত"
+                    style={{ maxHeight: "172px", maxWidth: "470px", width: "auto", objectFit: "contain" }}
+                  />
                 ) : (
-                  <div className="flex flex-col items-center justify-center pt-2">
+                  <div className="flex flex-col items-center justify-center pt-1">
                     <div className="relative inline-flex items-center justify-center">
-                      <span className="text-[52px] font-black tracking-tight text-[#1b5e20]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
+                      <span
+                        className="text-[64px] font-black tracking-tight text-[#1b5e20]"
+                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
+                      >
                         বিজ্ঞান
                       </span>
-                      <span className="ml-2 text-[52px] font-black tracking-tight text-[#e65100]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
+                      <span
+                        className="ml-2.5 text-[64px] font-black tracking-tight text-[#e65100]"
+                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
+                      >
                         পণ্ডিত
                       </span>
-                      <span className="absolute -top-3 -right-14 rounded-full bg-[#d32f2f] px-3 py-0.5 text-[11px] font-black uppercase text-white shadow-sm">
+                      <span className="absolute -top-3.5 -right-16 rounded-full bg-[#d32f2f] px-3.5 py-0.5 text-[12px] font-black uppercase text-white shadow-sm tracking-wider">
                         Tutor Center
                       </span>
                     </div>
@@ -622,8 +667,12 @@ export function OfficialResultCard({
                 )}
               </div>
 
-              <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
-              <div className="rc-a rc-addr">সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ</div>
+              {!logoUrl && (
+                <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
+              )}
+              <div className="rc-a rc-addr" style={logoUrl ? { top: 188 } : undefined}>
+                সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ
+              </div>
               <div className="rc-a rc-badge">রেজাল্ট কার্ড</div>
               
               <div className="rc-a rc-my">
@@ -689,7 +738,7 @@ export function OfficialResultCard({
                 মাসঃ{" "}
                 {MONTHS_BN.map((m, i) => (
                   <React.Fragment key={m}>
-                    <span className={mode === "MONTHLY" && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
+                    <span className={(mode === "MONTHLY" || mode === "MODEL") && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
                     {i < MONTHS_BN.length - 1 ? " / " : ""}
                   </React.Fragment>
                 ))}
@@ -754,12 +803,28 @@ export function OfficialResultCard({
                       <>
                         <td className="rc-sp" rowSpan={rows.length} />
                         <td className="rc-top" rowSpan={rows.length}>
-                          <div className="rc-vv">{bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}</div>
-                          <div className="text-[12px] font-bold text-slate-700">{topStudent?.grade || "A+"} ({fmtGpa(topStudent?.gpa ?? 5)})</div>
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
+                              {bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}
+                            </div>
+                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
+                              {topStudent?.grade || "A+"}
+                            </div>
+                            <div className="text-[20px] font-bold text-blue-700 leading-tight">
+                              {fmtGpa(topStudent?.gpa ?? 5)}
+                            </div>
+                          </div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
-                          <div className="rc-vv">{bn(overall.obtained)}/{bn(overall.totalMarks)}</div>
+                          <div className="inline-flex flex-col items-center justify-center font-bold">
+                            <span className="text-[20px] font-bold leading-tight text-slate-900 border-b-[1.5px] border-slate-900 px-1 pb-0.5 min-w-[36px] text-center">
+                              {bn(overall.obtained)}
+                            </span>
+                            <span className="text-[18px] font-bold leading-tight text-slate-800 pt-0.5 px-1 min-w-[36px] text-center">
+                              {bn(overall.totalMarks)}
+                            </span>
+                          </div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
@@ -770,7 +835,7 @@ export function OfficialResultCard({
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
                           <div className="rc-vv rc-gpa">
-                            {totalFails > 0 ? "০.০০" : fmtGpa(overall.gpa)}
+                            {totalFails > 0 ? "0.00" : fmtGpa(overall.gpa)}
                           </div>
                           <div className="rc-dd" />
                         </td>
@@ -806,7 +871,7 @@ export function OfficialResultCard({
                       : 19;
                     const sFs = Math.min(sub.subjectName.length > 18 ? 15 : sub.subjectName.length > 14 ? 18 : 22, Math.floor(rowH * 0.55));
                     const nFs = Math.min(19, Math.floor(rowH * 0.5));
-                    const att = sub.attendance || "P";
+                    const att = sub.attendance || (sub.obtained === 0 && sub.grade === "F" ? "A1" : "P");
 
                     return (
                       <tr key={`s${sub.subjectId}-${idx}`} style={{ height: rowH }}>

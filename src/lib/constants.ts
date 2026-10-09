@@ -216,8 +216,8 @@ export function fmtPct(n: number | null | undefined): string {
   return `${fmtNum(Math.round(n * 100) / 100)}%`;
 }
 export function fmtGpa(n: number | null | undefined): string {
-  if (n === null || n === undefined || Number.isNaN(n)) return "০.০০";
-  return bn(n.toFixed(2));
+  if (n === null || n === undefined || Number.isNaN(n)) return "0.00";
+  return Number(n).toFixed(2);
 }
 
 // ---- Friendly Bangla messages (spec section 68) ----

@@ -33,6 +33,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const curMonth = new Date().getMonth() + 1;
   const month = Number(one(sp.month)) || curMonth;
   const year = Number(one(sp.year)) || curYear;
+  const mode = one(sp.mode)?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
 
   const classRow = await db
     .prepare("SELECT id FROM classes WHERE name = ?")
@@ -42,11 +43,11 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const classId = classRow?.id ?? 0;
 
   const report = user.studentId && classId
-    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null })
+    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null, mode, publishedOnly: true })
     : null;
 
   const summaryAll = classId
-    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null })
+    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null, mode, publishedOnly: true })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === user.studentId)?.position : undefined;
 
@@ -89,7 +90,17 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
       {/* Month/Year Filter (Hidden on Print) */}
       <Card className="no-print">
         <CardContent className="pt-4">
-          <form method="get" action="/student/monthly-result" className="grid grid-cols-2 gap-3 sm:w-96">
+          <form method="get" action="/student/monthly-result" className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:w-[480px]">
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label className="text-[12px]">ফলাফলের ধরন</Label>
+              <Select name="mode" defaultValue={mode}>
+                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">মাসিক</SelectItem>
+                  <SelectItem value="MODEL">মডেল টেস্ট</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-[12px]">মাস</Label>
               <Select name="month" defaultValue={String(month)}>
@@ -112,7 +123,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2 flex items-end">
+            <div className="col-span-2 sm:col-span-3 flex items-end">
               <Button type="submit" className="h-10 w-full">দেখান</Button>
             </div>
           </form>
@@ -121,7 +132,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
 
       {/* ডেডিকেটেড স্টুডেন্ট একাডেমিক মার্কশিট (এডমিনের রেজাল্ট কার্ড নয়) */}
       <StudentMarksheet
-        title="মাসিক একাডেমিক মার্কশিট"
+        title={mode === "MODEL" ? "মডেল টেস্ট একাডেমিক মার্কশিট" : "মাসিক একাডেমিক মার্কশিট"}
         sessionText={`${MONTHS_BN[month - 1]} ${bn(year)}`}
         student={{
           name: user.name,

@@ -22,7 +22,8 @@ export async function GET(req: Request) {
     const db = await getDb();
     const url = new URL(req.url);
 
-    const mode = (url.searchParams.get("mode")?.toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY") as "MONTHLY" | "ANNUAL";
+    const rawMode = url.searchParams.get("mode")?.toUpperCase();
+    const mode = (rawMode === "ANNUAL" ? "ANNUAL" : rawMode === "MODEL" ? "MODEL" : "MONTHLY") as "MONTHLY" | "ANNUAL" | "MODEL";
     const className = url.searchParams.get("class") || "10";
     const requiresDiv = className === "9" || className === "10";
     const rawDiv = url.searchParams.get("division");
@@ -79,25 +80,29 @@ export async function GET(req: Request) {
 
     // Cohort summary for monthly position calculation
     let monthlySummary: any = null;
-    if (mode === "MONTHLY" && classId) {
+    if ((mode === "MONTHLY" || mode === "MODEL") && classId) {
       monthlySummary = await buildMonthlyClassSummary(db, {
         classId,
         division,
         month,
         year,
         subjectIds: null,
+        mode,
+        publishedOnly: false,
       }).catch(() => null);
     }
 
     const cards = [];
 
     for (const st of studentsToProcess) {
-      if (mode === "MONTHLY") {
+      if (mode === "MONTHLY" || mode === "MODEL") {
         const report = await buildMonthlyReport(db, {
           studentId: st.id,
           month,
           year,
           subjectIds: null,
+          mode,
+          publishedOnly: false,
         }).catch(() => null);
 
         const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];

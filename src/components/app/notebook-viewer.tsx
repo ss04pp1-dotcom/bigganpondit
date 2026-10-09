@@ -80,6 +80,17 @@ export function NotebookViewer({
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string }>>([]);
   const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string }>>([]);
 
+  // Publication branding info
+  const [pubInfo, setPubInfo] = useState<{
+    name: string;
+    description: string;
+    logoUrl: string | null;
+  }>({
+    name: "বিজ্ঞান পণ্ডিত প্রকাশনী",
+    description: "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
+    logoUrl: null,
+  });
+
   const { toast } = useToast();
 
   const canUpload = user.role === "ADMIN" || user.role === "DIRECTOR" || user.role === "TEACHER";
@@ -107,6 +118,22 @@ export function NotebookViewer({
       .then((json) => {
         if (json.ok && Array.isArray(json.subjects)) {
           setSubjectsList(json.subjects);
+        }
+      })
+      .catch(() => {});
+
+    // Load publication branding settings
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok) {
+          setPubInfo({
+            name: json.publicationName || "বিজ্ঞান পণ্ডিত প্রকাশনী",
+            description:
+              json.publicationDescription ||
+              "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
+            logoUrl: json.publicationLogoUrl || null,
+          });
         }
       })
       .catch(() => {});
@@ -245,13 +272,31 @@ export function NotebookViewer({
       <Card className="border-cyan-100 bg-white shadow-xs">
         <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md">
-              <BookMarked className="h-6 w-6" />
-            </span>
+            {pubInfo.logoUrl ? (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50 p-1 shadow-2xs">
+                <img
+                  src={pubInfo.logoUrl}
+                  alt={pubInfo.name}
+                  className="h-full w-full object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = "none";
+                  }}
+                />
+              </div>
+            ) : (
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md">
+                <BookMarked className="h-6 w-6" />
+              </span>
+            )}
             <div>
-              <h2 className="text-[18px] font-bold text-slate-900">প্রকাশনী ও ডিজিটাল লাইব্রেরি</h2>
-              <p className="text-[12px] text-slate-500">
-                অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)
+              <div className="flex items-center gap-2">
+                <h2 className="text-[18px] font-bold text-slate-900">{pubInfo.name}</h2>
+                <span className="rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-800">
+                  ডিজিটাল লাইব্রেরি
+                </span>
+              </div>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                {pubInfo.description}
               </p>
             </div>
           </div>

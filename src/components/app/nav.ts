@@ -63,6 +63,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/admin/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/admin/subjects", label: "বিষয়", icon: BookOpen },
+    { href: "/admin/marks", label: "নম্বর এন্ট্রি", icon: ClipboardEdit },
     { href: "/admin/results", label: "ফলাফল ও মার্কশিট", icon: Search },
     { href: "/admin/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
     { href: "/admin/notebooks", label: "প্রকাশনী", icon: BookMarked },

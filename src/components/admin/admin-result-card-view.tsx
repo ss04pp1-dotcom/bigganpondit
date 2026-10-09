@@ -58,7 +58,7 @@ interface CardData {
 }
 
 export function AdminResultCardView() {
-  const [mode, setMode] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
+  const [mode, setMode] = useState<"MONTHLY" | "ANNUAL" | "MODEL">("MONTHLY");
   const [className, setClassName] = useState("10");
   const [division, setDivision] = useState("SCIENCE");
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
@@ -158,6 +158,18 @@ export function AdminResultCardView() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setMode("MODEL")}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
+                    mode === "MODEL"
+                      ? "bg-white text-purple-700 shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Award className="h-3.5 w-3.5" />
+                  <span>মডেল টেস্ট</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setMode("ANNUAL")}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
                     mode === "ANNUAL"
@@ -219,8 +231,8 @@ export function AdminResultCardView() {
               </div>
             )}
 
-            {/* Month (for Monthly mode) */}
-            {mode === "MONTHLY" && (
+            {/* Month (for Monthly and Model Test mode) */}
+            {(mode === "MONTHLY" || mode === "MODEL") && (
               <div className="space-y-1.5">
                 <Label className="text-[12px] font-semibold text-slate-700">মাস</Label>
                 <Select value={month} onValueChange={setMonth}>

@@ -68,7 +68,7 @@ export function ImageUpload({
   compact = false,
   disabled = false,
 }: {
-  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg";
+  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg" | "publication-logo";
   studentId?: number;
   teacherId?: number;
   currentUrl?: string | null;
@@ -86,9 +86,17 @@ export function ImageUpload({
 
   async function pick(file: File) {
     if (disabled) return;
-    const maxBytes = type === "banner" ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
+    const maxBytes = type === "banner" ? 15 * 1024 * 1024 : type === "publication-logo" ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxBytes) {
-      toast({ title: type === "banner" ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।" : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।", variant: "destructive" });
+      toast({
+        title:
+          type === "banner"
+            ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
+            : type === "publication-logo"
+            ? "প্রকাশনী লোগো ফাইলটি অনেক বড় (সর্বোচ্চ ১০ MB)।"
+            : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।",
+        variant: "destructive",
+      });
       return;
     }
     let fileToUpload = file;

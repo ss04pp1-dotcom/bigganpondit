@@ -93,6 +93,13 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
+  // Ensure exams exam_type column exists in existing databases
+  try {
+    await db.exec("ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY';");
+  } catch {
+    // Column already exists
+  }
+
   // Ensure storage_files table exists for fallback file persistence
   try {
     await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");

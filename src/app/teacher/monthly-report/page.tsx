@@ -20,9 +20,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_ACADEMY_NAME,
+  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
+  SETTING_PUBLICATION_LOGO,
+  SETTING_PUBLICATION_NAME,
   bn,
   classLabel,
   divisionLabel,
@@ -56,6 +59,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
   const division = requiresDiv ? (one(sp.division) === "HUMANITIES" ? "HUMANITIES" : "SCIENCE") : null;
   const month = Number(one(sp.month)) || curMonth;
   const year = Number(one(sp.year)) || curYear;
+  const mode = one(sp.mode)?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
 
   const classRow = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(className).first<{ id: number }>(undefined as never).catch(() => null);
   const classId = classRow?.id ?? 0;
@@ -79,17 +83,20 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
+  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
+  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const dirInfo = await getDirectorSignatureInfo(db);
   const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
 
   const report = studentId && classId
-    ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted })
+    ? await buildMonthlyReport(db, { studentId, month, year, subjectIds: restricted, mode, publishedOnly: false })
     : null;
 
   // cohort-wide position (all subjects, whole class)
   const summaryAll = classId
-    ? await buildMonthlyClassSummary(db, { classId, division, month, year, subjectIds: null })
+    ? await buildMonthlyClassSummary(db, { classId, division, month, year, subjectIds: null, mode, publishedOnly: false })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === studentId)?.position : undefined;
 
@@ -142,6 +149,16 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label className="text-[12px]">ধরনের রিপোর্ট</Label>
+              <Select name="mode" defaultValue={mode}>
+                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">মাসিক</SelectItem>
+                  <SelectItem value="MODEL">মডেল টেস্ট</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label className="text-[12px]">মাস</Label>
               <Select name="month" defaultValue={String(month)}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
@@ -173,7 +190,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
       {/* individual report card (100% pixel-to-pixel copy of Image 1) */}
       {report ? (
         <OfficialResultCard
-          mode="MONTHLY"
+          mode={mode}
           month={month}
           year={year}
           student={{
@@ -207,6 +224,8 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
           directorInfo={dirInfo}
           availableDirectors={availableDirectors}
           logoUrl={logoKey ? `/api/files/${logoKey}` : null}
+          publicationLogoUrl={publicationLogoUrl}
+          publicationName={publicationName}
           defaultTab="ALL"
           isAdmin={false}
           canPrint={false}

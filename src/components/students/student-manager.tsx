@@ -206,7 +206,7 @@ export function StudentManager({
   role = "ADMIN",
 }: {
   canCreate?: boolean;
-  role?: "ADMIN" | "TEACHER";
+  role?: "ADMIN" | "TEACHER" | "DIRECTOR";
 }) {
   const [mainTab, setMainTab] = useState<"students" | "requests">("students");
   const [rows, setRows] = useState<Row[]>([]);
@@ -254,11 +254,19 @@ export function StudentManager({
     }
     setSmsSending(true);
     try {
+      // FIX: resolve the class ID from /api/classes (the previous code read
+      // `clsRes.classes` from /api/admin/teachers — an endpoint that returns
+      // NO classes key, so classIdNum was always undefined and "নির্দিষ্ট শ্রেণি"
+      // SMS silently went to the ENTIRE school).
       let classIdNum: number | undefined = undefined;
       if (smsScope === "CLASS") {
-        const clsRes = await fetch("/api/admin/teachers").then((r) => r.json()).catch(() => null);
-        const clsObj = clsRes?.classes?.find((c: any) => c.name === smsClass);
+        const clsRes = await fetch("/api/classes").then((r) => r.json()).catch(() => null);
+        const clsObj = (clsRes?.classes ?? []).find((c: any) => String(c.name) === String(smsClass));
         classIdNum = clsObj?.id;
+        if (!classIdNum) {
+          toast({ title: "শ্রেণি খুঁজে পাওয়া যায়নি — আবার চেষ্টা করুন।", variant: "destructive" });
+          return;
+        }
       }
       const res = await fetch("/api/admin/sms", {
         method: "POST",
@@ -1540,7 +1548,7 @@ function StudentViewDialog({
   studentId: number | null;
   onClose: () => void;
   students: Row[];
-  role?: "ADMIN" | "TEACHER";
+  role?: "ADMIN" | "TEACHER" | "DIRECTOR";
   onRevealPassword?: (student: Row) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");

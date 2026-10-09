@@ -51,6 +51,19 @@ const TABLES = [
   "student_requests",
 ] as const;
 
+// SECURITY: settings rows that hold third-party secrets are NEVER written to
+// backups. A leaked backup file must not expose the Resend / SMS API keys.
+const SECRET_SETTING_KEYS = new Set(["resend_api_key", "sms_gateway_api_key"]);
+
+// SECURITY: plaintext password mirrors are scrubbed from backups. Only the
+// PBKDF2 hashes (needed for restore) are exported; raw_password is nulled so
+// the admin "reveal password" feature simply reports unavailable after a
+// restore instead of shipping credentials inside the backup file.
+const PASSWORD_MIRROR_COLUMNS: Record<string, string> = {
+  students: "raw_password",
+  student_requests: "raw_password",
+};
+
 export async function GET(req: Request) {
   try {
     await requireApiUser(["ADMIN"]);
@@ -72,7 +85,16 @@ export async function POST(req: Request) {
     if (body.action === "create") {
       const dump: Record<string, unknown[]> = {};
       for (const t of TABLES) {
-        dump[t] = (await db.prepare(`SELECT * FROM ${t}`).all<Record<string, unknown>>().catch(() => null))?.results ?? [];
+        let rows = (await db.prepare(`SELECT * FROM ${t}`).all<Record<string, unknown>>().catch(() => null))?.results ?? [];
+        // scrub secrets
+        if (PASSWORD_MIRROR_COLUMNS[t]) {
+          const col = PASSWORD_MIRROR_COLUMNS[t];
+          rows = rows.map((r) => (r[col] === null || r[col] === undefined ? r : { ...r, [col]: null }));
+        }
+        if (t === "settings") {
+          rows = rows.filter((r) => !SECRET_SETTING_KEYS.has(String(r.key)));
+        }
+        dump[t] = rows;
       }
       const payload = {
         version: 1,
@@ -177,6 +199,15 @@ export async function POST(req: Request) {
       const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
       // delete in reverse dependency order (FK-safe)
       for (const t of ["sessions", "attendance", "notebooks", "notices", "marks", "exams", "teacher_subjects", "student_requests", "directors", "students", "teachers", "subjects", "settings", "classes", "users", "webauthn_credentials", "webauthn_challenges"]) {
+        if (t === "settings") {
+          // SECURITY: live API keys are NOT part of the backup (scrubbed at
+          // creation) — do not delete them during restore either.
+          const secretKeys = Array.from(SECRET_SETTING_KEYS);
+          stmts.push(
+            db.prepare(`DELETE FROM settings WHERE key NOT IN (${secretKeys.map(() => "?").join(",")})`).bind(...secretKeys)
+          );
+          continue;
+        }
         stmts.push(db.prepare(`DELETE FROM ${t}`));
       }
       for (const t of insertOrder) {

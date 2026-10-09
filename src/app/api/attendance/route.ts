@@ -103,6 +103,16 @@ export async function POST(req: Request) {
     }
 
     const date = body.date.trim();
+    // VALIDATION: date must be a real YYYY-MM-DD calendar date (no future
+    // dates — attendance is recorded on/before the day itself).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())) {
+      throw new ApiError(400, "তারিখের ফরম্যাট ভুল (YYYY-MM-DD)।");
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (date > today) {
+      throw new ApiError(400, "ভবিষ্যতের তারিখে হাজিরা দেওয়া যায় না।");
+    }
+
     let classId = Number(body.classId);
     const byId = await db.prepare("SELECT id FROM classes WHERE id = ?").bind(classId).first<{ id: number }>().catch(() => null);
     if (!byId) {
@@ -118,13 +128,42 @@ export async function POST(req: Request) {
       }
     }
 
-    // High performance batching: convert N+1 sequential queries into batched chunk executions
-    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+    // VALIDATION: status enum + every student must belong to the class
+    const VALID_STATUSES = new Set(["PRESENT", "ABSENT", "LATE"]);
+    const validEntries: Array<{ studentId: number; status: "PRESENT" | "ABSENT" | "LATE"; remarks: string | null }> = [];
     for (const entry of entries) {
       const studentId = Number(entry.studentId);
-      const status = entry.status || "PRESENT";
-      const remarks = entry.remarks?.trim() || null;
+      const status = String(entry.status ?? "");
+      if (!Number.isInteger(studentId) || studentId <= 0) {
+        throw new ApiError(400, "অবৈধ শিক্ষার্থী আইডি।");
+      }
+      if (!VALID_STATUSES.has(status)) {
+        throw new ApiError(400, `অবৈধ হাজিরা স্থিতি (${status})।`);
+      }
+      validEntries.push({ studentId, status: status as "PRESENT" | "ABSENT" | "LATE", remarks: entry.remarks?.trim() || null });
+    }
 
+    if (validEntries.length > 0) {
+      const ids = Array.from(new Set(validEntries.map((e) => e.studentId)));
+      const validRows = (
+        await db
+          .prepare(
+            `SELECT id FROM students WHERE id IN (${ids.map(() => "?").join(",")}) AND class_id = ?`
+          )
+          .bind(...ids, classId)
+          .all<{ id: number }>()
+          .catch(() => null)
+      )?.results ?? [];
+      const validIds = new Set(validRows.map((r) => r.id));
+      const invalid = ids.filter((sid) => !validIds.has(sid));
+      if (invalid.length > 0) {
+        throw new ApiError(400, `${invalid.length} জন শিক্ষার্থী এই শ্রেণির নয় — হাজিরা সংরক্ষণ করা যায়নি।`);
+      }
+    }
+
+    // High performance batching: convert N+1 sequential queries into batched chunk executions
+    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+    for (const entry of validEntries) {
       stmts.push(
         db.prepare(
           `INSERT INTO attendance (student_id, class_id, date, status, remarks, recorded_by)
@@ -133,7 +172,7 @@ export async function POST(req: Request) {
              status = excluded.status,
              remarks = excluded.remarks,
              recorded_by = excluded.recorded_by`
-        ).bind(studentId, classId, date, status, remarks, user.id)
+        ).bind(entry.studentId, classId, date, entry.status, entry.remarks, user.id)
       );
     }
 

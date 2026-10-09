@@ -86,11 +86,16 @@ export function RecentResultBox({
   user,
   defaultClass = "10",
 }: {
-  user: { role: Role; studentId?: number; className?: string | null };
+  user: { role: Role; studentId?: number; className?: string | null; division?: string | null };
   defaultClass?: string;
 }) {
   const [selectedClass, setSelectedClass] = useState(user.className || defaultClass || "10");
-  const [selectedDivision, setSelectedDivision] = useState<string>("SCIENCE");
+  // FIX: a student's own division is now honored (previously hardcoded
+  // "SCIENCE", so class 9/10 HUMANITIES students were served the SCIENCE
+  // exam feed and "আপনার ফলাফল পাওয়া যায়নি" for their own marks).
+  const [selectedDivision, setSelectedDivision] = useState<string>(
+    user.division === "HUMANITIES" || user.division === "SCIENCE" ? user.division : "SCIENCE"
+  );
   const [selectedSubject, setSelectedSubject] = useState<string>("ALL");
   const [selectedExamId, setSelectedExamId] = useState<string>("LATEST");
   const [data, setData] = useState<RecentResultData | null>(null);

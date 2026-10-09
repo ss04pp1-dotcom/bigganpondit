@@ -47,6 +47,7 @@ export default async function MarksPage({ searchParams }: MarksPageProps) {
         </p>
       </div>
       <MarksEntry
+        role="TEACHER"
         subjects={subjects.map((s) => ({
           id: s.id,
           name: s.name,

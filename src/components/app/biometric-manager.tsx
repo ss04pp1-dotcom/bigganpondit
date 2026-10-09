@@ -70,7 +70,8 @@ export function BiometricManager() {
       const rawId = toBase64Url(new Uint8Array(credential.rawId));
       const clientDataJSON = new TextDecoder().decode(credential.response.clientDataJSON);
 
-      // Extract public key or attestation object
+      // The server parses the attestationObject (CBOR) to extract the real
+      // COSE public key — we never send an opaque "publicKey" blob.
       const attestationObject = toBase64Url(new Uint8Array(credential.response.attestationObject));
 
       // 3) Send credential to server
@@ -79,7 +80,7 @@ export function BiometricManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           credentialId: rawId,
-          publicKey: attestationObject,
+          attestationObject,
           rawClientData: clientDataJSON,
           deviceName: navigator.userAgent.includes("Mobile") ? "স্মার্টফোন ফিঙ্গারপ্রিন্ট" : "ল্যাপটপ / পিসি বায়োমেট্রিক",
         }),

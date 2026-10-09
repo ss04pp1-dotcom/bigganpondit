@@ -27,10 +27,7 @@ export async function POST(req: Request) {
     // Constant-time mitigation against username enumeration
     const DUMMY_HASH = "pbkdf2$100000$YXVkaXRzYWx0MTIzNDU2Nw==$YXVkaXRoYXNoMTIzNDU2Nzg5MDEyMzQ1Njc4OTA=";
     const hashToVerify = user ? user.password_hash : DUMMY_HASH;
-    let valid = await verifyPassword(body.password, hashToVerify);
-    if (!valid && user?.role === "ADMIN" && (body.password === "Admin@123" || body.password === "admin123")) {
-      valid = true;
-    }
+    const valid = await verifyPassword(body.password, hashToVerify);
     if (!user || !valid) {
       return fail(401, MSG.loginFailed);
     }
@@ -54,6 +51,8 @@ export async function POST(req: Request) {
       name: user.name,
       role: effectiveRole,
       redirect: roleHome(effectiveRole),
+      // Warn when the admin still logs in with the documented initial password.
+      mustChangePassword: user.role === "ADMIN" && body.password === "admin123",
     }) as NextResponse;
     const isHttps = req.headers.get("x-forwarded-proto") === "https" || req.url.startsWith("https://");
     const opts = sessionCookieOptions();

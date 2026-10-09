@@ -15,6 +15,31 @@ import {
   getAllDirectorsList,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
+import { gradeFromPercentage } from "@/lib/constants";
+
+// ---------------------------------------------------------------- helpers
+const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+
+function toBanglaNumber(n: number): string {
+  return String(n).replace(/\d/g, (d) => BN_DIGITS[Number(d)]);
+}
+
+/** Proper Bangla ordinal: ১ম, ২য়, ৩য়, ৪র্থ, ৫ম, ৬ষ্ঠ, ১০ম, ১১শ, ২০তম … */
+function banglaOrdinal(n: number | undefined | null): string {
+  if (!Number.isInteger(n as number) || (n as number) <= 0) return "—";
+  const v = n as number;
+  const last = v % 10;
+  const lastTwo = v % 100;
+  let suffix: string;
+  if (lastTwo >= 11 && lastTwo <= 19) suffix = "শ";
+  else if (v === 10) suffix = "ম";
+  else if (last === 0) suffix = "তম";
+  else if (last === 2 || last === 3) suffix = "য়";
+  else if (last === 4) suffix = "র্থ";
+  else if (last === 6) suffix = "ষ্ঠ";
+  else suffix = "ম";
+  return toBanglaNumber(v) + suffix;
+}
 
 export async function GET(req: Request) {
   try {
@@ -28,7 +53,7 @@ export async function GET(req: Request) {
     const requiresDiv = className === "9" || className === "10";
     const rawDiv = url.searchParams.get("division");
     const division = requiresDiv ? (rawDiv === "HUMANITIES" ? "HUMANITIES" : "SCIENCE") : null;
-    
+
     const curYear = new Date().getFullYear();
     const curMonth = new Date().getMonth() + 1;
     const month = Number(url.searchParams.get("month")) || curMonth;
@@ -79,6 +104,7 @@ export async function GET(req: Request) {
       : students;
 
     // Cohort summary for monthly position calculation
+    // FIX: official printed cards must only ever be built from PUBLISHED marks.
     let monthlySummary: any = null;
     if ((mode === "MONTHLY" || mode === "MODEL") && classId) {
       monthlySummary = await buildMonthlyClassSummary(db, {
@@ -88,11 +114,89 @@ export async function GET(req: Request) {
         year,
         subjectIds: null,
         mode,
-        publishedOnly: false,
+        publishedOnly: true,
       }).catch(() => null);
     }
 
-    const cards = [];
+    const cards: Array<Record<string, unknown>> = [];
+
+    // ---------------------------- ANNUAL precomputation (once) ----------------------------
+    // FIX (was `ORDER BY s.sort_order` — the subjects table has no sort_order
+    // column, so the query always threw and the .catch swallowed it, printing
+    // annual cards with an EMPTY subject table).
+    // One grouped query (published exams only, whole class) gives us:
+    // per-student per-subject aggregates, real class-highest per subject and
+    // a real class ranking for the annual position.
+    const byStudent = new Map<number, Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>>();
+    const classHighestBySubject = new Map<number, number>();
+    const annualPosition = new Map<number, number>();
+
+    if (mode === "ANNUAL" && classId) {
+      const annualRows = (
+        await db
+          .prepare(
+            `SELECT m.student_id, e.subject_id, s.name as subject_name, s.is_fourth_subject,
+                    SUM(e.total_marks) as total_marks, SUM(m.obtained_marks) as obtained_marks
+             FROM marks m
+             JOIN exams e ON e.id = m.exam_id
+             JOIN subjects s ON s.id = e.subject_id
+             JOIN students st ON st.id = m.student_id
+             WHERE st.class_id = ? AND e.year = ? AND COALESCE(e.is_published, 0) = 1
+             GROUP BY m.student_id, e.subject_id`
+          )
+          .bind(classId, year)
+          .all<{
+            student_id: number;
+            subject_id: number;
+            subject_name: string;
+            is_fourth_subject: number;
+            total_marks: number;
+            obtained_marks: number;
+          }>()
+          .catch(() => null)
+      )?.results ?? [];
+
+      const cohortIds = new Set(students.map((s) => s.id));
+
+      for (const r of annualRows) {
+        if (!cohortIds.has(r.student_id)) continue;
+        let subjMap = byStudent.get(r.student_id);
+        if (!subjMap) {
+          subjMap = new Map();
+          byStudent.set(r.student_id, subjMap);
+        }
+        subjMap.set(r.subject_id, {
+          name: r.subject_name,
+          isFourth: r.is_fourth_subject === 1,
+          total: Number(r.total_marks) || 0,
+          obtained: Number(r.obtained_marks) || 0,
+        });
+
+        const cur = classHighestBySubject.get(r.subject_id) ?? -1;
+        const obtained = Number(r.obtained_marks) || 0;
+        if (obtained > cur) classHighestBySubject.set(r.subject_id, obtained);
+      }
+
+      // annual ranking across the whole class (percentage desc, obtained desc, roll asc)
+      const rankInput = students.map((s) => {
+        const subjMap = byStudent.get(s.id);
+        let total = 0;
+        let obtained = 0;
+        if (subjMap) {
+          for (const v of subjMap.values()) {
+            total += v.total;
+            obtained += v.obtained;
+          }
+        }
+        return { id: s.id, roll: s.roll, total, obtained, pct: total > 0 ? obtained / total : 0 };
+      });
+      const rankOrder = [...rankInput].sort((a, b) => {
+        if (b.pct !== a.pct) return b.pct - a.pct;
+        if (b.obtained !== a.obtained) return b.obtained - a.obtained;
+        return a.roll - b.roll;
+      });
+      rankOrder.forEach((r, idx) => annualPosition.set(r.id, idx + 1));
+    }
 
     for (const st of studentsToProcess) {
       if (mode === "MONTHLY" || mode === "MODEL") {
@@ -102,7 +206,7 @@ export async function GET(req: Request) {
           year,
           subjectIds: null,
           mode,
-          publishedOnly: false,
+          publishedOnly: true,
         }).catch(() => null);
 
         const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];
@@ -167,71 +271,37 @@ export async function GET(req: Request) {
           },
           subjects: officialSubjects,
           overall,
-          position: position ? `${position}ম` : "১ম",
+          // FIX: real position with proper Bangla ordinals — never a fake "১ম"
+          position: banglaOrdinal(position),
           fine: `${calculatedFine}.00৳`,
           topStudent,
           teacherComments: {
             comment1: "আরো ভালো করা উচিত ছিল",
-            comment2: "পরীক্ষায় অনুপস্থিত থাকা অন্যায়",
+            comment2: "পরীক্ষায় অনুপস্থিত থাকা অন্যায়",
             guardianComment: "",
           },
         });
       } else {
-        // ANNUAL mode
+        // ---------------------------- ANNUAL mode ----------------------------
+        // Uses the precomputed byStudent / classHighestBySubject /
+        // annualPosition maps (published exams only, whole class).
+        // Pre-compute the per-student report (published only, consistent with rows)
         const rep = await buildStudentAnnualReport(db, {
           studentId: st.id,
           year,
           subjectIds: null,
         }).catch(() => null);
 
-        // Fetch annual subject marks for this student
-        const marksRows = (
-          await db
-            .prepare(
-              `SELECT s.id as subject_id, s.name as subject_name, s.is_fourth_subject,
-                      e.total_marks, m.obtained_marks
-               FROM marks m
-               JOIN exams e ON e.id = m.exam_id
-               JOIN subjects s ON s.id = e.subject_id
-               WHERE m.student_id = ? AND e.year = ?
-               ORDER BY s.sort_order ASC, s.id ASC`
-            )
-            .bind(st.id, year)
-            .all<{
-              subject_id: number;
-              subject_name: string;
-              is_fourth_subject: number;
-              total_marks: number;
-              obtained_marks: number;
-            }>()
-            .catch(() => null)
-        )?.results ?? [];
+        const subjMap = byStudent.get(st.id) ?? new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
+        // stable subject order: Bangla name, same as the monthly engine
+        const subjectEntries = Array.from(subjMap.entries()).sort((a, b) =>
+          a[1].name.localeCompare(b[1].name, "bn")
+        );
 
-        // Aggregate by subject
-        const subMap = new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
-        for (const mr of marksRows) {
-          const cur = subMap.get(mr.subject_id) ?? {
-            name: mr.subject_name,
-            isFourth: mr.is_fourth_subject === 1,
-            total: 0,
-            obtained: 0,
-          };
-          cur.total += mr.total_marks;
-          cur.obtained += mr.obtained_marks;
-          subMap.set(mr.subject_id, cur);
-        }
-
-        const officialSubjects = Array.from(subMap.entries()).map(([sid, val]) => {
+        const officialSubjects = subjectEntries.map(([sid, val]) => {
           const t = teacherMap.get(sid);
           const pct = val.total > 0 ? (val.obtained / val.total) * 100 : 0;
-          let grade = "F";
-          let gpa = 0;
-          if (pct >= 80) { grade = "A+"; gpa = 5.0; }
-          else if (pct >= 70) { grade = "A"; gpa = 4.0; }
-          else if (pct >= 60) { grade = "A-"; gpa = 3.5; }
-          else if (pct >= 50) { grade = "B"; gpa = 3.0; }
-          else if (pct >= 40) { grade = "C"; gpa = 2.0; }
-          else if (pct >= 33) { grade = "D"; gpa = 1.0; }
+          const g = gradeFromPercentage(pct);
 
           return {
             subjectId: sid,
@@ -239,10 +309,11 @@ export async function GET(req: Request) {
             teacherName: t?.name,
             teacherShortName: t?.shortName,
             totalMarks: val.total,
-            classHighest: val.total,
+            // FIX: real class highest (was: full marks, fabricated)
+            classHighest: classHighestBySubject.get(sid) ?? val.obtained,
             obtained: val.obtained,
-            grade,
-            gpa,
+            grade: g.grade,
+            gpa: g.gpa,
             isFourth: val.isFourth,
           };
         });
@@ -264,13 +335,14 @@ export async function GET(req: Request) {
           subjects: officialSubjects,
           overall: {
             totalMarks: totalMarksSum,
-            classHighestTotal: totalMarksSum,
+            classHighestTotal: 0,
             obtained: obtainedSum,
             grade: overallGrade,
             gpa: overallGpa,
             percentage: totalMarksSum > 0 ? Math.round((obtainedSum / totalMarksSum) * 100) : 0,
           },
-          position: "১ম",
+          // FIX: real computed annual position (was: hardcoded "১ম" for everyone)
+          position: banglaOrdinal(annualPosition.get(st.id)),
           fine: "০০/-",
           teacherComments: {
             comment1: "বাৎসরিক মূল্যায়ন চমৎকার, গণিত ও বিজ্ঞানে ধারাবাহিক মনোযোগ বজায় রাখতে হবে।",

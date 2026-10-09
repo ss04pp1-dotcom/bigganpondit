@@ -8,6 +8,10 @@ import { DEFAULT_ACADEMY_NAME } from "@/lib/constants";
 export interface SeedEnv {
   adminUsername: string;
   adminPassword: string;
+  // Demo teachers/students/exams are ONLY seeded when explicitly requested
+  // (SEED_DEMO_DATA="1", e.g. in local .dev.vars). Production installs get a
+  // clean database with no known-credential accounts.
+  seedDemo: boolean;
 }
 
 async function count(db: D1Database, table: string): Promise<number> {
@@ -80,7 +84,17 @@ async function ensureSubjects(db: D1Database) {
 }
 
 // ---------------------------------------------------------------- teachers
-async function ensureTeachers(db: D1Database) {
+async function ensureTeachers(db: D1Database, seedDemo: boolean) {
+  if (!seedDemo) {
+    // Mark as disabled so demo accounts can never be resurrected later by a
+    // cold start (the old guard was count(teachers) > 0 — deleting the demo
+    // teachers used to re-seed them with the known passwords).
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('demo_teachers_seeded', 'disabled') ON CONFLICT(key) DO UPDATE SET value = 'disabled'")
+      .run()
+      .catch(() => null);
+    return;
+  }
   const flag = await db
     .prepare("SELECT value FROM settings WHERE key = 'demo_teachers_seeded'")
     .first<{ value: string }>()
@@ -163,11 +177,11 @@ async function ensureTeachers(db: D1Database) {
 
 // ---------------------------------------------------------------- admin
 async function ensureAdmin(db: D1Database, env: SeedEnv) {
-  const existing = await db
-    .prepare("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1")
-    .first<{ id: number }>()
-    .catch(() => null);
-  if (existing) return;
+  // SECURITY: create the initial admin ONLY on a completely empty users
+  // table. Previously the guard was "no ADMIN row exists", which meant that
+  // deleting the admin account resurrected it with the default password on
+  // the next cold start.
+  if ((await count(db, "users")) > 0) return;
   const username = env.adminUsername || "admin";
   const password = env.adminPassword || "admin123";
   const hash = await hashPassword(password);
@@ -227,7 +241,14 @@ const DEMO_STUDENTS: { name: string; classNum: string; division: string | null; 
   { name: "আবির হোসেন", classNum: "6", division: null, roll: 3 },
 ];
 
-async function ensureDemoData(db: D1Database) {
+async function ensureDemoData(db: D1Database, seedDemo: boolean) {
+  if (!seedDemo) {
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('demo_data_seeded', 'disabled') ON CONFLICT(key) DO UPDATE SET value = 'disabled'")
+      .run()
+      .catch(() => null);
+    return;
+  }
   const flag = await db
     .prepare("SELECT value FROM settings WHERE key = 'demo_data_seeded'")
     .first<{ value: string }>()
@@ -339,8 +360,10 @@ async function ensureDemoData(db: D1Database) {
 export async function seedDatabase(db: D1Database, env: SeedEnv): Promise<void> {
   await ensureClasses(db);
   await ensureSubjects(db);
-  await ensureTeachers(db);
+  // Admin FIRST: it is only created on a completely EMPTY users table, so it
+  // must run before demo teacher accounts populate the users table.
   await ensureAdmin(db, env);
+  await ensureTeachers(db, env.seedDemo);
   await ensureSettings(db);
-  await ensureDemoData(db);
+  await ensureDemoData(db, env.seedDemo);
 }

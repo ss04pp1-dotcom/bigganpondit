@@ -59,7 +59,8 @@ export async function POST(req: Request) {
            photo_key       TEXT,
            signature_key   TEXT,
            remarks         TEXT,
-           created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+           created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+           updated_at      TEXT
          );`
       )
       .catch(() => null);
@@ -77,9 +78,15 @@ export async function POST(req: Request) {
 
     const hash = await hashPassword(body.password);
 
-    // 3. Insert into users with robust fallback for SQLite CHECK constraint
+    // 3. Insert into users.
+    // SECURITY: NEVER fall back to role 'ADMIN' — that was a privilege
+    // escalation bug. On databases whose users.role CHECK predates the
+    // DIRECTOR role (migration 0001), we store 'TEACHER' (allowed by the
+    // legacy CHECK) — the effective role is resolved to DIRECTOR through
+    // the directors table by the login and session layers, so the user
+    // still authenticates and is authorized exactly as a DIRECTOR.
     let userRes;
-    let usedRole = "DIRECTOR";
+    let storedRole: "DIRECTOR" | "TEACHER" = "DIRECTOR";
     try {
       userRes = await db
         .prepare(
@@ -88,12 +95,12 @@ export async function POST(req: Request) {
         .bind(body.username, hash, body.name)
         .run();
     } catch (insertErr) {
-      // If legacy CHECK constraint role IN ('ADMIN','TEACHER','STUDENT') rejects 'DIRECTOR', fallback to 'ADMIN'
-      console.warn("Direct insert with role 'DIRECTOR' failed, falling back to 'ADMIN':", insertErr);
-      usedRole = "ADMIN";
+      // Legacy CHECK constraint (role IN ('ADMIN','TEACHER','STUDENT')) rejects DIRECTOR.
+      console.warn("Direct insert with role 'DIRECTOR' failed, using legacy-compatible 'TEACHER' storage:", insertErr);
+      storedRole = "TEACHER";
       userRes = await db
         .prepare(
-          "INSERT INTO users (username, password_hash, role, name) VALUES (?, ?, 'ADMIN', ?)"
+          "INSERT INTO users (username, password_hash, role, name) VALUES (?, ?, 'TEACHER', ?)"
         )
         .bind(body.username, hash, body.name)
         .run();
@@ -151,7 +158,8 @@ export async function POST(req: Request) {
       {
         id: directorId,
         user_id: userId,
-        role: usedRole,
+        role: "DIRECTOR",
+        storedRole,
         message: "পরিচালক সফলভাবে যুক্ত করা হয়েছে।",
       },
       201

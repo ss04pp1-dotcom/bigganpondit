@@ -48,5 +48,8 @@ export function localEnv(): CloudflareEnv {
     ADMIN_USERNAME: process.env.ADMIN_USERNAME,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
     APP_URL: process.env.APP_URL,
+    // Opt-in demo seeding for local development (see .dev.vars.example).
+    // Production must NEVER set this to "1".
+    SEED_DEMO_DATA: process.env.SEED_DEMO_DATA,
   };
 }

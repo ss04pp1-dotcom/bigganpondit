@@ -354,7 +354,7 @@ export async function GET(req: Request) {
 
       // If viewing user is student: strictly hide other classmates' scores
       let resultsToReturn = allRanked;
-      let myResult = null;
+      let myResult: any = null;
 
       if (user.role === "STUDENT") {
         myResult = allRanked.find((r: any) => r.studentId === user.studentId) ?? null;

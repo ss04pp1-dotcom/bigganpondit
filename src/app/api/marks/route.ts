@@ -49,36 +49,55 @@ export async function POST(req: Request) {
     ) ? "MODEL" : "MONTHLY";
 
     // ---- find or create the exam (natural key or explicit examId) ----
-    let exam: { id: number; total_marks: number } | null = null;
+    let exam: { id: number; total_marks: number; is_published: number } | null = null;
 
     if (body.examId) {
       const existingById = await db
-        .prepare("SELECT id, total_marks, class_id, subject_id FROM exams WHERE id = ?")
+        .prepare("SELECT id, total_marks, class_id, subject_id, COALESCE(is_published, 0) as is_published FROM exams WHERE id = ?")
         .bind(body.examId)
-        .first<{ id: number; total_marks: number; class_id: number; subject_id: number }>()
+        .first<{ id: number; total_marks: number; class_id: number; subject_id: number; is_published: number }>()
         .catch(() => null);
       if (existingById && existingById.class_id === body.classId && existingById.subject_id === body.subjectId) {
-        exam = { id: existingById.id, total_marks: existingById.total_marks };
+        exam = { id: existingById.id, total_marks: existingById.total_marks, is_published: existingById.is_published };
       }
     }
 
     if (!exam) {
       exam = await db
         .prepare(
-          `SELECT id, total_marks FROM exams
+          `SELECT id, total_marks, COALESCE(is_published, 0) as is_published FROM exams
            WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
              AND subject_id = ? AND month = ? AND year = ?
              AND title = ?
              AND COALESCE(exam_type, 'MONTHLY') = ?`
         )
         .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.title, effectiveExamType)
-        .first<{ id: number; total_marks: number }>(undefined as never)
+        .first<{ id: number; total_marks: number; is_published: number }>(undefined as never)
         .catch(() => null);
     }
 
     if (exam) {
-      // Sync total_marks or exam_date if updated in the UI
+      // ---- PUBLISH INTEGRITY: teachers cannot modify a published exam ----
+      if (exam.is_published === 1 && user.role !== "ADMIN") {
+        throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সম্পাদনা করতে হলে প্রথমে অ্যাডমিনের কাছ থেকে অপ্রকাশ (unpublish) করতে হবে।");
+      }
+
+      // ---- RESCALE GUARD: never silently rewrite saved marks ----
       if (exam.total_marks !== body.totalMarks) {
+        const stats = await db
+          .prepare("SELECT COUNT(*) as c, MAX(obtained_marks) as mx FROM marks WHERE exam_id = ?")
+          .bind(exam.id)
+          .first<{ c: number; mx: number }>(undefined as never)
+          .catch(() => null);
+        const affected = stats?.c ?? 0;
+        const maxSaved = stats?.mx ?? 0;
+        if (affected > 0 && maxSaved > body.totalMarks && !body.allowRescale) {
+          throw new ApiError(
+            400,
+            `RESCALE_REQUIRED: পূর্ণমান ${exam.total_marks} → ${body.totalMarks} কমালে পূর্বে সংরক্ষিত ${affected} টি নম্বর রূপান্তর (ক্ল্যাম্প) হবে (সর্বোচ্চ ${maxSaved})। নিশ্চিত হলে আবার সংরক্ষণ করুন।`
+          );
+        }
+        // Sync total_marks or exam_date if updated in the UI
         await db
           .prepare("UPDATE exams SET total_marks = ?, exam_date = ?, updated_at = datetime('now') WHERE id = ?")
           .bind(body.totalMarks, body.examDate, exam.id)
@@ -97,7 +116,7 @@ export async function POST(req: Request) {
           .run();
         const examId = Number(res.meta.last_row_id ?? 0);
         if (examId) {
-          exam = { id: examId, total_marks: body.totalMarks };
+          exam = { id: examId, total_marks: body.totalMarks, is_published: 0 };
         }
       } catch {
         // Handled by concurrency recheck below
@@ -107,17 +126,20 @@ export async function POST(req: Request) {
         // Concurrent race mitigation: re-fetch exam if already inserted by a parallel request
         const recheck = await db
           .prepare(
-            `SELECT id, total_marks FROM exams
+            `SELECT id, total_marks, COALESCE(is_published, 0) as is_published FROM exams
              WHERE class_id = ? AND COALESCE(division,'') = COALESCE(?, '')
                AND subject_id = ? AND month = ? AND year = ?
                AND title = ?
                AND COALESCE(exam_type, 'MONTHLY') = ?`
           )
           .bind(body.classId, body.division ?? null, body.subjectId, body.month, body.year, body.title, effectiveExamType)
-          .first<{ id: number; total_marks: number }>()
+          .first<{ id: number; total_marks: number; is_published: number }>()
           .catch(() => null);
         if (recheck) {
-          exam = { id: recheck.id, total_marks: recheck.total_marks };
+          if (recheck.is_published === 1 && user.role !== "ADMIN") {
+            throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সম্পাদনা করা যাবে না।");
+          }
+          exam = { id: recheck.id, total_marks: recheck.total_marks, is_published: recheck.is_published };
         } else {
           throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
         }
@@ -126,6 +148,34 @@ export async function POST(req: Request) {
 
     // ---- BATCH SAVE (Spreadsheet Grid Mode) ----
     if (body.batch && body.batch.length > 0) {
+      // VALIDATION: every batch student must belong to the exam's class/division
+      // (the single-save path always enforced this; the batch path did not).
+      const batchIds = Array.from(new Set(body.batch.map((i) => i.studentId)));
+      const validRows = (
+        await db
+          .prepare(
+            `SELECT id FROM students WHERE id IN (${batchIds.map(() => "?").join(",")}) AND class_id = ? AND COALESCE(division,'') = COALESCE(?, '')`
+          )
+          .bind(...batchIds, body.classId, body.division ?? null)
+          .all<{ id: number }>()
+          .catch(() => null)
+      )?.results ?? [];
+      const validIds = new Set(validRows.map((r) => r.id));
+      const invalid = batchIds.filter((sid) => !validIds.has(sid));
+      if (invalid.length > 0) {
+        throw new ApiError(400, `${invalid.length} জন শিক্ষার্থী এই শ্রেণি/বিভাগের নয় — নম্বর সংরক্ষণ করা যায়নি।`);
+      }
+
+      // VALIDATION: over-limit rows must be rejected (not silently clamped)
+      // unless the caller explicitly confirmed a total-marks rescale.
+      if (!body.allowRescale) {
+        const overLimit = body.batch.filter(
+          (item) => item.attendance !== "ABSENT" && item.obtainedMarks > body.totalMarks
+        );
+        if (overLimit.length > 0) {
+          throw new ApiError(400, `${overLimit.length} জন শিক্ষার্থীর নম্বর পূর্ণমান (${body.totalMarks})-এর বেশি দেওয়া হয়েছে। ঠিক করে আবার সংরক্ষণ করুন।`);
+        }
+      }
       let savedCount = 0;
       for (const item of body.batch) {
         const obtained = item.attendance === "ABSENT" ? 0 : Math.min(body.totalMarks, Math.max(0, Math.round(item.obtainedMarks * 100) / 100));

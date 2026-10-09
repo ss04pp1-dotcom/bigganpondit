@@ -64,6 +64,14 @@ export async function POST(
         .bind(requestRow.new_password_hash, requestRow.user_id)
         .run();
 
+      // SECURITY: clear the mirrored raw_password so the admin reveal feature
+      // can never display a stale password after this change.
+      await db
+        .prepare("UPDATE students SET raw_password = NULL, updated_at = datetime('now') WHERE user_id = ?")
+        .bind(requestRow.user_id)
+        .run()
+        .catch(() => null);
+
       // 2) Update request status to APPROVED
       await db
         .prepare(

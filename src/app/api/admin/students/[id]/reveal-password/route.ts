@@ -39,11 +39,9 @@ export async function POST(req: Request, ctx: Ctx) {
     if (!st) throw new ApiError(404, "শিক্ষার্থী পাওয়া যায়নি।");
 
     let password = st.raw_password;
-    if (!password) {
-      // Default initial password fallback
-      password = "1234";
-      await db.prepare("UPDATE students SET raw_password = ? WHERE id = ?").bind(password, id).run().catch(() => {});
-    }
+    // SECURITY: never fabricate a password. If raw_password is missing (the
+    // password was reset through OTP / admin approval), the caller must set a
+    // new password instead of being shown a wrong default.
 
     return ok({
       studentId: st.id,
@@ -52,6 +50,7 @@ export async function POST(req: Request, ctx: Ctx) {
       className: st.class_name,
       username: st.username,
       password: password,
+      passwordAvailable: !!password,
       revealedBy: user.name || user.username,
       revealedAt: new Date().toISOString(),
     });

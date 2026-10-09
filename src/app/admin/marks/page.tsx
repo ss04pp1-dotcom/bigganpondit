@@ -39,6 +39,7 @@ export default async function AdminMarksPage({ searchParams }: AdminMarksPagePro
         </p>
       </div>
       <MarksEntry
+        role="ADMIN"
         subjects={subjects.map((s) => ({
           id: s.id,
           name: s.name,

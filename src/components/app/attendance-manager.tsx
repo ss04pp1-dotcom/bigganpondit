@@ -53,7 +53,8 @@ export function AttendanceManager({
   // Daily state
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [students, setStudents] = useState<StudentAttRow[]>([]);
-  const [dailyStatus, setDailyStatus] = useState<Record<number, "PRESENT" | "ABSENT" | "LATE">>({});
+  // undefined = unmarked (never fabricated as PRESENT)
+  const [dailyStatus, setDailyStatus] = useState<Record<number, "PRESENT" | "ABSENT" | "LATE" | undefined>>({});
   const [loadingDaily, setLoadingDaily] = useState(false);
   const [savingDaily, setSavingDaily] = useState(false);
 
@@ -95,9 +96,16 @@ export function AttendanceManager({
       const json = await res.json();
       if (json.ok && Array.isArray(json.students)) {
         setStudents(json.students);
-        const map: Record<number, "PRESENT" | "ABSENT" | "LATE"> = {};
+        // FIX: only PREFILL statuses that actually exist in the DB
+        // (attendance_status is null for unmarked students). Unmarked
+        // students stay undefined — saving must never fabricate them as
+        // PRESENT.
+        const map: Record<number, "PRESENT" | "ABSENT" | "LATE" | undefined> = {};
         for (const s of json.students) {
-          map[s.id] = s.attendance_status || "PRESENT"; // Default to PRESENT
+          map[s.id] =
+            s.attendance_status === "PRESENT" || s.attendance_status === "ABSENT" || s.attendance_status === "LATE"
+              ? s.attendance_status
+              : undefined;
         }
         setDailyStatus(map);
       }
@@ -147,13 +155,29 @@ export function AttendanceManager({
 
   async function handleSaveDaily() {
     if (!targetClassParam) return;
-    setSavingDaily(true);
-    try {
-      const entries = students.map((s) => ({
+    // FIX: save ONLY the students whose status was explicitly set —
+    // either already recorded in the DB (prefilled on load) or clicked in
+    // this session. Unmarked students are silently skipped instead of being
+    // fabricated as PRESENT (which used to inflate attendance on save).
+    const entries = students
+      .filter((s) => dailyStatus[s.id] !== undefined)
+      .map((s) => ({
         studentId: s.id,
-        status: dailyStatus[s.id] || "PRESENT",
+        status: dailyStatus[s.id] as "PRESENT" | "ABSENT" | "LATE",
       }));
 
+    if (entries.length === 0) {
+      toast({
+        title: "কারো হাজিরা চিহ্নিত হয়নি।",
+        description: "উপস্থিত/অনুপস্থিত বোতাম চেপে অন্তত একজন শিক্ষার্থীর হাজিরা দিন, অথবা 'সবাইকে উপস্থিত' ব্যবহার করুন।",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const unmarkedCount = students.length - entries.length;
+    setSavingDaily(true);
+    try {
       const res = await fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,7 +194,12 @@ export function AttendanceManager({
         return;
       }
 
-      toast({ title: json.message });
+      toast({
+        title: json.message,
+        ...(unmarkedCount > 0
+          ? { description: `${unmarkedCount} জন শিক্ষার্থীর হাজিরা চিহ্নিত হয়নি — সেভ করা হয়নি।` }
+          : {}),
+      });
       loadDaily();
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
@@ -179,12 +208,14 @@ export function AttendanceManager({
     }
   }
 
-  // Summary counts
+  // Summary counts (unmarked students are counted separately, never as present)
   const totalStudents = students.length;
   const presentCount = Object.values(dailyStatus).filter((st) => st === "PRESENT").length;
   const absentCount = Object.values(dailyStatus).filter((st) => st === "ABSENT").length;
   const lateCount = Object.values(dailyStatus).filter((st) => st === "LATE").length;
-  const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+  const unmarkedCount = students.filter((s) => dailyStatus[s.id] === undefined).length;
+  const markedCount = presentCount + absentCount + lateCount;
+  const rate = markedCount > 0 ? Math.round((presentCount / markedCount) * 100) : 0;
 
   return (
     <div className="space-y-5">
@@ -329,13 +360,16 @@ export function AttendanceManager({
               {/* MOBILE VIEW: Dedicated Touch Cards (< sm) */}
               <div className="block sm:hidden space-y-2.5">
                 {students.map((s) => {
-                  const currentSt = dailyStatus[s.id] || "PRESENT";
+                  // undefined stays undefined — unmarked shows neutral styling
+                  const currentSt = dailyStatus[s.id];
                   return (
                     <div
                       key={s.id}
                       className={cn(
                         "rounded-xl border p-3 transition-colors shadow-2xs space-y-2.5",
-                        currentSt === "PRESENT"
+                        currentSt === undefined
+                          ? "border-slate-200 bg-slate-50/40"
+                          : currentSt === "PRESENT"
                           ? "border-emerald-200 bg-white"
                           : currentSt === "ABSENT"
                           ? "border-red-200 bg-red-50/30"
@@ -426,13 +460,20 @@ export function AttendanceManager({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {students.map((s) => {
-                      const currentSt = dailyStatus[s.id] || "PRESENT";
+                      // undefined = unmarked (neutral row, no button highlighted)
+                      const currentSt = dailyStatus[s.id];
                       return (
                         <tr
                           key={s.id}
                           className={cn(
                             "transition-colors",
-                            currentSt === "ABSENT" ? "bg-red-50/40" : currentSt === "LATE" ? "bg-amber-50/30" : "hover:bg-slate-50"
+                            currentSt === undefined
+                              ? "bg-slate-50/50"
+                              : currentSt === "ABSENT"
+                              ? "bg-red-50/40"
+                              : currentSt === "LATE"
+                              ? "bg-amber-50/30"
+                              : "hover:bg-slate-50"
                           )}
                         >
                           <td className="px-3 py-2.5 text-center font-bold font-mono text-slate-700">

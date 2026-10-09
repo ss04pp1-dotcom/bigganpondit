@@ -42,9 +42,12 @@ export async function GET(req: Request, ctx: Ctx) {
       if (!allowed) throw new ApiError(403, MSG.noPermissionView);
     }
 
-    const { user_id, password_hash, ...safe } = st as Record<string, unknown>;
+    // SECURITY: raw_password is never exposed through this endpoint —
+    // only the strictly-admin reveal-password route may return it.
+    const { user_id, password_hash, raw_password, ...safe } = st as Record<string, unknown>;
     void user_id;
     void password_hash;
+    void raw_password;
     return ok({ student: safe });
   } catch (e) {
     return handleError(e);

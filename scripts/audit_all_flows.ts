@@ -1,6 +1,6 @@
 import { getDb } from "../src/lib/db";
 import { hashPassword, verifyPassword } from "../src/lib/auth/password";
-import { getTeacherClasses, getTeacherSubjects, canTeacherManageSubject } from "../src/lib/permissions";
+import { getTeacherClasses, getTeacherSubjects } from "../src/lib/permissions";
 import { buildMonthlyClassSummary } from "../src/lib/results/reports";
 import { calculateGPA, calculateGrade, calculatePercentage } from "../src/lib/results/engine";
 import { bn, classLabel, divisionLabel, MONTHS_BN, fmtPct, fmtNum } from "../src/lib/constants";

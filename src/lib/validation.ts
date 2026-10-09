@@ -74,6 +74,9 @@ export const markSaveSchema = z.object({
   attendance: z.enum(["PRESENT", "ABSENT"]).optional().default("PRESENT"),
   obtainedMarks: z.number().min(0, "ভুল নম্বর প্রদান করা হয়েছে।").max(1000).optional().default(0),
   confirmUpdate: z.boolean().optional(),
+  // Explicit confirmation that shrinking an exam's total_marks may rescale
+  // (clamp) previously saved marks that exceed the new total.
+  allowRescale: z.boolean().optional(),
   batch: z
     .array(
       z.object({

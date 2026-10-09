@@ -173,7 +173,30 @@ export function buildMonthlyResult(
 
   const overallPct = calculatePercentage(obtained, totalMarks);
   const compulsory = subjects.filter((s) => !s.isFourth);
-  const optional = subjects.find((s) => s.isFourth);
+
+  // ------------------------------------------------------------------
+  // Fourth (optional) subject handling.
+  // Bangladesh rule: exactly ONE 4th subject contributes the bonus
+  // (gpa - 2, only when above 2.0). Data may legitimately contain MORE than
+  // one is_fourth_subject subject (e.g. কৃষিশিক্ষা + উচ্চতর গণিত for the same
+  // class, and students typically sit only the one they chose).
+  //
+  // The previous code used `subjects.find(isFourth)` — which picked whichever
+  // subject came first alphabetically and SILENTLY DROPPED the rest from the
+  // GPA. Two students with identical marks could get different GPAs depending
+  // on subject-name ordering.
+  //
+  // Deterministic fix: among the 4th subjects the student actually has marks
+  // in, the one with the HIGHEST GPA is chosen for the bonus (ties resolved
+  // by the stable subject order above). Marks of all subjects still count
+  // toward totalMarks/obtained/percentage — only the GPA divisor follows the
+  // compulsory set.
+  // ------------------------------------------------------------------
+  const optionalSubjects = subjects.filter((s) => s.isFourth);
+  const optional =
+    optionalSubjects.length > 0
+      ? optionalSubjects.reduce((best, s) => (!best || s.gpa > best.gpa ? s : best), optionalSubjects[0])
+      : undefined;
   const hasCompulsoryFail = compulsory.some((s) => s.gpa === 0);
 
   let finalGpa = 0;

@@ -53,6 +53,14 @@ export async function POST(req: Request) {
       .bind(newHash, userId)
       .run();
 
+    // SECURITY: clear the mirrored raw_password so the admin reveal feature
+    // can never display a stale password after a reset.
+    await db
+      .prepare("UPDATE students SET raw_password = NULL, updated_at = datetime('now') WHERE user_id = ?")
+      .bind(userId)
+      .run()
+      .catch(() => null);
+
     // Mark reset request as used
     await db
       .prepare("UPDATE password_resets SET used = 1 WHERE id = ?")

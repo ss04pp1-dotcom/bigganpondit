@@ -98,6 +98,8 @@ export interface MarksEntryProps {
   initialClass?: string;
   initialDivision?: string;
   initialSubjectId?: number;
+  /** Role of the logged-in user — teachers cannot edit published exams. */
+  role?: "ADMIN" | "TEACHER";
 }
 
 export function MarksEntry({
@@ -105,6 +107,7 @@ export function MarksEntry({
   initialClass,
   initialDivision,
   initialSubjectId,
+  role = "TEACHER",
 }: MarksEntryProps) {
   const now = new Date();
   const { toast } = useToast();
@@ -433,9 +436,19 @@ export function MarksEntry({
   }, [students, searchQuery, filterStatus, marksState]);
 
   // Save a single student's mark
-  async function saveSingleStudent(studentIdToSave: number, confirmUpdate = false) {
+  async function saveSingleStudent(studentIdToSave: number, confirmUpdate = false, allowRescale = false) {
     const selectedSub = classSubjects.find((s) => s.id === subjectId);
     if (!selectedSub || !studentIdToSave || total <= 0) return;
+
+    // PUBLISH LOCK: teachers cannot modify a published exam
+    if (existingExamPublished && role !== "ADMIN") {
+      toast({
+        title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
+        description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const st = marksState[studentIdToSave] ?? { obtained: "0", attendance: "PRESENT" };
     const obtainedNum = st.attendance === "ABSENT" ? 0 : Number(st.obtained) || 0;
@@ -465,6 +478,7 @@ export function MarksEntry({
         attendance: st.attendance,
         obtainedMarks: obtainedNum,
         confirmUpdate,
+        allowRescale,
       };
 
       const res = await fetch("/api/marks", {
@@ -473,6 +487,15 @@ export function MarksEntry({
         body: JSON.stringify(payload),
       });
       const json = await res.json();
+
+      // RESCALE confirmation flow: shrinking পূর্ণমান would rewrite saved marks
+      if (!res.ok && String(json?.error ?? "").startsWith("RESCALE_REQUIRED")) {
+        const go = window.confirm(
+          `${json.error.replace("RESCALE_REQUIRED: ", "")}\n\nনিশ্চিত হয়ে রূপান্তর করতে চান?`
+        );
+        if (go) await saveSingleStudent(studentIdToSave, confirmUpdate, true);
+        return;
+      }
 
       if (json && json.duplicate && !confirmUpdate) {
         const update = await new Promise<boolean>((resolve) => setDupPrompt({ resolve }));
@@ -506,10 +529,20 @@ export function MarksEntry({
   }
 
   // Batch Save All Modified / Filled Marks
-  async function saveAllBatch() {
+  async function saveAllBatch(allowRescale = false) {
     const selectedSub = classSubjects.find((s) => s.id === subjectId);
     if (!selectedSub || total <= 0 || !title.trim()) {
       toast({ title: "অনুগ্রহ করে পরীক্ষার সব তথ্য সঠিকভাবে পূরণ করুন।", variant: "destructive" });
+      return;
+    }
+
+    // PUBLISH LOCK: teachers cannot modify a published exam
+    if (existingExamPublished && role !== "ADMIN") {
+      toast({
+        title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
+        description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -566,6 +599,7 @@ export function MarksEntry({
         title: title.trim(),
         totalMarks: total,
         batch: batchEntries,
+        allowRescale,
       };
 
       const res = await fetch("/api/marks", {
@@ -574,6 +608,15 @@ export function MarksEntry({
         body: JSON.stringify(payload),
       });
       const json = await res.json();
+
+      // RESCALE confirmation flow: shrinking পূর্ণমান would rewrite saved marks
+      if (!res.ok && String(json?.error ?? "").startsWith("RESCALE_REQUIRED")) {
+        const go = window.confirm(
+          `${json.error.replace("RESCALE_REQUIRED: ", "")}\n\nনিশ্চিত হয়ে রূপান্তর করতে চান?`
+        );
+        if (go) await saveAllBatch(true);
+        return;
+      }
 
       if (!res.ok || !json?.ok) {
         toast({ title: json?.error ?? "সংরক্ষণ করা যায়নি।", variant: "destructive" });
@@ -972,7 +1015,7 @@ export function MarksEntry({
               </span>
             )}
             <Button
-              onClick={saveAllBatch}
+              onClick={() => saveAllBatch()}
               disabled={savingBatch || loadingStudents || students.length === 0}
               className="h-9 px-4 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs"
             >
@@ -1264,7 +1307,7 @@ export function MarksEntry({
                     পুনরায় লোড
                   </Button>
                   <Button
-                    onClick={saveAllBatch}
+                    onClick={() => saveAllBatch()}
                     disabled={savingBatch || loadingStudents || students.length === 0}
                     className="h-9 px-5 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs"
                   >

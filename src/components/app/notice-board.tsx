@@ -117,17 +117,19 @@ export function NoticeBoard({
 
   async function handleApprove(id: number) {
     try {
+      // FIX: the API route only exports POST (with {action}) and DELETE —
+      // the old PATCH call always 405'd, so notices could never be approved.
       const res = await fetch(`/api/notices/${id}`, {
-        method: "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "APPROVED" }),
+        body: JSON.stringify({ action: "APPROVE" }),
       });
-      const json = await res.json();
-      if (json.ok) {
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.ok) {
         toast({ title: "নোটিশ অনুমোদন করা হয়েছে।" });
         loadNotices();
       } else {
-        toast({ title: json.error ?? "অনুমোদন করা যায়নি।", variant: "destructive" });
+        toast({ title: json?.error ?? "অনুমোদন করা যায়নি।", variant: "destructive" });
       }
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });

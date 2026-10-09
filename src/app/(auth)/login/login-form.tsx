@@ -135,6 +135,13 @@ export function LoginForm({
         toast({ title: json.error ?? "লগইন ব্যর্থ হয়েছে।", variant: "destructive" });
         return;
       }
+      if (json.mustChangePassword) {
+        toast({
+          title: "পাসওয়ার্ড পরিবর্তন করুন!",
+          description: "আপনি এখনো প্রাথমিক (ডিফল্ট) পাসওয়ার্ড ব্যবহার করছেন। নিরাপত্তার জন্য এখনই পাসওয়ার্ড বদলে ফেলুন।",
+          variant: "destructive",
+        });
+      }
       toast({ title: `স্বাগতম, ${json.name}!` });
       window.location.href = json.redirect;
     } catch {
@@ -188,6 +195,10 @@ export function LoginForm({
 
       const rawId = toBase64Url(new Uint8Array(credential.rawId));
       const clientDataJSON = new TextDecoder().decode(credential.response.clientDataJSON);
+      // authenticatorData + signature are REQUIRED for server-side
+      // cryptographic verification of the assertion.
+      const authenticatorData = toBase64Url(new Uint8Array(credential.response.authenticatorData));
+      const signature = toBase64Url(new Uint8Array(credential.response.signature));
 
       const verifyRes = await fetch("/api/auth/webauthn/login", {
         method: "POST",
@@ -195,6 +206,8 @@ export function LoginForm({
         body: JSON.stringify({
           credentialId: rawId,
           rawClientData: clientDataJSON,
+          authenticatorData,
+          signature,
         }),
       });
 

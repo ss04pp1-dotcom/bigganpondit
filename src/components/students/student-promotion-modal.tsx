@@ -227,19 +227,33 @@ export function StudentPromotionModal({
 
     const isTarget9or10 = targetClass === "9" || targetClass === "10";
 
+    // Validate every roll BEFORE building the payload — a missing/zero roll
+    // must be fixed by the admin, never silently coerced to 1 (which would
+    // collide with the real roll 1 in the target class).
+    for (const id of selectedIds) {
+      const roll = Number(newRolls[id]);
+      if (!Number.isInteger(roll) || roll <= 0) {
+        toast({
+          title: "প্রতিটি নির্বাচিত শিক্ষার্থীর নতুন রোল নম্বর দিন (০-এর বেশি পূর্ণসংখ্যা)।",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const promotionsPayload = Array.from(selectedIds).map((id) => {
       return {
         studentId: id,
-        newRoll: newRolls[id] || 1,
+        newRoll: Number(newRolls[id]),
         newSection: newSections[id]?.trim() || null,
         newDivision: isTarget9or10 ? (newDivisions[id] || targetDivision) : null,
       };
     });
 
-    // Check roll uniqueness
+    // Check roll uniqueness (key aligned with the server's "NO_DIV" convention)
     const seen = new Set<string>();
     for (const p of promotionsPayload) {
-      const key = `${p.newDivision || "NONE"}:${p.newRoll}`;
+      const key = `${p.newDivision || "NO_DIV"}:${p.newRoll}`;
       if (seen.has(key)) {
         toast({
           title: `ডুপ্লিকেট রোল পাওয়া গেছে (${p.newRoll})! একই ক্লাসে একাধিক শিক্ষার্থীকে একই রোল দেওয়া যাবে না।`,

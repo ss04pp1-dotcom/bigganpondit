@@ -324,11 +324,10 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
-  try {
-    await db.exec(`UPDATE students SET raw_password = '1234' WHERE raw_password IS NULL;`);
-  } catch {
-    // Ignore
-  }
+  // SECURITY FIX: no cold-start backfill of raw_password with a default value.
+  // If a student's password was set through a flow that does not mirror it
+  // (OTP reset / admin-approved change), the admin reveal endpoint must NOT
+  // display a fabricated password — it returns "not available" instead.
 
   try {
     await db.exec(`ALTER TABLE notebooks ADD COLUMN download_allowed INTEGER NOT NULL DEFAULT 0;`);
@@ -350,11 +349,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
   try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_relation TEXT;`); } catch {}
 
   try {
-    // 2) seed (idempotent); initial admin comes from environment variables
+    // 2) seed (idempotent); initial admin comes from environment variables.
+    // Demo teachers/students/exams are opt-in via SEED_DEMO_DATA=1 (local dev
+    // only) — production databases must never receive known-credential accounts.
     const env = cf ?? localEnv();
     await seedDatabase(db, {
       adminUsername: String(env.ADMIN_USERNAME ?? "admin"),
       adminPassword: String(env.ADMIN_PASSWORD ?? "admin123"),
+      seedDemo: String((env as Record<string, unknown>).SEED_DEMO_DATA ?? "") === "1",
     });
   } catch (err) {
     console.warn("Seed execution notice:", err);

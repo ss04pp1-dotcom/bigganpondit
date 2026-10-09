@@ -24,10 +24,18 @@ export async function POST(req: Request) {
     let query = "SELECT id, name, roll, phone FROM students WHERE phone IS NOT NULL AND TRIM(phone) != ''";
     const params: any[] = [];
 
-    if (body.scope === "CLASS" && body.classId) {
+    // SAFETY: a CLASS-scoped SMS REQUIRES a classId. Without this guard a
+    // missing classId silently fell through to ALL students (whole school).
+    if (body.scope === "CLASS") {
+      if (!body.classId) {
+        throw new ApiError(400, "শ্রেণি-নির্দিষ্ট SMS-এর জন্য শ্রেণি নির্বাচন করা আবশ্যক।");
+      }
       query += " AND class_id = ?";
       params.push(Number(body.classId));
-    } else if (body.scope === "SELECTED" && Array.isArray(body.studentIds) && body.studentIds.length > 0) {
+    } else if (body.scope === "SELECTED") {
+      if (!Array.isArray(body.studentIds) || body.studentIds.length === 0) {
+        throw new ApiError(400, "বাছাইকৃত SMS-এর জন্য অন্তত একজন শিক্ষার্থী নির্বাচন করুন।");
+      }
       const placeholders = body.studentIds.map(() => "?").join(",");
       query += ` AND id IN (${placeholders})`;
       params.push(...body.studentIds);

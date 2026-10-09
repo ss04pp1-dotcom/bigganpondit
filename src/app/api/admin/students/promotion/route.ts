@@ -209,6 +209,34 @@ export async function POST(req: Request) {
       seenRolls.add(key);
     }
 
+    // 2b. PRE-CHECK against students ALREADY in the target class.
+    // Without this, the db.batch UPDATE below hits the
+    // idx_students_class_div_roll UNIQUE index and dies with a generic 500.
+    const promotedIds = promotions.map((p) => p.studentId);
+    const existingStudents = (
+      await db
+        .prepare(
+          `SELECT id, roll, COALESCE(division, '') as d
+           FROM students WHERE class_id = ? AND id NOT IN (${promotedIds.map(() => "?").join(",")})`
+        )
+        .bind(targetClassId, ...promotedIds)
+        .all<{ id: number; roll: number; d: string }>()
+        .catch(() => null)
+    )?.results ?? [];
+    const existingKeys = new Set(existingStudents.map((s) => `${s.d || "NO_DIV"}:${s.roll}`));
+    const conflicts = promotions.filter((p) => {
+      const div = (p.newDivision !== undefined ? p.newDivision : body.targetDivision ?? null) || null;
+      const targetDiv = isTarget9or10 ? div : null;
+      return existingKeys.has(`${targetDiv || "NO_DIV"}:${Number(p.newRoll)}`);
+    });
+    if (conflicts.length > 0) {
+      const rollList = conflicts.map((c) => c.newRoll).join(", ");
+      throw new ApiError(
+        409,
+        `টার্গেট শ্রেণিতে এই রোল নম্বরগুলো ইতোমধ্যে বিদ্যমান: ${rollList}। প্রমোশনের আগে রোল পরিবর্তন করুন বা পুরনো শিক্ষার্থীকে সরান।`
+      );
+    }
+
     // 3. Batch update the promoted students
     const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
     for (const p of promotions) {

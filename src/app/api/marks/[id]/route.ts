@@ -13,11 +13,12 @@ type Ctx = { params: Promise<{ id: string }> };
 async function loadMark(db: Awaited<ReturnType<typeof getDb>>, id: number) {
   return await db
     .prepare(
-      `SELECT m.id, m.exam_id, m.student_id, m.attendance, m.obtained_marks, e.total_marks, e.subject_id
+      `SELECT m.id, m.exam_id, m.student_id, m.attendance, m.obtained_marks, e.total_marks, e.subject_id,
+              COALESCE(e.is_published, 0) as is_published
        FROM marks m JOIN exams e ON e.id = m.exam_id WHERE m.id = ?`
     )
     .bind(id)
-    .first<{ id: number; exam_id: number; student_id: number; attendance: string; obtained_marks: number; total_marks: number; subject_id: number }>(undefined as never)
+    .first<{ id: number; exam_id: number; student_id: number; attendance: string; obtained_marks: number; total_marks: number; subject_id: number; is_published: number }>(undefined as never)
     .catch(() => null);
 }
 
@@ -30,6 +31,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
     const mark = await loadMark(db, id);
     if (!mark) throw new ApiError(404, MSG.notFound);
+
+    // PUBLISH INTEGRITY: teachers cannot modify marks of a published exam.
+    if (mark.is_published === 1 && user.role !== "ADMIN") {
+      throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সংশোধন করতে হলে প্রথমে অপ্রকাশ (unpublish) করতে হবে।");
+    }
 
     if (user.role === "TEACHER" && user.teacherId) {
       const allowed = await teacherSubjectAllowed(db, user.teacherId, mark.subject_id);
@@ -58,6 +64,11 @@ export async function DELETE(req: Request, ctx: Ctx) {
     const id = Number((await ctx.params).id);
     const mark = await loadMark(db, id);
     if (!mark) throw new ApiError(404, MSG.notFound);
+
+    // PUBLISH INTEGRITY: teachers cannot delete marks of a published exam.
+    if (mark.is_published === 1 && user.role !== "ADMIN") {
+      throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — মুছতে হলে প্রথমে অপ্রকাশ (unpublish) করতে হবে।");
+    }
 
     if (user.role === "TEACHER" && user.teacherId) {
       const allowed = await teacherSubjectAllowed(db, user.teacherId, mark.subject_id);

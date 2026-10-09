@@ -11,7 +11,15 @@ export async function GET() {
     const rows = (
       await db
         .prepare(
-          `SELECT sr.*, c.name as class_name, rev.name as reviewer_name
+          // SECURITY: never select sr.* — password_hash and raw_password must
+          // never be returned to teachers.
+          `SELECT sr.id, sr.teacher_id, sr.name, sr.class_id, sr.division, sr.section, sr.roll,
+                  sr.username, sr.photo_key, sr.father_name, sr.father_occupation,
+                  sr.mother_name, sr.mother_occupation, sr.guardian_name, sr.guardian_occupation,
+                  sr.guardian_relation, sr.school_name, sr.phone, sr.address, sr.blood_group,
+                  sr.dob, sr.status, sr.admin_notes, sr.reviewed_by, sr.reviewed_at,
+                  sr.created_at, sr.updated_at,
+                  c.name as class_name, rev.name as reviewer_name
            FROM student_requests sr
            JOIN classes c ON c.id = sr.class_id
            LEFT JOIN users rev ON rev.id = sr.reviewed_by

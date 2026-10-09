@@ -109,7 +109,16 @@ export function BiometricPasswordDialog({
       }
 
       setScanState("VERIFIED");
-      setPassword(data.password || "1234");
+      // SECURITY: never fabricate a fallback password — show a clear message
+      // when no stored password is available (e.g. after OTP reset).
+      if (data.passwordAvailable && data.password) {
+        setPassword(data.password);
+      } else {
+        setPassword("");
+        setErrorMsg("এই শিক্ষার্থীর পাসওয়ার্ড পুনরুদ্ধার করা যাচ্ছে না (রিসেট হয়ে থাকতে পারে)। নতুন পাসওয়ার্ড সেট করুন।");
+        setScanState("ERROR");
+        return;
+      }
       toast({
         title: "ফিঙ্গারপ্রিন্ট সফলভাবে যাচাই হয়েছে! 🔐",
         description: `${student.name}-এর পাসওয়ার্ড উন্মুক্ত করা হয়েছে।`,

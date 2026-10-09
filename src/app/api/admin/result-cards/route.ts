@@ -79,11 +79,13 @@ export async function GET(req: Request) {
     const classRow = await db
       .prepare("SELECT id FROM classes WHERE name = ?")
       .bind(className)
-      .first<{ id: number }>()
-      .catch(() => null);
+      .first<{ id: number }>();
     const classId = classRow?.id ?? 0;
 
     // Fetch students of this class
+    // FIX: no .catch(() => null) — a DB error mid print-batch previously
+    // produced a silent 200 with an EMPTY card list (or cards rendered as
+    // "failed" with GPA 0). Errors now surface as a proper 500.
     const studentsRes = await db
       .prepare(
         `SELECT st.id, st.name, st.roll, st.division, st.section
@@ -93,8 +95,7 @@ export async function GET(req: Request) {
          ORDER BY st.roll ASC`
       )
       .bind(className, division)
-      .all<{ id: number; name: string; roll: number; division: string | null; section: string | null }>()
-      .catch(() => null);
+      .all<{ id: number; name: string; roll: number; division: string | null; section: string | null }>();
 
     const students = studentsRes?.results ?? [];
 
@@ -115,7 +116,7 @@ export async function GET(req: Request) {
         subjectIds: null,
         mode,
         publishedOnly: true,
-      }).catch(() => null);
+      });
     }
 
     const cards: Array<Record<string, unknown>> = [];
@@ -153,7 +154,6 @@ export async function GET(req: Request) {
             total_marks: number;
             obtained_marks: number;
           }>()
-          .catch(() => null)
       )?.results ?? [];
 
       const cohortIds = new Set(students.map((s) => s.id));
@@ -207,7 +207,7 @@ export async function GET(req: Request) {
           subjectIds: null,
           mode,
           publishedOnly: true,
-        }).catch(() => null);
+        });
 
         const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];
         const topStudent = topEntry ? {
@@ -225,7 +225,10 @@ export async function GET(req: Request) {
           const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
           const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
           totalStudentAbsences += absCount;
-          if (s.grade === "F" && !s.isFourth) {
+          // Absent subjects already incur the absence fine — do NOT also
+          // charge the fail fine for the same missed exam (was 20 + 50 = 70৳
+          // per absence).
+          if (s.grade === "F" && !s.isFourth && absCount === 0) {
             totalStudentFails++;
           }
           const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
@@ -275,11 +278,9 @@ export async function GET(req: Request) {
           position: banglaOrdinal(position),
           fine: `${calculatedFine}.00৳`,
           topStudent,
-          teacherComments: {
-            comment1: "আরো ভালো করা উচিত ছিল",
-            comment2: "পরীক্ষায় অনুপস্থিত থাকা অন্যায়",
-            guardianComment: "",
-          },
+          // No canned comments: every student previously received identical
+          // printed remarks like "পরীক্ষায় অনুপস্থিত থাকা অন্যায়" — even perfect
+          // attendance toppers. Comment boxes are left blank to hand-write.
         });
       } else {
         // ---------------------------- ANNUAL mode ----------------------------
@@ -290,7 +291,7 @@ export async function GET(req: Request) {
           studentId: st.id,
           year,
           subjectIds: null,
-        }).catch(() => null);
+        });
 
         const subjMap = byStudent.get(st.id) ?? new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
         // stable subject order: Bangla name, same as the monthly engine
@@ -344,11 +345,7 @@ export async function GET(req: Request) {
           // FIX: real computed annual position (was: hardcoded "১ম" for everyone)
           position: banglaOrdinal(annualPosition.get(st.id)),
           fine: "০০/-",
-          teacherComments: {
-            comment1: "বাৎসরিক মূল্যায়ন চমৎকার, গণিত ও বিজ্ঞানে ধারাবাহিক মনোযোগ বজায় রাখতে হবে।",
-            comment2: "নিয়মিত উপস্থিতি ও অধ্যবসায় প্রশংসনীয়।",
-            guardianComment: "বাসায় পড়াশোনায় সন্তোষজনক অগ্রগতি রয়েছে।",
-          },
+          // No canned comments on official annual cards (see monthly note).
         });
       }
     }

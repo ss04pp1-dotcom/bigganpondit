@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { MSG } from "@/lib/constants";
 import { parseJson, teacherUpdateSchema } from "@/lib/validation";
+import { getBucket } from "@/lib/storage/r2";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -68,14 +69,62 @@ export async function DELETE(req: Request, ctx: Ctx) {
     const id = Number((await ctx.params).id);
 
     const teacher = await db
-      .prepare("SELECT t.user_id, t.signature_key FROM teachers t WHERE t.id = ?")
+      .prepare("SELECT t.user_id, t.signature_key, t.photo_key FROM teachers t WHERE t.id = ?")
       .bind(id)
-      .first<{ user_id: number; signature_key: string | null }>(undefined as never)
+      .first<{ user_id: number; signature_key: string | null; photo_key: string | null }>(undefined as never)
       .catch(() => null);
     if (!teacher) throw new ApiError(404, MSG.notFound);
 
+    // Detach rows that referenced users(id) WITHOUT an ON DELETE action —
+    // on D1 (FKs enforced) deleting an active teacher who ever authored a
+    // notice, uploaded a notebook, or recorded attendance died with a 500.
+    await db
+      .prepare("UPDATE notices SET author_id = NULL WHERE author_id = ?")
+      .bind(teacher.user_id)
+      .run()
+      .catch(() => {});
+    await db
+      .prepare("UPDATE attendance SET recorded_by = NULL WHERE recorded_by = ?")
+      .bind(teacher.user_id)
+      .run()
+      .catch(() => {});
+    try {
+      await db.prepare("UPDATE notebooks SET uploaded_by = NULL WHERE uploaded_by = ?").bind(teacher.user_id).run();
+    } catch {
+      // Legacy table shape: uploaded_by is NOT NULL — remove the notebooks
+      // (and their R2 objects) instead of leaving dangling references.
+      const nbs = (
+        (await db
+          .prepare("SELECT file_key FROM notebooks WHERE uploaded_by = ?")
+          .bind(teacher.user_id)
+          .all<{ file_key: string | null }>()
+          .catch(() => null))?.results
+      ) ?? [];
+      await db.prepare("DELETE FROM notebooks WHERE uploaded_by = ?").bind(teacher.user_id).run().catch(() => {});
+      try {
+        const bucket = await getBucket();
+        for (const nb of nbs) {
+          if (nb.file_key && nb.file_key.startsWith("academy/notebooks/")) {
+            await bucket.delete(nb.file_key).catch(() => {});
+          }
+        }
+      } catch {
+        // storage unavailable — rows already removed
+      }
+    }
+
     // deleting the user cascades: teachers row, permissions, sessions
     await db.prepare("DELETE FROM users WHERE id = ?").bind(teacher.user_id).run();
+
+    // Remove the teacher's R2 photo/signature objects (previously orphaned).
+    try {
+      const bucket = await getBucket();
+      if (teacher.signature_key) await bucket.delete(teacher.signature_key).catch(() => {});
+      if (teacher.photo_key) await bucket.delete(teacher.photo_key).catch(() => {});
+    } catch {
+      // storage unavailable — account already deleted
+    }
+
     return ok({ message: MSG.deleted });
   } catch (e) {
     return handleError(e);

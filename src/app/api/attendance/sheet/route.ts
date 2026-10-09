@@ -2,11 +2,11 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, handleError, ok } from "@/lib/api";
+import { teacherClassAllowed } from "@/lib/permissions";
 
 export async function GET(req: Request) {
   try {
-    await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
-    const db = await getDb();
+    const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const url = new URL(req.url);
 
     const classIdStr = url.searchParams.get("classId");
@@ -22,8 +22,25 @@ export async function GET(req: Request) {
       if (byName) classId = byName.id;
     }
 
+    // Authorization: a teacher may only view the monthly sheet (incl. student
+    // PII — phones/photos) for classes they teach.
+    if (user.role === "TEACHER" && user.teacherId) {
+      const allowed = await teacherClassAllowed(db, user.teacherId, classId);
+      if (!allowed) {
+        throw new ApiError(403, "আপনার এই শ্রেণির হাজিরা দেখার অনুমতি নেই।");
+      }
+    }
+
     const month = Number(monthStr);
     const year = Number(yearStr);
+    // VALIDATION: month/year must be real ranges — invalid input previously
+    // produced a garbage LIKE prefix silently.
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      throw new ApiError(400, "মাস অবৈধ।");
+    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      throw new ApiError(400, "সাল অবৈধ।");
+    }
 
     const monthPadded = String(month).padStart(2, "0");
     const prefix = `${year}-${monthPadded}-%`;

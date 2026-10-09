@@ -47,6 +47,43 @@ export function cleanCardBgUrl(val: string | null | undefined): string | null {
   return `/api/files/${str}`;
 }
 
+/**
+ * Today's date as YYYY-MM-DD in the academy's local timezone (Asia/Dhaka,
+ * UTC+6). Using raw UTC meant that between 00:00–05:59 local time the server
+ * considered the current local date a "future date".
+ */
+export function todayISODateDhaka(): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+// ---- Bangladesh phone-number helpers --------------------------------
+// (toEnDigits already exists below — Bangla->ASCII numeral conversion.)
+
+/** Valid BD mobile number: 01XXXXXXXXX (also accepts +880/880 prefixes). */
+export const BD_PHONE_RE = /^(?:\+?880|0)1[3-9]\d{8}$/;
+
+/**
+ * Normalize a phone entry to the canonical `01XXXXXXXXX` form: converts
+ * Bengali digits, strips separators, and folds +88/880 prefixes. A phone
+ * entered as ০১৭১… previously stripped to "" in the SMS route and the
+ * guardian silently never received anything.
+ */
+export function normalizeBdPhone(raw: string): string {
+  const p = toEnDigits(String(raw ?? "")).replace(/[^0-9+]/g, "");
+  if (p.startsWith("+880")) return "0" + p.slice(4);
+  if (p.startsWith("880")) return "0" + p.slice(3);
+  return p;
+}
+
 export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "DIRECTOR";
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: "প্রশাসক",

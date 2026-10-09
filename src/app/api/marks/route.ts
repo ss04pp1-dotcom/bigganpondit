@@ -326,6 +326,17 @@ export async function GET(req: Request) {
           .catch(() => null);
 
         if (exam) {
+          // Teacher scoping — the other GET branches enforce this, but this
+          // branch previously let any teacher enumerate marks of any
+          // class/subject by guessing filter values.
+          if (user.role === "TEACHER" && user.teacherId) {
+            const allowed = await teacherSubjectAllowed(
+              db,
+              user.teacherId,
+              (exam as { subject_id: number }).subject_id
+            );
+            if (!allowed) throw new ApiError(403, MSG.noPermissionView);
+          }
           const marks = (
             await db
               .prepare(

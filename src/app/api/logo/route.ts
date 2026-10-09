@@ -43,7 +43,9 @@ export async function GET() {
     const db = await getDb();
     const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
 
-    if (logoKey && logoKey.startsWith("academy/")) {
+    if (logoKey && logoKey.startsWith("academy/logos/")) {
+      // Serve ONLY the academy/logos/ prefix — never an arbitrary R2 object
+      // that the (possibly DIRECTOR-set) setting might point at.
       const bucket = await getBucket();
       const obj = await bucket.get(logoKey);
       if (obj && obj.data) {

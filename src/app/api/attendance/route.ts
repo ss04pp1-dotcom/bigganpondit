@@ -3,14 +3,14 @@ import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { teacherClassAllowed } from "@/lib/permissions";
+import { todayISODateDhaka } from "@/lib/constants";
 
 export async function GET(req: Request) {
   try {
-    await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
-    const db = await getDb();
+    const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const url = new URL(req.url);
     const classIdStr = url.searchParams.get("classId");
-    const date = url.searchParams.get("date") || new Date().toISOString().split("T")[0];
+    const date = url.searchParams.get("date") || todayISODateDhaka();
 
     if (!classIdStr) {
       throw new ApiError(400, "শ্রেণি নির্বাচন করুন।");
@@ -20,6 +20,15 @@ export async function GET(req: Request) {
     if (!byId) {
       const byName = await db.prepare("SELECT id FROM classes WHERE name = ?").bind(classIdStr).first<{ id: number }>().catch(() => null);
       if (byName) classId = byName.id;
+    }
+
+    // Authorization: a teacher may only view attendance (incl. student PII —
+    // phones/photos) for classes they teach.
+    if (user.role === "TEACHER" && user.teacherId) {
+      const allowed = await teacherClassAllowed(db, user.teacherId, classId);
+      if (!allowed) {
+        throw new ApiError(403, "আপনার এই শ্রেণির হাজিরা দেখার অনুমতি নেই।");
+      }
     }
 
     // Get all students of this class
@@ -108,7 +117,7 @@ export async function POST(req: Request) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())) {
       throw new ApiError(400, "তারিখের ফরম্যাট ভুল (YYYY-MM-DD)।");
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISODateDhaka();
     if (date > today) {
       throw new ApiError(400, "ভবিষ্যতের তারিখে হাজিরা দেওয়া যায় না।");
     }

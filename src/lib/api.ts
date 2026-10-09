@@ -39,6 +39,8 @@ export function assertSameOrigin(req: Request): void {
 
   try {
     if (origin) {
+      // "Origin: null" (sandboxed iframe) or a malformed origin must FAIL CLOSED,
+      // not silently pass the CSRF check.
       const o = new URL(origin);
       if (host && o.host !== host && o.hostname !== host) {
         throw new ApiError(403, "অননুমোদিত অনুরোধ।");
@@ -59,36 +61,14 @@ export function assertSameOrigin(req: Request): void {
       throw new ApiError(403, "অননুমোদিত অনুরোধ।");
     }
   } catch (e) {
+    // Fail closed: a URL parse failure means the Origin/Referer was malformed
+    // (e.g. "Origin: null") — reject instead of letting the request through.
     if (e instanceof ApiError) throw e;
+    throw new ApiError(403, "অননুমোদিত অনুরোধ।");
   }
 }
 
-// ---- simple in-memory login rate limit (per isolate) ----
-const attempts = new Map<string, { count: number; until: number }>();
-
-export function loginRateLimit(key: string): void {
-  const now = Date.now();
-  const rec = attempts.get(key);
-  if (rec && rec.until > now && rec.count >= 8) {
-    throw new ApiError(429, "অনেকবার ভুল চেষ্টা করা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।");
-  }
-  if (!rec || rec.until <= now) {
-    attempts.set(key, { count: 1, until: now + 5 * 60_000 });
-  } else {
-    rec.count += 1;
-  }
-}
-
-export function loginRateClear(key: string): void {
-  attempts.delete(key);
-}
-
-export function loginRateKey(req: Request, username: string): string {
-  const ip =
-    req.headers.get("cf-connecting-ip")?.trim() ||
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "local";
-  return `${ip}:${username}`;
-}
+// Rate limiting is now D1-backed and durable — see src/lib/auth/rate-limit.ts
+// (the old in-memory Map was per-isolate and ineffective on Cloudflare Workers).
 
 export const MESSAGES = MSG;

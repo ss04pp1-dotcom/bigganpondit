@@ -31,5 +31,22 @@ APP_URL = "https://your-domain.com"
 #   bunx wrangler secret put ADMIN_USERNAME
 #   bunx wrangler secret put ADMIN_PASSWORD
 
+# Preview environment — MUST use its own database & bucket.
+# Previously [env.preview] only overrode `name`, so it INHERITED the
+# production D1 database (academy-marks) and R2 bucket: deploying or testing
+# preview wrote directly to LIVE production data.
+# Create the preview resources once, then fill in the ids below:
+#   bunx wrangler d1 create academy-marks-preview
+#   bunx wrangler r2 bucket create academy-assets-preview
 [env.preview]
 name = "academy-marks-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "academy-marks-preview"
+database_id = "REPLACE_WITH_PREVIEW_D1_DATABASE_ID"
+migrations_dir = "db/migrations"
+
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "academy-assets-preview"

@@ -450,8 +450,21 @@ export function MarksEntry({
       return;
     }
 
-    const st = marksState[studentIdToSave] ?? { obtained: "0", attendance: "PRESENT" };
+    const st = marksState[studentIdToSave] ?? { obtained: "", attendance: "PRESENT" };
     const obtainedNum = st.attendance === "ABSENT" ? 0 : Number(st.obtained) || 0;
+
+    // BLOCK accidental blank saves: an untouched student used to be silently
+    // stored as PRESENT with 0 marks — a record the result-card fine logic
+    // then misread as a real failing score. The teacher must either type a
+    // number (0 is fine when typed) or mark the student ABSENT.
+    if (st.attendance === "PRESENT" && (st.obtained === "" || st.obtained === undefined || st.obtained === null)) {
+      toast({
+        title: "নম্বর লিখুন অথবা অনুপস্থিত (ABSENT) চিহ্নিত করুন।",
+        description: "ফাঁকা রেখে সংরক্ষণ করলে ০ নম্বর প্রেজেন্ট হিসেবে সংরক্ষিত হতো — সেটি আর হবে না।",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (st.attendance === "PRESENT" && obtainedNum > total) {
       toast({
@@ -670,6 +683,11 @@ export function MarksEntry({
   const currentSingleStudent = students[currentSingleIndex] ?? students[0];
   const currentSingleMark = currentSingleStudent ? marksState[currentSingleStudent.id] : null;
   const singleObtainedNum = currentSingleMark?.attendance === "ABSENT" ? 0 : Number(currentSingleMark?.obtained || 0);
+  // Blank + PRESENT cannot be saved (see saveSingleStudent) — reflect it in the
+  // button state so the guard is visible, not just a toast after the fact.
+  const singleBlank =
+    (currentSingleMark?.attendance ?? "PRESENT") === "PRESENT" &&
+    (currentSingleMark?.obtained === "" || currentSingleMark?.obtained === undefined || currentSingleMark?.obtained === null);
   const singlePct = total > 0 ? (currentSingleMark?.attendance === "ABSENT" ? 0 : (Math.min(singleObtainedNum, total) / total) * 100) : 0;
   const singleGrade = gradeFromPercentage(singlePct);
 
@@ -1459,7 +1477,7 @@ export function MarksEntry({
                   <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                     <Button
                       onClick={() => saveSingleStudent(currentSingleStudent.id)}
-                      disabled={savingSingleId === currentSingleStudent.id || singleObtainedNum > total}
+                      disabled={savingSingleId === currentSingleStudent.id || singleObtainedNum > total || singleBlank}
                       className="h-11 flex-1 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white"
                     >
                       {savingSingleId === currentSingleStudent.id ? (
@@ -1478,7 +1496,7 @@ export function MarksEntry({
                         if (next) setSingleStudentId(next.id);
                         else toast({ title: "এই শ্রেণির সব শিক্ষার্থীর নম্বর দেওয়া শেষ হয়েছে।" });
                       }}
-                      disabled={savingSingleId === currentSingleStudent.id || singleObtainedNum > total}
+                      disabled={savingSingleId === currentSingleStudent.id || singleObtainedNum > total || singleBlank}
                       className="h-11 flex-1 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs"
                     >
                       <Sparkles className="mr-2 h-4 w-4" />

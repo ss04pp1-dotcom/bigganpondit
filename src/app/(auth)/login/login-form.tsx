@@ -37,7 +37,6 @@ export function LoginForm({
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
   const [forgotUsername, setForgotUsername] = useState("");
-  const [forgotUserId, setForgotUserId] = useState<number | null>(null);
   const [forgotEmailMasked, setForgotEmailMasked] = useState("");
   const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPass, setForgotNewPass] = useState("");
@@ -64,7 +63,6 @@ export function LoginForm({
         toast({ title: json.error ?? "ওটিপি পাঠানো যায়নি।", variant: "destructive" });
         return;
       }
-      setForgotUserId(json.userId);
       setForgotEmailMasked(json.emailMasked);
       setForgotStep("verify");
       toast({ title: json.message });
@@ -77,6 +75,11 @@ export function LoginForm({
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
+    const target = forgotUsername.trim() || username.trim();
+    if (!target) {
+      toast({ title: "ইউজারনেম বা আইডি লিখুন।", variant: "destructive" });
+      return;
+    }
     if (!forgotOtp.trim()) {
       toast({ title: "৬-সংখ্যার ওটিপি কোড লিখুন।", variant: "destructive" });
       return;
@@ -95,7 +98,7 @@ export function LoginForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: forgotUserId,
+          username: target,
           otp: forgotOtp.trim(),
           newPassword: forgotNewPass.trim(),
         }),

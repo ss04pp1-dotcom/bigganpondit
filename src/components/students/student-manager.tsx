@@ -50,6 +50,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { ImageUpload } from "@/components/app/image-upload";
@@ -64,6 +65,7 @@ import {
   divisionLabel,
   fmtNum,
   groupLabel,
+  toEnDigits,
 } from "@/lib/constants";
 
 interface Row {
@@ -653,6 +655,24 @@ export function StudentManager({
                     <ul className="divide-y divide-border/70">
                       {list.map((row) => (
                         <li key={row.id} className="flex items-center gap-3 bg-white/40 px-4 py-3">
+                          {/* SMS selection checkbox (admin only) — previously the
+                              SELECTED scope had NO selection UI, so it always sent
+                              an empty list and could never succeed. */}
+                          {role === "ADMIN" && (
+                            <Checkbox
+                              checked={selectedStudentIds.has(row.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedStudentIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (checked) next.add(row.id);
+                                  else next.delete(row.id);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`${row.name} নির্বাচন করুন`}
+                              className="shrink-0"
+                            />
+                          )}
                           <StudentAvatar photoKey={row.photo_key} name={row.name} />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[14px] font-semibold">{row.name}</p>
@@ -1285,9 +1305,10 @@ export function StudentManager({
                   <Label>অভিভাবকের ফোন নম্বর (ঐচ্ছিক)</Label>
                   <Input
                     value={form.phone ?? ""}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    onChange={(e) => setForm({ ...form, phone: toEnDigits(e.target.value) })}
                     className="h-10"
-                    placeholder="০১৭১XXXXXXXX"
+                    placeholder="0171XXXXXXXX"
+                    inputMode="tel"
                   />
                 </div>
               </div>
@@ -1472,6 +1493,14 @@ export function StudentManager({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {smsScope === "SELECTED" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-medium text-amber-800">
+              {selectedStudentIds.size > 0
+                ? `তালিকা থেকে ${bn(selectedStudentIds.size)} জন শিক্ষার্থী নির্বাচন করা হয়েছে।`
+                : "তালিকা থেকে চেকবক্স (✓) দিয়ে অন্তত একজন শিক্ষার্থী নির্বাচন করুন।"}
             </div>
           )}
 

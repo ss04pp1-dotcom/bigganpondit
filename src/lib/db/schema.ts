@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS students (
   blood_group TEXT,
   dob         TEXT,
   raw_password TEXT,
+  hide_photo_from_students INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -146,6 +147,56 @@ CREATE TABLE IF NOT EXISTS storage_files (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- D1 chunked-blob fallback used by the storage layer when R2 is unavailable.
+-- Column names match migration 0010 / 0011 (canonical: chunk_index).
+CREATE TABLE IF NOT EXISTS storage_chunks (
+  key         TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  data        TEXT NOT NULL,
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (key, chunk_index)
+);
+CREATE INDEX IF NOT EXISTS idx_storage_chunks_key ON storage_chunks(key);
+
+-- Pending OTP password-reset requests (email recovery workflow).
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  otp_hash    TEXT NOT NULL,
+  email       TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used        INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON password_resets(user_id);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_expires ON password_resets(expires_at);
+
+-- Teacher/Student password change requests (admin approval workflow).
+CREATE TABLE IF NOT EXISTS password_change_requests (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_name         TEXT NOT NULL,
+  user_role         TEXT NOT NULL,
+  username          TEXT NOT NULL,
+  new_password_hash TEXT NOT NULL,
+  reason            TEXT,
+  status            TEXT NOT NULL DEFAULT 'PENDING',
+  admin_notes       TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  reviewed_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pwd_change_user ON password_change_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_pwd_change_status ON password_change_requests(status);
+
+-- Durable D1-backed rate limiting (login brute-force + OTP attempt caps).
+CREATE TABLE IF NOT EXISTS login_attempts (
+  key          TEXT PRIMARY KEY,
+  count        INTEGER NOT NULL DEFAULT 0,
+  window_start TEXT NOT NULL DEFAULT (datetime('now')),
+  locked_until TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);
+
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -183,7 +234,7 @@ CREATE TABLE IF NOT EXISTS notices (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   title           TEXT NOT NULL,
   content         TEXT NOT NULL,
-  author_id       INTEGER NOT NULL REFERENCES users(id),
+  author_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   author_name     TEXT NOT NULL,
   author_role     TEXT NOT NULL,
   status          TEXT NOT NULL DEFAULT 'APPROVED',
@@ -201,7 +252,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
   file_key        TEXT NOT NULL,
   file_name       TEXT NOT NULL,
   file_size       INTEGER,
-  uploaded_by     INTEGER NOT NULL REFERENCES users(id),
+  uploaded_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   uploader_name   TEXT NOT NULL,
   description     TEXT,
   download_allowed INTEGER NOT NULL DEFAULT 0,
@@ -215,7 +266,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   date            TEXT NOT NULL,
   status          TEXT NOT NULL DEFAULT 'PRESENT',
   remarks         TEXT,
-  recorded_by     INTEGER NOT NULL REFERENCES users(id),
+  recorded_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(student_id, date)
 );

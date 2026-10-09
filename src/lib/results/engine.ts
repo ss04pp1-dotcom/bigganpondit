@@ -143,6 +143,55 @@ export interface MonthlyResult {
   overall: MonthlyOverall;
 }
 
+// ------------------------------------------------------------------
+// THE official final-GPA formula (Bangladesh GPA-5 system).
+// Exported so the merit list, class summaries and monthly report cards
+// ALL use the same computation — previously the merit list used a plain
+// percentage->grade GPA while the report card used compulsory-average +
+// 4th-subject bonus + fail-cap, so the same student could show GPA 4.00 on
+// the merit list and GPA 0.00 on the report card.
+// ------------------------------------------------------------------
+export interface GpaSubjectInput {
+  gpa: number;
+  isFourth: boolean;
+}
+
+export function computeFinalGpa(
+  subjects: GpaSubjectInput[],
+  fallbackPct?: number
+): { gpa: number; grade: string } {
+  const compulsory = subjects.filter((s) => !s.isFourth);
+  const optionalSubjects = subjects.filter((s) => s.isFourth);
+  // exactly ONE 4th subject contributes the bonus — the best-GPA one
+  // (deterministic; see the note in buildMonthlyResult).
+  const optional =
+    optionalSubjects.length > 0
+      ? optionalSubjects.reduce((best, s) => (!best || s.gpa > best.gpa ? s : best), optionalSubjects[0])
+      : undefined;
+  const hasCompulsoryFail = compulsory.some((s) => s.gpa === 0);
+
+  if (hasCompulsoryFail && compulsory.length > 0) {
+    return { gpa: 0.0, grade: "F" };
+  }
+  if (compulsory.length > 0) {
+    let totalGp = compulsory.reduce((sum, s) => sum + s.gpa, 0);
+    if (optional && optional.gpa > 2.0) {
+      totalGp += optional.gpa - 2.0;
+    }
+    const finalGpa = Math.min(5.0, Math.round((totalGp / compulsory.length) * 100) / 100);
+    let finalGrade = "F";
+    if (finalGpa >= 5.0) finalGrade = "A+";
+    else if (finalGpa >= 4.0) finalGrade = "A";
+    else if (finalGpa >= 3.5) finalGrade = "A-";
+    else if (finalGpa >= 3.0) finalGrade = "B";
+    else if (finalGpa >= 2.0) finalGrade = "C";
+    else if (finalGpa >= 1.0) finalGrade = "D";
+    return { gpa: finalGpa, grade: finalGrade };
+  }
+  const og = calculateGrade(fallbackPct ?? 0);
+  return { gpa: og.gpa, grade: og.grade };
+}
+
 export function buildMonthlyResult(
   bySubject: Map<
     number,
@@ -172,7 +221,6 @@ export function buildMonthlyResult(
   subjects.sort((a, b) => a.subjectName.localeCompare(b.subjectName, "bn"));
 
   const overallPct = calculatePercentage(obtained, totalMarks);
-  const compulsory = subjects.filter((s) => !s.isFourth);
 
   // ------------------------------------------------------------------
   // Fourth (optional) subject handling.
@@ -192,38 +240,9 @@ export function buildMonthlyResult(
   // toward totalMarks/obtained/percentage — only the GPA divisor follows the
   // compulsory set.
   // ------------------------------------------------------------------
-  const optionalSubjects = subjects.filter((s) => s.isFourth);
-  const optional =
-    optionalSubjects.length > 0
-      ? optionalSubjects.reduce((best, s) => (!best || s.gpa > best.gpa ? s : best), optionalSubjects[0])
-      : undefined;
-  const hasCompulsoryFail = compulsory.some((s) => s.gpa === 0);
 
-  let finalGpa = 0;
-  let finalGrade = "F";
-
-  if (hasCompulsoryFail && compulsory.length > 0) {
-    finalGpa = 0.0;
-    finalGrade = "F";
-  } else if (compulsory.length > 0) {
-    let totalGp = compulsory.reduce((sum, s) => sum + s.gpa, 0);
-    if (optional && optional.gpa > 2.0) {
-      totalGp += optional.gpa - 2.0;
-    }
-    const divisor = compulsory.length;
-    finalGpa = Math.min(5.0, Math.round((totalGp / divisor) * 100) / 100);
-    if (finalGpa >= 5.0) finalGrade = "A+";
-    else if (finalGpa >= 4.0) finalGrade = "A";
-    else if (finalGpa >= 3.5) finalGrade = "A-";
-    else if (finalGpa >= 3.0) finalGrade = "B";
-    else if (finalGpa >= 2.0) finalGrade = "C";
-    else if (finalGpa >= 1.0) finalGrade = "D";
-    else finalGrade = "F";
-  } else {
-    const og = calculateGrade(overallPct);
-    finalGpa = og.gpa;
-    finalGrade = og.grade;
-  }
+  // The single official formula (shared with the merit list / class summary):
+  const { gpa: finalGpa, grade: finalGrade } = computeFinalGpa(subjects, overallPct);
 
   return {
     subjects,

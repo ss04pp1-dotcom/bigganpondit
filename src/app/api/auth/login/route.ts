@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession, sessionCookieOptions } from "@/lib/auth/session";
-import { fail, handleError, ok, assertSameOrigin, loginRateClear, loginRateKey, loginRateLimit } from "@/lib/api";
+import { fail, handleError, ok, assertSameOrigin } from "@/lib/api";
+import { LOGIN_RATE, assertNotRateLimited, clearRateLimit, loginRateKey, recordRateFailure } from "@/lib/auth/rate-limit";
 import { SESSION_COOKIE, MSG, type Role } from "@/lib/constants";
 import { parseJson, loginSchema } from "@/lib/validation";
 import { roleHome } from "@/lib/auth/guards";
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     const db = await getDb();
 
     const rlKey = loginRateKey(req, body.username);
-    loginRateLimit(rlKey);
+    await assertNotRateLimited(db, rlKey, LOGIN_RATE);
 
     const user = await db
       .prepare("SELECT id, name, username, password_hash, role FROM users WHERE username = ?")
@@ -29,9 +30,10 @@ export async function POST(req: Request) {
     const hashToVerify = user ? user.password_hash : DUMMY_HASH;
     const valid = await verifyPassword(body.password, hashToVerify);
     if (!user || !valid) {
+      await recordRateFailure(db, rlKey, LOGIN_RATE);
       return fail(401, MSG.loginFailed);
     }
-    loginRateClear(rlKey);
+    await clearRateLimit(db, rlKey);
 
     // housekeeping: drop expired sessions
     await db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();

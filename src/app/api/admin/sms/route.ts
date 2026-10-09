@@ -3,6 +3,7 @@ import { getDb, getSetting } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { getCloudflareEnv } from "@/lib/cloudflare";
+import { BD_PHONE_RE, normalizeBdPhone } from "@/lib/constants";
 
 export async function POST(req: Request) {
   try {
@@ -51,14 +52,28 @@ export async function POST(req: Request) {
       throw new ApiError(400, "নির্বাচিত ক্যাটাগরিতে কোনো বৈধ মোবাইল নম্বর পাওয়া যায়নি।");
     }
 
-    // Deduplicate and format valid BD phone numbers
-    const validPhones = Array.from(
-      new Set(
-        students
-          .map((s) => s.phone.replace(/[^0-9+]/g, ""))
-          .filter((p) => p.length >= 10)
-      )
-    );
+    // Normalize (Bengali digits -> ASCII, +880/880 -> 0) and validate real BD
+    // mobile numbers. Previously numbers were silently DROPPED when invalid
+    // (e.g. entered in Bengali numerals) — the guardian never received the
+    // SMS and nobody knew. Skipped numbers are now reported back.
+    const seen = new Set<string>();
+    const validPhones: string[] = [];
+    const skipped: { name: string; phone: string }[] = [];
+    for (const s of students) {
+      const p = normalizeBdPhone(s.phone || "");
+      if (BD_PHONE_RE.test(p)) {
+        if (!seen.has(p)) {
+          seen.add(p);
+          validPhones.push(p);
+        }
+      } else {
+        skipped.push({ name: s.name, phone: s.phone || "" });
+      }
+    }
+    const skippedNote =
+      skipped.length > 0
+        ? ` সতর্কতা: ${skipped.length} জনের নম্বর অবৈধ বলে বাদ দেওয়া হয়েছে।`
+        : "";
 
     if (validPhones.length === 0) {
       throw new ApiError(400, "কোনো বৈধ মোবাইল নম্বর পাওয়া যায়নি।");
@@ -101,6 +116,8 @@ export async function POST(req: Request) {
         sentCount: validPhones.length,
         dispatched: false,
         sampleNumbers: validPhones.slice(0, 5),
+        skippedCount: skipped.length,
+        skipped: skipped.slice(0, 10),
       });
     }
 
@@ -110,6 +127,8 @@ export async function POST(req: Request) {
       dispatched,
       gatewayResponse: gatewayResponse.slice(0, 100),
       sampleNumbers: validPhones.slice(0, 5),
+      skippedCount: skipped.length,
+      skipped: skipped.slice(0, 10),
     });
   } catch (e) {
     return handleError(e);

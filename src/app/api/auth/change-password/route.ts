@@ -43,12 +43,18 @@ export async function POST(req: Request) {
     }
 
     const newHash = await hashPassword(body.newPassword);
-    await db
-      .prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
-      .bind(newHash, user.id)
-      .run();
+    // SECURITY: invalidate every active session for this user so a stolen
+    // session cannot outlive a password change.
+    await db.batch([
+      db
+        .prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind(newHash, user.id),
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(user.id),
+    ]);
 
-    return ok({ message: "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।" });
+    return ok({
+      message: "পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে। নিরাপত্তার জন্য সব সেশন বাতিল করা হয়েছে — নতুন পাসওয়ার্ড দিয়ে আবার লগইন করুন।",
+    });
   } catch (e) {
     return handleError(e);
   }

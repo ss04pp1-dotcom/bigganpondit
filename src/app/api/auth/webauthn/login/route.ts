@@ -13,9 +13,10 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { createSession, sessionCookieOptions } from "@/lib/auth/session";
-import { fail, handleError, ok, assertSameOrigin, loginRateKey, loginRateClear } from "@/lib/api";
+import { fail, handleError, ok, assertSameOrigin } from "@/lib/api";
 import { SESSION_COOKIE, type Role } from "@/lib/constants";
 import { roleHome } from "@/lib/auth/guards";
+import { LOGIN_RATE, assertNotRateLimited, clearRateLimit, loginRateKey } from "@/lib/auth/rate-limit";
 import { generateRandomChallenge, saveChallenge, verifyAndConsumeChallenge } from "@/lib/auth/webauthn";
 import { parseAuthData, verifyAssertionSignature, rpIdHash, constantTimeEqual } from "@/lib/auth/webauthn-crypto";
 import { fromBase64Url } from "@/lib/auth/webauthn";
@@ -146,6 +147,10 @@ export async function POST(req: Request) {
       return fail(401, "এই ফিঙ্গারপ্রিন্টটি কোনো একাউন্টের সাথে যুক্ত নয়। প্রথমে সাধারণ পাসওয়ার্ড দিয়ে লগইন করে ফিঙ্গারপ্রিন্ট যুক্ত করুন।");
     }
 
+    // Durable rate-limit guard (same policy as password login)
+    const rlKey = loginRateKey(req, cred.username);
+    await assertNotRateLimited(db, rlKey, LOGIN_RATE);
+
     const validChallenge = await verifyAndConsumeChallenge(db, clientChallenge, cred.user_id);
     if (!validChallenge) {
       return fail(401, "বায়োমেট্রিক সেশনের মেয়াদ শেষ হয়েছে অথবা রি-প্লে অ্যাটাক সনাক্ত হয়েছে।");
@@ -200,9 +205,8 @@ export async function POST(req: Request) {
       .run()
       .catch(() => null);
 
-    // Rate limit clear on success
-    const rlKey = loginRateKey(req, cred.username);
-    loginRateClear(rlKey);
+    // Rate limit clear on success (the durable D1-backed limiter)
+    await clearRateLimit(db, rlKey);
 
     // Housekeeping: purge expired sessions
     await db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();

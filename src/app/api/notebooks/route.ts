@@ -6,6 +6,10 @@ import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 
 export async function GET(req: Request) {
   try {
+    // Require a real session: the only other "gate" was the proxy checking that
+    // a `sid` cookie merely EXISTS — any fabricated value passed, leaking
+    // notebook metadata (titles, R2 file keys, uploader names) unauthenticated.
+    await requireApiUser();
     const db = await getDb();
     const url = new URL(req.url);
     const classId = url.searchParams.get("class_id");

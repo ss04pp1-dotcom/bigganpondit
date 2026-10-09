@@ -7,7 +7,9 @@ import { DEFAULT_ACADEMY_NAME } from "@/lib/constants";
 
 export interface SeedEnv {
   adminUsername: string;
-  adminPassword: string;
+  // null = refuse to create the initial admin (Workers without the
+  // ADMIN_PASSWORD secret must NEVER get a well-known default password).
+  adminPassword: string | null;
   // Demo teachers/students/exams are ONLY seeded when explicitly requested
   // (SEED_DEMO_DATA="1", e.g. in local .dev.vars). Production installs get a
   // clean database with no known-credential accounts.
@@ -183,8 +185,16 @@ async function ensureAdmin(db: D1Database, env: SeedEnv) {
   // the next cold start.
   if ((await count(db, "users")) > 0) return;
   const username = env.adminUsername || "admin";
-  const password = env.adminPassword || "admin123";
-  const hash = await hashPassword(password);
+  if (!env.adminPassword) {
+    // SECURITY: a production deploy where ADMIN_PASSWORD was never set must
+    // not silently boot with admin/admin123 — the documented default.
+    console.error(
+      "[seed] ADMIN_PASSWORD is not configured — initial admin account NOT created. " +
+        "Set it with `wrangler secret put ADMIN_USERNAME` / `wrangler secret put ADMIN_PASSWORD`, then restart the worker."
+    );
+    return;
+  }
+  const hash = await hashPassword(env.adminPassword);
   await db
     .prepare("INSERT INTO users (name, username, password_hash, role) VALUES ('প্রশাসক', ?, ?, 'ADMIN')")
     .bind(username, hash)
@@ -256,6 +266,11 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
   if (flag?.value === "disabled" || flag?.value === "1") return;
   if ((await count(db, "students")) > 0) return;
 
+  // Track exactly which rows the demo seeder creates so "clear demo data"
+  // can remove ONLY those rows (never real production data).
+  const demoStudentUserIds: number[] = [];
+  const demoExamIds: number[] = [];
+
   // 1) student users + student rows
   const passwordHash = await hashPassword("1234");
   let seq = 0;
@@ -268,6 +283,7 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
       .run();
     const userId = Number(res.meta.last_row_id ?? 0);
     if (!userId) continue;
+    demoStudentUserIds.push(userId);
     const c = await classIdByName(db, s.classNum);
     if (!c) continue;
     const section = s.classNum === "9" || s.classNum === "10" ? "ক" : null;
@@ -295,6 +311,12 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
   const subjects = (await db.prepare("SELECT id, class_id FROM subjects").all<{ id: number; class_id: number }>()).results;
   const students = (await db.prepare("SELECT id, class_id, division FROM students").all<{ id: number; class_id: number; division: string | null }>()).results;
   const links = (await db.prepare("SELECT teacher_id, subject_id FROM teacher_subjects").all<{ teacher_id: number; subject_id: number }>()).results;
+  // exams.created_by REFERENCES users(id) — map teachers.id -> the owning
+  // user id so demo exams do not violate the FK (previously the seeder wrote
+  // teachers.id into a users(id) column).
+  const teacherRows = (await db.prepare("SELECT id, user_id FROM teachers").all<{ id: number; user_id: number }>()).results;
+  const teacherUserId = new Map<number, number>();
+  for (const t of teacherRows) teacherUserId.set(t.id, t.user_id);
   const teacherForSubject = new Map<number, number>();
   for (const l of links) if (!teacherForSubject.has(l.subject_id)) teacherForSubject.set(l.subject_id, l.teacher_id);
 
@@ -329,10 +351,21 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
             `INSERT INTO exams (class_id, division, subject_id, month, year, exam_date, title, total_marks, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .bind(subj.class_id, group.division, subj.id, plan.month, plan.year, examDate, plan.title, plan.total, teacherForSubject.get(subj.id) ?? null)
+          .bind(
+            subj.class_id,
+            group.division,
+            subj.id,
+            plan.month,
+            plan.year,
+            examDate,
+            plan.title,
+            plan.total,
+            teacherUserId.get(teacherForSubject.get(subj.id) ?? -1) ?? null
+          )
           .run();
         const examId = Number(res.meta.last_row_id ?? 0);
         if (!examId) continue;
+        demoExamIds.push(examId);
 
         const inserts: import("./types").D1PreparedStatement[] = [];
         for (const st of group.list) {
@@ -352,6 +385,16 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
   }
   await db
     .prepare("INSERT INTO settings (key, value) VALUES ('demo_data_seeded', '1') ON CONFLICT(key) DO UPDATE SET value = '1'")
+    .run()
+    .catch(() => null);
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('demo_student_user_ids', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind(JSON.stringify(demoStudentUserIds))
+    .run()
+    .catch(() => null);
+  await db
+    .prepare("INSERT INTO settings (key, value) VALUES ('demo_exam_ids', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .bind(JSON.stringify(demoExamIds))
     .run()
     .catch(() => null);
 }

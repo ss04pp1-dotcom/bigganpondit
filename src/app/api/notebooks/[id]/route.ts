@@ -15,9 +15,9 @@ export async function DELETE(
     const notebookId = Number(id);
 
     const nb = await db
-      .prepare("SELECT uploaded_by FROM notebooks WHERE id = ?")
+      .prepare("SELECT uploaded_by, file_key FROM notebooks WHERE id = ?")
       .bind(notebookId)
-      .first<{ uploaded_by: number }>()
+      .first<{ uploaded_by: number; file_key: string | null }>()
       .catch(() => null);
 
     if (!nb) throw new ApiError(404, "নোট বুক পাওয়া যায়নি।");
@@ -27,6 +27,13 @@ export async function DELETE(
     }
 
     await db.prepare("DELETE FROM notebooks WHERE id = ?").bind(notebookId).run();
+
+    // Also remove the orphaned R2 object — previously only the D1 row was
+    // deleted, leaving the PDF stored (and still fetchable by key) forever.
+    if (nb.file_key && nb.file_key.startsWith("academy/notebooks/")) {
+      const bucket = await getBucket();
+      await bucket.delete(nb.file_key).catch(() => {});
+    }
 
     return ok({ message: "নোট বুক সফলভাবে মুছে ফেলা হয়েছে।" });
   } catch (e) {

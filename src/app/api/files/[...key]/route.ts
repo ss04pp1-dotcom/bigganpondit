@@ -135,6 +135,27 @@ export async function GET(req: Request, ctx: Ctx) {
       });
     }
 
+    // ---- pending student-request photos: admin/director, or teacher of that class ----
+    // (previously this prefix had no handler at all — previews always 404'd)
+    if (key.startsWith("academy/requests/")) {
+      const m = key.match(/^academy\/requests\/(\d+)\//);
+      const requestId = m ? Number(m[1]) : null;
+      let allowed = false;
+      if (user.role === "ADMIN" || user.role === "DIRECTOR") allowed = true;
+      else if (requestId && user.role === "TEACHER" && user.teacherId) {
+        const rq = await db
+          .prepare("SELECT class_id FROM student_requests WHERE id = ?")
+          .bind(requestId)
+          .first<{ class_id: number }>()
+          .catch(() => null);
+        if (rq) allowed = await teacherClassAllowed(db, user.teacherId, rq.class_id);
+      }
+      if (!allowed) return fail(403, "আপনার এই তথ্য দেখার অনুমতি নেই।");
+      return new Response(obj.data as unknown as BodyInit, {
+        headers: { "Content-Type": contentTypeFor(key), "Cache-Control": "private, max-age=300" },
+      });
+    }
+
     return fail(404, "এই তথ্য পাওয়া যায়নি।");
   } catch (e) {
     return handleError(e);

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DatabaseBackup, Download, History, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { bn } from "@/lib/constants";
@@ -16,11 +17,16 @@ interface Item {
   createdAt: string;
 }
 
+const RESTORE_CONFIRM_WORD = "RESTORE";
+
 export function BackupManager() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
+
+  // Typed-confirmation state for the destructive restore dialog.
+  const [confirmText, setConfirmText] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,10 +34,14 @@ export function BackupManager() {
       const res = await fetch("/api/backup");
       const json = await res.json();
       if (json.ok) setItems(json.backups ?? []);
+    } catch {
+      // Network failure previously vanished silently — the admin saw an
+      // empty list that looked like "no backups exist".
+      toast({ title: "ব্যাকআপ তালিকা লোড করা যায়নি।", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     load();
@@ -45,7 +55,7 @@ export function BackupManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({ ok: false, error: "সার্ভার থেকে অবৈধ উত্তর এসেছে।" }));
       if (!res.ok || !json.ok) {
         toast({ title: json.error ?? "কাজটি সম্পন্ন হয়নি।", variant: "destructive" });
         return null;
@@ -53,9 +63,19 @@ export function BackupManager() {
       toast({ title: json.message ?? successMsg });
       await load();
       return json;
+    } catch {
+      // Network failure mid-restore previously produced an unhandled
+      // rejection with NO feedback — the admin could re-click and double-apply.
+      toast({ title: "সার্ভারে সংযোগ ব্যর্থ হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
+      return null;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmRestore(target: Item) {
+    setConfirmText("");
+    await action({ action: "restore", key: target.key });
   }
 
   return (
@@ -69,7 +89,7 @@ export function BackupManager() {
             <div>
               <p className="text-[15px] font-bold">ডেটাবেস ব্যাকআপ</p>
               <p className="text-[12px] text-muted-foreground">
-                ব্যাকআপ তৈরি হয়ে Cloudflare R2-তে সংরক্ষিত হয়। রিস্টোরে বর্তমান তথ্য পরিবর্তিত হবে।
+                ব্যাকআপ তৈরি হয় Cloudflare R2-তে সংরক্ষিত হয়। রিস্টোরে বর্তমান তথ্য পরিবর্তিত হবে।
               </p>
             </div>
           </div>
@@ -115,13 +135,39 @@ export function BackupManager() {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>রিস্টোরের নিশ্চয়তা</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            ব্যাকআপ রিস্টোর করলে বর্তমান সব তথ্য মুছে যাবে এবং ব্যাকআপের তথ্য বসবে। সব ব্যবহারকারীকে আবার লগইন করতে হবে। আপনি কি নিশ্চিত?
+                          <AlertDialogDescription asChild>
+                            <div className="space-y-2">
+                              <span className="block">
+                                ব্যাকআপ রিস্টোর করলে বর্তমান সব তথ্য মুছে যাবে এবং ব্যাকআপের তথ্য বসবে। সব ব্যবহারকারীকে আবার লগইন করতে হবে।
+                                রিস্টোরের আগে স্বয়ংক্রিয়ভাবে একটি <b>pre-restore</b> ব্যাকআপ তৈরি হবে, যা দিয়ে ভুল হলে পূর্বের অবস্থায় ফিরে যাওয়া যাবে।
+                              </span>
+                              <span className="block">
+                                নিশ্চিত হতে টাইপ করুন: <b>{RESTORE_CONFIRM_WORD}</b>
+                              </span>
+                              <Input
+                                value={confirmText}
+                                onChange={(e) => setConfirmText(e.target.value)}
+                                placeholder={RESTORE_CONFIRM_WORD}
+                                className="h-9"
+                                autoComplete="off"
+                              />
+                            </div>
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>না</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => action({ action: "restore", key: it.key })}>
+                          <AlertDialogCancel
+                            onClick={() => setConfirmText("")}
+                          >
+                            না
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            disabled={confirmText !== RESTORE_CONFIRM_WORD || busy}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              confirmRestore(it);
+                            }}
+                          >
+                            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             হ্যাঁ, রিস্টোর করুন
                           </AlertDialogAction>
                         </AlertDialogFooter>

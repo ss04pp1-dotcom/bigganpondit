@@ -28,7 +28,10 @@ export interface UserRow {
   name: string;
   username: string;
   password_hash?: string;
-  role: "ADMIN" | "TEACHER" | "STUDENT";
+  // DIRECTOR is a real stored role on bootstrap-created databases (schema.ts
+  // CHECK includes it); migration-provisioned legacy DBs store directors as
+  // TEACHER + a directors row, resolved to DIRECTOR at runtime.
+  role: "ADMIN" | "TEACHER" | "STUDENT" | "DIRECTOR";
   created_at: string;
   updated_at: string;
 }

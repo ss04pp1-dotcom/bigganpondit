@@ -8,6 +8,7 @@ import {
   buildAnnualResult,
   buildMonthlyResult,
   calculateRanking,
+  computeFinalGpa,
   decorateExamRow,
   type ExamRowForDisplay,
   type SearchResultRow,
@@ -329,19 +330,25 @@ export async function buildMonthlyReport(
   const bySubject = data.byStudent.get(opts.studentId);
   const result = buildMonthlyResult(bySubject ?? new Map(), data.classHighest);
 
-  // ranking across the cohort (only students who have at least one mark)
+  // ranking across the cohort (only students who have at least one mark).
+  // GPA uses THE official formula (compulsory average + best-4th bonus +
+  // fail-cap) so the position ranking can never contradict the report card.
   const rankEntries: (import("./engine").RankEntry & { photoKey: string | null; section: string | null })[] = [];
   for (const st of data.students) {
     const sm = data.byStudent.get(st.studentId);
     if (!sm || sm.size === 0) continue;
     const overall = aggregate([...sm.values()].flatMap((v) => v.exams));
+    const official = computeFinalGpa(
+      [...sm.values()].map((v) => ({ ...aggregate(v.exams), isFourth: v.isFourth })),
+      overall.percentage
+    );
     rankEntries.push({
       studentId: st.studentId,
       roll: st.roll,
       name: st.name,
       percentage: overall.percentage,
       totalObtained: overall.obtained,
-      gpa: overall.gpa,
+      gpa: official.gpa,
       photoKey: st.photoKey,
       section: st.section,
     });
@@ -419,6 +426,13 @@ export async function buildMonthlyClassSummary(
     const sm = data.byStudent.get(st.studentId);
     if (!sm || sm.size === 0) continue;
     const overall = aggregate([...sm.values()].flatMap((v) => v.exams));
+    // THE official GPA (same formula as the monthly report card) — the
+    // merit list previously showed a percentage->grade GPA, so a student
+    // with one compulsory fail showed GPA 4.00 here and 0.00 on the card.
+    const official = computeFinalGpa(
+      [...sm.values()].map((v) => ({ ...aggregate(v.exams), isFourth: v.isFourth })),
+      overall.percentage
+    );
     const bySubjectPct = new Map<number, number>();
     for (const [sid, v] of sm) {
       bySubjectPct.set(sid, aggregate(v.exams).percentage);
@@ -432,8 +446,8 @@ export async function buildMonthlyClassSummary(
       percentage: overall.percentage,
       totalObtained: overall.obtained,
       totalMarks: overall.totalMarks,
-      gpa: overall.gpa,
-      grade: overall.grade,
+      gpa: official.gpa,
+      grade: official.grade,
       position: 0,
       bySubjectPct,
     };
@@ -444,7 +458,7 @@ export async function buildMonthlyClassSummary(
       name: st.name,
       percentage: overall.percentage,
       totalObtained: overall.obtained,
-      gpa: overall.gpa,
+      gpa: official.gpa,
       photoKey: st.photoKey,
       section: st.section,
     });

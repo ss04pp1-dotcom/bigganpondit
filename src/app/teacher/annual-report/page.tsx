@@ -26,6 +26,7 @@ import {
   divisionLabel,
   fmtGpa,
   fmtPct,
+  gradeFromPercentage,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -83,21 +84,52 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
     cur.obtained += r.obtained;
     bySub.set(r.subjectId, cur);
   }
+
+  // REAL per-subject class highest (published marks, whole class) — was
+  // previously fabricated as the subject's full marks.
+  const classHighestBySubject = new Map<number, number>();
+  {
+    const classRow = await db
+      .prepare("SELECT id FROM classes WHERE name = ?")
+      .bind(className)
+      .first<{ id: number }>()
+      .catch(() => null);
+    if (classRow?.id) {
+      const rows = (
+        (await db
+          .prepare(
+            `SELECT m.student_id, e.subject_id, SUM(m.obtained_marks) as obtained_marks
+             FROM marks m JOIN exams e ON e.id = m.exam_id JOIN students st ON st.id = m.student_id
+             WHERE st.class_id = ? AND e.year = ? AND COALESCE(e.is_published, 0) = 1
+             GROUP BY m.student_id, e.subject_id`
+          )
+          .bind(classRow.id, year)
+          .all<{ student_id: number; subject_id: number; obtained_marks: number }>()
+          .catch(() => null))?.results
+      ) ?? [];
+      for (const r of rows) {
+        const cur = classHighestBySubject.get(r.subject_id) ?? -1;
+        const ob = Number(r.obtained_marks) || 0;
+        if (ob > cur) classHighestBySubject.set(r.subject_id, ob);
+      }
+    }
+  }
+
   const officialSubjects = [...bySub.entries()].map(([subId, s]) => {
     const t = teacherMap.get(subId);
     const pct = s.total > 0 ? (s.obtained / s.total) * 100 : 0;
-    const gpa = pct >= 80 ? 5.0 : pct >= 70 ? 4.0 : pct >= 60 ? 3.5 : pct >= 50 ? 3.0 : pct >= 40 ? 2.0 : pct >= 33 ? 1.0 : 0.0;
-    const grade = pct >= 80 ? "A+" : pct >= 70 ? "A" : pct >= 60 ? "A-" : pct >= 50 ? "B" : pct >= 40 ? "C" : pct >= 33 ? "D" : "F";
+    // single source of truth for the grade scale (was a duplicated inline table)
+    const g = gradeFromPercentage(pct);
     return {
       subjectId: subId,
       subjectName: s.name,
       teacherName: t?.name ?? user.name,
       teacherShortName: t?.shortName ?? user.shortName,
       totalMarks: s.total,
-      classHighest: s.total,
+      classHighest: classHighestBySubject.get(subId) ?? s.obtained,
       obtained: s.obtained,
-      grade,
-      gpa,
+      grade: g.grade,
+      gpa: g.gpa,
       isFourth: s.isFourth,
     };
   });

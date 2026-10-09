@@ -42,14 +42,16 @@ export async function GET(req: Request) {
     // Teachers: only students of classes they teach (server-side enforced).
     if (user.role === "TEACHER" && user.teacherId) {
       const allowedClasses = await getTeacherClasses(db, user.teacherId);
-      // If teacher has assigned classes, enforce them; if unassigned, allow browsing
-      if (allowedClasses.length > 0) {
-        if (className && !allowedClasses.includes(className)) {
-          throw new ApiError(403, MSG.noPermissionView);
-        }
-        clauses.push(`c.name IN (${allowedClasses.map(() => "?").join(",")})`);
-        params.push(...allowedClasses);
+      // Fail-closed: a teacher with NO assigned classes must not browse every
+      // student's PII (phones, addresses, guardian info) school-wide.
+      if (allowedClasses.length === 0) {
+        return ok({ students: [] });
       }
+      if (className && !allowedClasses.includes(className)) {
+        throw new ApiError(403, MSG.noPermissionView);
+      }
+      clauses.push(`c.name IN (${allowedClasses.map(() => "?").join(",")})`);
+      params.push(...allowedClasses);
     }
 
     if (className && /^(6|7|8|9|10)$/.test(className)) {

@@ -281,20 +281,25 @@ export function OfficialResultCard({
   let totalAbsenceCount = 0;
   let totalFails = 0;
   for (const s of subjects) {
-    const att = s.attendance || (s.obtained === 0 && s.grade === "F" ? "A1" : "P");
+    // SECURITY/DATA: never infer "absent" from a 0 mark — a PRESENT student
+    // who legitimately scored 0 was previously fabricated as absent (A1) and
+    // fined 20৳. Missing attendance data simply defaults to PRESENT.
+    const att = s.attendance || "P";
     if (att.startsWith("A")) {
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    if (s.grade === "F" && !s.isFourth) {
+    // Absent subjects already incur the absence fine — do NOT also charge the
+    // fail fine for the same missed exam (was 20 + 50 = 70৳ per absence).
+    if (s.grade === "F" && !s.isFourth && !att.startsWith("A")) {
       totalFails++;
     }
   }
 
   const calculatedFine = totalAbsenceCount * 20 + totalFails * 50;
-  const fineDisplay = fine !== undefined && fine !== null && fine !== "০০/-"
-    ? fine
-    : `${calculatedFine}.00৳`;
+  // "০০/-" means "explicitly zero fine" (annual cards) — display it as-is,
+  // never treat it as a trigger to auto-compute a fabricated fine.
+  const fineDisplay = fine !== undefined && fine !== null ? fine : `${calculatedFine}.00৳`;
 
   /* ---------- টেবিল সারি তৈরি (শিক্ষক-গ্রুপ → গ্যাপ → ফাঁকা সারি) ---------- */
   const groups: { name: string; short: string; subs: OfficialSubjectRow[] }[] = [];
@@ -552,8 +557,8 @@ export function OfficialResultCard({
           <div className="rc-page" style={pageStyle}>
             {/* বাম প্যানেল */}
             <div className="rc-panel rc-pl" style={getPanelBg("LEFT")}>
-              <CommentBox cls="rc-b1" title="শিক্ষকের মন্তব্য (MH):" text={teacherComments?.comment1 || "আরো ভালো করা উচিত ছিল"} date={dateMH} sig="MH" />
-              <CommentBox cls="rc-b2" title="শিক্ষকের মন্তব্য (RI):" text={teacherComments?.comment2 || "পরীক্ষায় অনুপস্থিত থাকা অন্যায়"} date={dateRI} sig="RI" />
+              <CommentBox cls="rc-b1" title="শিক্ষকের মন্তব্য (MH):" text={teacherComments?.comment1} date={dateMH} sig="MH" />
+              <CommentBox cls="rc-b2" title="শিক্ষকের মন্তব্য (RI):" text={teacherComments?.comment2} date={dateRI} sig="RI" />
               <CommentBox cls="rc-b3" title="অভিভাবকের মন্তব্য:" text={teacherComments?.guardianComment} />
               
               <div className="rc-pill rc-qleft">
@@ -801,7 +806,7 @@ export function OfficialResultCard({
                       : 19;
                     const sFs = Math.min(sub.subjectName.length > 18 ? 15 : sub.subjectName.length > 14 ? 18 : 22, Math.floor(rowH * 0.55));
                     const nFs = Math.min(19, Math.floor(rowH * 0.5));
-                    const att = sub.attendance || (sub.obtained === 0 && sub.grade === "F" ? "A1" : "P");
+                    const att = sub.attendance || "P";
 
                     return (
                       <tr key={`s${sub.subjectId}-${idx}`} style={{ height: rowH }}>

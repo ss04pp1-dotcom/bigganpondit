@@ -104,6 +104,11 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const activeRenderTaskRef = useRef<{ cancel: () => void; promise: Promise<void> } | null>(null);
   const initialFitDoneRef = useRef<boolean>(false);
+  // Holds the currently-loaded pdf.js document for cleanup. The old cleanup
+  // read the `pdfDoc` STATE from a stale closure (null at effect-run time),
+  // so the document was NEVER destroyed — every book open/switch leaked a
+  // full pdf.js document (worker + internal page caches).
+  const loadedDocRef = useRef<{ destroy?: () => void } | null>(null);
 
   // Function to calculate fit-width scale based on current container width
   const calculateFitWidthZoom = useCallback((pageWidth: number) => {
@@ -174,8 +179,12 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         });
 
         const doc = await loadingTask.promise;
-        if (!isMounted) return;
-
+        if (!isMounted) {
+          // component unmounted while loading — destroy immediately
+          doc.destroy?.();
+          return;
+        }
+        loadedDocRef.current = doc;
         setPdfDoc(doc);
         setNumPages(doc.numPages);
         setCurrentPage(1);
@@ -216,9 +225,11 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
           // ignore
         }
       }
-      if (pdfDoc && pdfDoc.destroy) {
+      const doc = loadedDocRef.current;
+      if (doc && doc.destroy) {
+        loadedDocRef.current = null;
         try {
-          pdfDoc.destroy();
+          doc.destroy();
         } catch {
           // ignore
         }

@@ -3,6 +3,7 @@
 
 import { z } from "zod";
 import { ApiError } from "@/lib/api";
+import { BD_PHONE_RE, toEnDigits } from "@/lib/constants";
 
 export const loginSchema = z.object({
   username: z.string().trim().min(1, "ইউজারনেম লিখুন।"),
@@ -35,7 +36,18 @@ export const studentCreateSchema = z.object({
   guardianOccupation: z.string().trim().max(100).nullish(),
   guardianRelation: z.string().trim().max(100).nullish(),
   schoolName: z.string().trim().max(150).nullish(),
-  phone: z.string().trim().max(30).nullish(),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    // Normalize Bengali numerals, then enforce a real BD mobile number so
+    // the SMS gateway never silently drops a whole family's notifications.
+    .transform((v) => toEnDigits(v).replace(/[\s-]/g, ""))
+    .refine(
+      (v) => v === "" || BD_PHONE_RE.test(v),
+      "বৈধ বাংলাদেশি মোবাইল নম্বর দিন (যেমন ০১৭১২৩৪৫৬৭৮)।"
+    )
+    .nullish(),
   address: z.string().trim().max(200).nullish(),
   bloodGroup: z.string().trim().max(10).nullish(),
   dob: z.string().trim().max(30).nullish(),
@@ -117,12 +129,50 @@ export const subjectUpdateSchema = subjectCreateSchema.partial();
 
 export const settingsUpdateSchema = z.object({
   academyName: z.string().trim().min(1, "একাডেমির নাম লিখুন।").max(100).optional(),
-  academyLogoKey: z.string().nullable().optional(),
-  cardBgUrl: z.string().nullable().optional(),
-  cardCoverBgUrl: z.string().nullable().optional(),
+  // Logo keys must point at the exact prefixes where uploads store them.
+  // Without this, a DIRECTOR could point the public /api/logo endpoint (or
+  // public /api/files branding branches) at ANY R2 object, e.g. an admin-only
+  // backup file containing every user's password hash.
+  academyLogoKey: z
+    .string()
+    .regex(/^academy\/logos\/[A-Za-z0-9._-]+$/, "লোগো কী অবৈধ।")
+    .or(z.literal(""))
+    .nullable()
+    .optional(),
+  cardBgUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (v) =>
+        v === "" ||
+        /^\/api\/files\/academy\/[A-Za-z0-9._/-]+$/.test(v) ||
+        /^https?:\/\/\S+$/i.test(v),
+      "কার্ড ব্যাকগ্রাউন্ড অবৈধ।"
+    )
+    .nullable()
+    .optional(),
+  cardCoverBgUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (v) =>
+        v === "" ||
+        /^\/api\/files\/academy\/[A-Za-z0-9._/-]+$/.test(v) ||
+        /^https?:\/\/\S+$/i.test(v),
+      "কার্ড ব্যাকগ্রাউন্ড অবৈধ।"
+    )
+    .nullable()
+    .optional(),
   publicationName: z.string().trim().max(120).optional(),
   publicationDescription: z.string().trim().max(1000).optional(),
-  publicationLogoKey: z.string().nullable().optional(),
+  publicationLogoKey: z
+    .string()
+    .regex(/^academy\/publication\/[A-Za-z0-9._-]+$/, "প্রকাশনী লোগো কী অবৈধ।")
+    .or(z.literal(""))
+    .nullable()
+    .optional(),
 });
 
 export const backupActionSchema = z.object({

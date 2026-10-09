@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
-  Fingerprint,
   CheckCircle2,
   Lock,
   Eye,
@@ -13,7 +12,6 @@ import {
   Loader2,
   RefreshCw,
   AlertCircle,
-  X,
   KeyRound,
   Sparkles,
 } from "lucide-react";
@@ -38,13 +36,23 @@ interface BiometricPasswordDialogProps {
   } | null;
 }
 
+/**
+ * Admin password-reveal dialog.
+ *
+ * SECURITY NOTE: the old version faked "fingerprint verification" with a
+ * 650ms spinner plus a device-capability probe — no real verification ever
+ * happened. Revealing a student password now requires re-entering the
+ * ADMIN's own password, which the server verifies (with its own attempt
+ * limit) before returning anything.
+ */
 export function BiometricPasswordDialog({
   open,
   onOpenChange,
   student,
 }: BiometricPasswordDialogProps) {
   const { toast } = useToast();
-  const [scanState, setScanState] = useState<"IDLE" | "SCANNING" | "VERIFIED" | "ERROR">("IDLE");
+  const [authState, setAuthState] = useState<"IDLE" | "VERIFYING" | "VERIFIED" | "ERROR">("IDLE");
+  const [adminPassword, setAdminPassword] = useState("");
   const [password, setPassword] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -59,7 +67,8 @@ export function BiometricPasswordDialog({
   // Reset state whenever modal opens
   useEffect(() => {
     if (open) {
-      setScanState("IDLE");
+      setAuthState("IDLE");
+      setAdminPassword("");
       setPassword(null);
       setShowPassword(false);
       setCopied(false);
@@ -69,38 +78,22 @@ export function BiometricPasswordDialog({
     }
   }, [open, student?.id]);
 
-  async function triggerBiometricVerification() {
+  async function handleReveal() {
     if (!student) return;
+    if (!adminPassword) {
+      setErrorMsg("পাসওয়ার্ড দেখতে প্রথমে আপনার (অ্যাডমিনের) নিজের পাসওয়ার্ড লিখুন।");
+      setAuthState("ERROR");
+      return;
+    }
     setErrorMsg(null);
-    setScanState("SCANNING");
+    setAuthState("VERIFYING");
+    setLoading(true);
 
     try {
-      // 1) Attempt native WebAuthn user verification if supported on device
-      let nativeVerified = false;
-      if (typeof window !== "undefined" && window.PublicKeyCredential) {
-        try {
-          // Check if platform authenticator is available
-          const hasAuth = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().catch(() => false);
-          if (hasAuth) {
-            // Optional native credential challenge
-            // We simulate smooth device verification alongside platform check
-            await new Promise((r) => setTimeout(r, 650));
-            nativeVerified = true;
-          }
-        } catch {
-          // Fall back gracefully to touch biometric simulation
-        }
-      }
-
-      // If no native or fallback: simulate high-precision biometric scan delay for realistic tactile feel
-      if (!nativeVerified) {
-        await new Promise((r) => setTimeout(r, 950));
-      }
-
-      // 2) Fetch student password securely from admin-only API
       const res = await fetch(`/api/admin/students/${student.id}/reveal-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminPassword }),
       });
 
       const data = await res.json();
@@ -108,29 +101,31 @@ export function BiometricPasswordDialog({
         throw new Error(data.error || "পাসওয়ার্ড দেখা সম্ভব হয়নি। শুধুমাত্র অ্যাডমিন অনুমতিপ্রাপ্ত।");
       }
 
-      setScanState("VERIFIED");
+      setAdminPassword("");
       // SECURITY: never fabricate a fallback password — show a clear message
       // when no stored password is available (e.g. after OTP reset).
       if (data.passwordAvailable && data.password) {
         setPassword(data.password);
+        setAuthState("VERIFIED");
+        toast({
+          title: "পরিচয় যাচাই সম্পন্ন",
+          description: `${student.name}-এর পাসওয়ার্ড উন্মুক্ত করা হয়েছে।`,
+        });
       } else {
         setPassword("");
         setErrorMsg("এই শিক্ষার্থীর পাসওয়ার্ড পুনরুদ্ধার করা যাচ্ছে না (রিসেট হয়ে থাকতে পারে)। নতুন পাসওয়ার্ড সেট করুন।");
-        setScanState("ERROR");
-        return;
+        setAuthState("ERROR");
       }
-      toast({
-        title: "ফিঙ্গারপ্রিন্ট সফলভাবে যাচাই হয়েছে! 🔐",
-        description: `${student.name}-এর পাসওয়ার্ড উন্মুক্ত করা হয়েছে।`,
-      });
     } catch (err: any) {
-      setScanState("ERROR");
-      setErrorMsg(err?.message || "বায়োমেট্রিক যাচাই ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
+      setAuthState("ERROR");
+      setErrorMsg(err?.message || "যাচাই ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
       toast({
         title: "যাচাই ব্যর্থ",
-        description: err?.message || "ফিঙ্গারপ্রিন্ট পুনরায় স্পর্শ করুন।",
+        description: err?.message,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -169,7 +164,7 @@ export function BiometricPasswordDialog({
       setNewPassword("");
       toast({
         title: "পাসওয়ার্ড সফলভাবে আপডেট হয়েছে! 🎉",
-        description: `শিক্ষার্থী এখন এই নতুন পাসওয়ার্ড দিয়ে লগইন করতে পারবে।`,
+        description: `শিক্ষার্থী এখন এই নতুন পাসওয়ার্ড দিয়ে লগইন করতে পারবে। পুরোনো সেশনগুলো বাতিল করা হয়েছে।`,
       });
     } catch (err: any) {
       toast({
@@ -193,7 +188,7 @@ export function BiometricPasswordDialog({
             <StudentAvatar photoKey={student.photo_key} name={student.name} size="lg" />
             <div className="min-w-0">
               <div className="inline-flex items-center gap-1 rounded-md bg-indigo-500/20 px-2 py-0.5 text-[10px] font-bold text-indigo-300 border border-indigo-400/30">
-                <ShieldCheck className="h-3 w-3" /> অ্যাডমিন বায়োমেট্রিক সিকিউরিটি
+                <ShieldCheck className="h-3 w-3" /> অ্যাডমিন ভেরিফিকেশন প্রয়োজন
               </div>
               <DialogTitle className="text-base font-bold text-white mt-1 truncate">
                 {student.name}
@@ -206,89 +201,68 @@ export function BiometricPasswordDialog({
         </div>
 
         <div className="p-5 space-y-4">
-          {/* যদি এখনও পাসওয়ার্ড দেখা না হয়ে থাকে -> ফিঙ্গারপ্রিন্ট স্ক্যানার UI */}
-          {scanState !== "VERIFIED" && (
-            <div className="flex flex-col items-center justify-center py-4 text-center">
-              {/* ইন্টারেক্টিভ ফিঙ্গারপ্রিন্ট সেন্সর প্যাড */}
-              <button
-                type="button"
-                onClick={triggerBiometricVerification}
-                disabled={scanState === "SCANNING"}
-                className={cn(
-                  "relative group flex h-28 w-28 items-center justify-center rounded-3xl transition-all duration-300 shadow-md",
-                  scanState === "IDLE" &&
-                    "bg-gradient-to-b from-indigo-50 to-indigo-100/70 border-2 border-indigo-300 hover:border-indigo-500 hover:scale-105 active:scale-95",
-                  scanState === "SCANNING" &&
-                    "bg-indigo-900 border-2 border-indigo-400 animate-pulse",
-                  scanState === "ERROR" &&
-                    "bg-rose-50 border-2 border-rose-400"
-                )}
-                title="ফিঙ্গারপ্রিন্ট যাচাই করতে স্পর্শ করুন"
-              >
-                {/* পালসিং অ্যানিমেশন রিং */}
-                {scanState === "SCANNING" && (
-                  <span className="absolute inset-0 rounded-3xl bg-indigo-500 opacity-25 animate-ping" />
-                )}
-
-                {/* ফিঙ্গারপ্রিন্ট আইকন */}
-                <Fingerprint
-                  className={cn(
-                    "h-14 w-14 transition-colors",
-                    scanState === "IDLE" && "text-indigo-600 group-hover:text-indigo-700",
-                    scanState === "SCANNING" && "text-cyan-300",
-                    scanState === "ERROR" && "text-rose-500"
-                  )}
-                />
-
-                {/* লেজার স্ক্যানিং এফেক্ট (স্ক্যান চলাকালীন) */}
-                {scanState === "SCANNING" && (
-                  <div className="absolute inset-x-2 top-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_8px_#22d3ee] animate-bounce" />
-                )}
-              </button>
-
-              <div className="mt-4 space-y-1">
-                <p className="text-sm font-bold text-slate-800">
-                  {scanState === "IDLE" && "ফিঙ্গারপ্রিন্ট স্পর্শ করুন"}
-                  {scanState === "SCANNING" && "বায়োমেট্রিক ফিঙ্গারপ্রিন্ট যাচাই হচ্ছে..."}
-                  {scanState === "ERROR" && "যাচাই ব্যর্থ হয়েছে"}
-                </p>
-                <p className="text-xs text-slate-500 max-w-xs">
-                  {scanState === "IDLE" &&
-                    "শিক্ষার্থীর পাসওয়ার্ড সুরক্ষার স্বার্থে শুধুমাত্র অনুমোদিত এডমিনের ফিঙ্গারপ্রিন্ট দিয়ে দেখা যাবে।"}
-                  {scanState === "SCANNING" &&
-                    "দয়া করে আঙুল ধরে রাখুন, সেন্সর স্ক্যান প্রক্রিয়া সম্পন্ন করছে..."}
-                  {scanState === "ERROR" && (errorMsg || "পুনরায় বাটনে ক্লিক করে স্পর্শ করুন।")}
-                </p>
+          {/* এখনও যাচাই হয়নি -> অ্যাডমিন পাসওয়ার্ড যাচাই ফর্ম */}
+          {authState !== "VERIFIED" && (
+            <div className="flex flex-col items-center justify-center py-2 text-center">
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-indigo-200 bg-indigo-50">
+                <Lock className={cn("h-7 w-7", authState === "ERROR" ? "text-rose-500" : "text-indigo-600")} />
               </div>
 
-              <div className="mt-4 w-full">
+              <p className="text-sm font-bold text-slate-800">
+                {authState === "ERROR" ? "যাচাই ব্যর্থ হয়েছে" : "অ্যাডমিন পাসওয়ার্ড দিন"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 max-w-xs">
+                {authState === "ERROR" && errorMsg
+                  ? errorMsg
+                  : "শিক্ষার্থীর পাসওয়ার্ড দেখার আগে আপনার (অ্যাডমিনের) নিজের পাসওয়ার্ড দিয়ে পরিচয় যাচাই করতে হবে।"}
+              </p>
+
+              <form
+                className="mt-4 w-full space-y-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!loading) handleReveal();
+                }}
+              >
+                <Input
+                  type="password"
+                  placeholder="আপনার (অ্যাডমিন) পাসওয়ার্ড"
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    if (authState === "ERROR") setAuthState("IDLE");
+                  }}
+                  autoComplete="current-password"
+                  className="h-10 text-xs bg-white border-slate-300"
+                  disabled={loading}
+                />
                 <Button
-                  onClick={triggerBiometricVerification}
-                  disabled={scanState === "SCANNING"}
+                  type="submit"
+                  disabled={loading}
                   className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs font-semibold text-xs h-10"
                 >
-                  {scanState === "SCANNING" ? (
+                  {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       যাচাই হচ্ছে...
                     </>
                   ) : (
                     <>
-                      <Fingerprint className="h-4 w-4" />
-                      ফিঙ্গার দিয়ে পাসওয়ার্ড দেখুন
+                      <KeyRound className="h-4 w-4" />
+                      যাচাই করে পাসওয়ার্ড দেখুন
                     </>
                   )}
                 </Button>
-              </div>
+              </form>
             </div>
           )}
 
-          {/* ফিঙ্গারপ্রিন্ট যাচাই সফল হলে -> পাসওয়ার্ড প্রদর্শন বক্স */}
-          {scanState === "VERIFIED" && password && (
+          {/* যাচাই সফল -> পাসওয়ার্ড প্রদর্শন বক্স */}
+          {authState === "VERIFIED" && password && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs text-emerald-800 font-medium">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span>ফিঙ্গারপ্রিন্ট সফলভাবে যাচাই করা হয়েছে।</span>
+                <span>অ্যাডমিন পরিচয় সফলভাবে যাচাই করা হয়েছে।</span>
               </div>
 
               {/* পাসওয়ার্ড বক্স */}

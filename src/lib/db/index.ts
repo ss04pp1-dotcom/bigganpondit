@@ -16,6 +16,23 @@ const g = globalThis as unknown as {
 };
 
 /**
+ * Run one idempotent schema step. Expected errors on existing databases
+ * ("duplicate column name", "already exists", "no such column" for renames)
+ * are ignored; ANY other error is logged loudly. Previously every step
+ * swallowed ALL errors, so a half-applied schema (read-only DB, quota,
+ * drift) was indistinguishable from the expected case.
+ */
+async function execSchemaStep(db: D1Database, sql: string, label: string): Promise<void> {
+  try {
+    await db.exec(sql);
+  } catch (err) {
+    const msg = String((err as Error | { message?: string })?.message ?? err);
+    if (/duplicate column name|already exists|no such column/i.test(msg)) return;
+    console.error(`[bootstrap] ${label} failed (unexpected schema error):`, err);
+  }
+}
+
+/**
  * Single-flight database access. The init promise is assigned synchronously,
  * so concurrent requests always share ONE bootstrap run (no races).
  */
@@ -26,26 +43,20 @@ export function getDb(): Promise<D1Database> {
       let db: D1Database;
       if (cf?.DB) {
         db = cf.DB as unknown as D1Database;
+      } else if (cf) {
+        // We are in the Workers environment but the D1 binding is MISSING.
+        // FAIL FAST: the old code silently substituted a fake stub database
+        // whose run() always returned success:true — the site booted and
+        // rendered normally while every write was discarded (admins saved
+        // settings that never persisted, logins "failed" misleadingly).
+        throw new Error(
+          "D1 ডেটাবেস বাইন্ডিং পাওয়া যায়নি — wrangler.toml-এ d1_databases বাইন্ডিং (DB) যাচাই করুন।"
+        );
       } else {
         try {
           db = await getLocalD1();
-        } catch {
-          console.error("Neither Cloudflare D1 nor local SQLite is available.");
-          db = {
-            prepare: () => ({
-              bind: () => ({
-                first: async () => null,
-                all: async () => ({ results: [], success: true, meta: {} }),
-                run: async () => ({ success: true, meta: {} }),
-              }),
-              first: async () => null,
-              all: async () => ({ results: [], success: true, meta: {} }),
-              run: async () => ({ success: true, meta: {} }),
-            }),
-            batch: async () => [],
-            exec: async () => ({ count: 0, duration: 0 }),
-            dump: async () => new ArrayBuffer(0),
-          } as unknown as D1Database;
+        } catch (err) {
+          throw new Error(`কোনো ডেটাবেস উপলব্ধ নয় (local SQLite চালু করা যায়নি): ${String(err)}`);
         }
       }
       g.__academyDb = db;
@@ -61,12 +72,8 @@ export function getDb(): Promise<D1Database> {
 }
 
 async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void> {
-  try {
-    // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
-    await db.exec(SCHEMA_SQL);
-  } catch (err) {
-    console.warn("Schema execution notice:", err);
-  }
+  // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
+  await execSchemaStep(db, SCHEMA_SQL, "schema");
 
   // Ensure new student profile columns exist in existing databases
   const newCols = [
@@ -79,54 +86,73 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     "dob TEXT",
   ];
   for (const col of newCols) {
-    try {
-      await db.exec(`ALTER TABLE students ADD COLUMN ${col};`);
-    } catch {
-      // Column already exists
-    }
+    await execSchemaStep(db, `ALTER TABLE students ADD COLUMN ${col};`, `students.${col.split(" ")[0]}`);
   }
 
   // Ensure teacher photo_key column exists in existing databases
-  try {
-    await db.exec("ALTER TABLE teachers ADD COLUMN photo_key TEXT;");
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, "ALTER TABLE teachers ADD COLUMN photo_key TEXT;", "teachers.photo_key");
 
   // Ensure exams exam_type column exists in existing databases
-  try {
-    await db.exec("ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY';");
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, "ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY';", "exams.exam_type");
 
   // Ensure exams is_published column exists (0 = draft/unpublished, 1 = published by admin)
-  try {
-    await db.exec("ALTER TABLE exams ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0;");
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, "ALTER TABLE exams ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0;", "exams.is_published");
 
   // Ensure composite performance indexes exist
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
       CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
-    `);
-  } catch {
-    // Indexes already exist
-  }
+    `,
+    "performance indexes"
+  );
 
   // Ensure storage_files table exists for fallback file persistence
-  try {
-    await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
-  } catch {
-    // Already exists
-  }
+  await execSchemaStep(
+    db,
+    "CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);",
+    "storage_files"
+  );
+
+  // D1 chunked-blob fallback (canonical column name: chunk_index — matches
+  // migration 0010). Legacy bootstrap-created tables used chunk_idx; converge
+  // them so backup/restore and the storage layer agree on one shape.
+  await execSchemaStep(
+    db,
+    `CREATE TABLE IF NOT EXISTS storage_chunks (
+      key         TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      data        TEXT NOT NULL,
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (key, chunk_index)
+    );
+    CREATE INDEX IF NOT EXISTS idx_storage_chunks_key ON storage_chunks(key);`,
+    "storage_chunks"
+  );
+  await execSchemaStep(
+    db,
+    "ALTER TABLE storage_chunks RENAME COLUMN chunk_idx TO chunk_index;",
+    "storage_chunks rename legacy column"
+  );
+
+  // Durable rate limiting (login brute-force + OTP attempt caps)
+  await execSchemaStep(
+    db,
+    `CREATE TABLE IF NOT EXISTS login_attempts (
+      key          TEXT PRIMARY KEY,
+      count        INTEGER NOT NULL DEFAULT 0,
+      window_start TEXT NOT NULL DEFAULT (datetime('now')),
+      locked_until TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);`,
+    "login_attempts"
+  );
 
   // Ensure WebAuthn biometric tables exist
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS webauthn_credentials (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -145,14 +171,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_webauthn_cred_user ON webauthn_credentials(user_id);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "webauthn tables"
+  );
 
   // Ensure student_requests table exists for teacher submission & admin approval flow
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS student_requests (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         teacher_id    INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
@@ -180,13 +206,13 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       );
       CREATE INDEX IF NOT EXISTS idx_student_req_status ON student_requests(status);
       CREATE INDEX IF NOT EXISTS idx_student_req_teacher ON student_requests(teacher_id);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "student_requests"
+  );
   // Ensure password_resets table exists for Resend email recovery
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS password_resets (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -198,14 +224,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       );
       CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON password_resets(user_id);
       CREATE INDEX IF NOT EXISTS idx_pwd_reset_expires ON password_resets(expires_at);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "password_resets"
+  );
 
   // Ensure password_change_requests table exists for Teacher/Student request -> Admin approval workflow
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS password_change_requests (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -221,14 +247,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       );
       CREATE INDEX IF NOT EXISTS idx_pwd_change_user ON password_change_requests(user_id);
       CREATE INDEX IF NOT EXISTS idx_pwd_change_status ON password_change_requests(status);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "password_change_requests"
+  );
 
   // Directors table
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS directors (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id         INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -236,16 +262,17 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         photo_key       TEXT,
         signature_key   TEXT,
         remarks         TEXT,
-        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT
       );
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "directors"
+  );
 
   // Notices table
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS notices (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         title           TEXT NOT NULL,
@@ -259,14 +286,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         approved_at     TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_notices_status ON notices(status);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "notices"
+  );
 
   // Notebooks table
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS notebooks (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         title           TEXT NOT NULL,
@@ -280,14 +307,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         description     TEXT,
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
       );
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "notebooks"
+  );
 
   // Attendance table
-  try {
-    await db.exec(`
+  await execSchemaStep(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS attendance (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
@@ -301,61 +328,56 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       );
       CREATE INDEX IF NOT EXISTS idx_att_date ON attendance(date);
       CREATE INDEX IF NOT EXISTS idx_att_class_date ON attendance(class_id, date);
-    `);
-  } catch {
-    // Already exists
-  }
+    `,
+    "attendance"
+  );
 
-  try {
-    await db.exec(`ALTER TABLE students ADD COLUMN hide_photo_from_students INTEGER NOT NULL DEFAULT 0;`);
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN hide_photo_from_students INTEGER NOT NULL DEFAULT 0;`, "students.hide_photo_from_students");
 
-  try {
-    await db.exec(`ALTER TABLE students ADD COLUMN raw_password TEXT;`);
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN raw_password TEXT;`, "students.raw_password");
 
-  try {
-    await db.exec(`ALTER TABLE student_requests ADD COLUMN raw_password TEXT;`);
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN raw_password TEXT;`, "student_requests.raw_password");
 
   // SECURITY FIX: no cold-start backfill of raw_password with a default value.
   // If a student's password was set through a flow that does not mirror it
   // (OTP reset / admin-approved change), the admin reveal endpoint must NOT
   // display a fabricated password — it returns "not available" instead.
 
-  try {
-    await db.exec(`ALTER TABLE notebooks ADD COLUMN download_allowed INTEGER NOT NULL DEFAULT 0;`);
-  } catch {
-    // Column already exists
-  }
+  await execSchemaStep(db, `ALTER TABLE notebooks ADD COLUMN download_allowed INTEGER NOT NULL DEFAULT 0;`, "notebooks.download_allowed");
 
   // Parent & Guardian occupation and relationship columns
-  try { await db.exec(`ALTER TABLE students ADD COLUMN father_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE students ADD COLUMN mother_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_name TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_relation TEXT;`); } catch {}
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN father_occupation TEXT;`, "students.father_occupation");
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN mother_occupation TEXT;`, "students.mother_occupation");
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN guardian_name TEXT;`, "students.guardian_name");
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN guardian_occupation TEXT;`, "students.guardian_occupation");
+  await execSchemaStep(db, `ALTER TABLE students ADD COLUMN guardian_relation TEXT;`, "students.guardian_relation");
 
-  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN father_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN mother_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_name TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_occupation TEXT;`); } catch {}
-  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_relation TEXT;`); } catch {}
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN father_occupation TEXT;`, "student_requests.father_occupation");
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN mother_occupation TEXT;`, "student_requests.mother_occupation");
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN guardian_name TEXT;`, "student_requests.guardian_name");
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN guardian_occupation TEXT;`, "student_requests.guardian_occupation");
+  await execSchemaStep(db, `ALTER TABLE student_requests ADD COLUMN guardian_relation TEXT;`, "student_requests.guardian_relation");
+
+  await execSchemaStep(db, `ALTER TABLE directors ADD COLUMN updated_at TEXT;`, "directors.updated_at");
 
   try {
     // 2) seed (idempotent); initial admin comes from environment variables.
     // Demo teachers/students/exams are opt-in via SEED_DEMO_DATA=1 (local dev
     // only) — production databases must never receive known-credential accounts.
     const env = cf ?? localEnv();
+    const isWorkers = !!cf;
+    const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;
+    if (isWorkers && !adminPasswordEnv) {
+      // SECURITY: in Workers, no ADMIN_PASSWORD secret means NO initial admin
+      // (never the documented default admin/admin123).
+      console.error(
+        "[seed] ADMIN_PASSWORD secret is not set — skipping initial admin creation. " +
+          "Set it with `wrangler secret put ADMIN_PASSWORD` (and ADMIN_USERNAME if customized), then reload."
+      );
+    }
     await seedDatabase(db, {
       adminUsername: String(env.ADMIN_USERNAME ?? "admin"),
-      adminPassword: String(env.ADMIN_PASSWORD ?? "admin123"),
+      adminPassword: isWorkers ? adminPasswordEnv : (adminPasswordEnv ?? "admin123"),
       seedDemo: String((env as Record<string, unknown>).SEED_DEMO_DATA ?? "") === "1",
     });
   } catch (err) {

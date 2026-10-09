@@ -16,7 +16,11 @@ export interface StoredObject {
 }
 
 export interface StorageBucket {
-  put(key: string, data: Uint8Array): Promise<void>;
+  // Returns true when the object was durably persisted to at least one of
+  // R2 / D1-fallback / local disk. Callers (e.g. backup creation) must fail
+  // loudly when false — previously put() always "succeeded" and backups could
+  // silently vanish with a missing R2 binding.
+  put(key: string, data: Uint8Array): Promise<boolean>;
   get(key: string): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
 }
@@ -52,16 +56,19 @@ function localSafePath(key: string): string {
   return p;
 }
 
-async function saveToD1(key: string, data: Uint8Array): Promise<void> {
+async function saveToD1(key: string, data: Uint8Array): Promise<boolean> {
   try {
     const db = await getDb();
+    // Canonical schema matches migration 0010 (chunk_index). Legacy
+    // bootstrap-created tables may still use chunk_idx — write with a fallback
+    // so the D1 fallback persists on BOTH database shapes.
     await db.exec(`
       CREATE TABLE IF NOT EXISTS storage_chunks (
         key TEXT,
-        chunk_idx INTEGER,
+        chunk_index INTEGER,
         data TEXT,
         updated_at TEXT,
-        PRIMARY KEY (key, chunk_idx)
+        PRIMARY KEY (key, chunk_index)
       );
     `);
 
@@ -72,24 +79,34 @@ async function saveToD1(key: string, data: Uint8Array): Promise<void> {
     // 300,000 characters per chunk (~225 KB), safely within D1 statement limits
     const chunkSize = 300000;
     const numChunks = Math.ceil(base64.length / chunkSize);
-    const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
 
-    for (let i = 0; i < numChunks; i++) {
-      const slice = base64.slice(i * chunkSize, (i + 1) * chunkSize);
-      stmts.push(
-        db
-          .prepare(
-            "INSERT INTO storage_chunks (key, chunk_idx, data, updated_at) VALUES (?, ?, ?, datetime('now'))"
-          )
-          .bind(key, i, slice)
-      );
-    }
+    const build = (col: string) => {
+      const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+      for (let i = 0; i < numChunks; i++) {
+        const slice = base64.slice(i * chunkSize, (i + 1) * chunkSize);
+        stmts.push(
+          db
+            .prepare(
+              `INSERT INTO storage_chunks (key, ${col}, data, updated_at) VALUES (?, ?, ?, datetime('now'))`
+            )
+            .bind(key, i, slice)
+        );
+      }
+      return stmts;
+    };
 
-    if (stmts.length > 0) {
-      await db.batch(stmts);
+    if (numChunks > 0) {
+      try {
+        await db.batch(build("chunk_index"));
+      } catch {
+        // Legacy table shape (bootstrap-created with chunk_idx)
+        await db.batch(build("chunk_idx"));
+      }
     }
+    return true;
   } catch (err) {
-    console.warn("Storage fallback save to D1 notice:", err);
+    console.warn("Storage fallback save to D1 failed:", err);
+    return false;
   }
 }
 
@@ -158,7 +175,7 @@ export async function getBucket(): Promise<StorageBucket> {
   const mem = g.__academyMemoryStore!;
 
   g.__academyBucket = {
-    async put(key: string, data: Uint8Array): Promise<void> {
+    async put(key: string, data: Uint8Array): Promise<boolean> {
       mem.set(key, data);
 
       let r2Success = false;
@@ -172,18 +189,29 @@ export async function getBucket(): Promise<StorageBucket> {
       }
 
       // Always save to D1 fallback to guarantee persistent availability across workers
+      let d1Success = false;
       if (!r2Success) {
-        await saveToD1(key, data);
+        d1Success = await saveToD1(key, data);
       }
 
       // Local disk for local dev (if filesystem writable)
+      let fsSuccess = false;
       try {
         const p = localSafePath(key);
         fs.mkdirSync(path.dirname(p), { recursive: true });
         fs.writeFileSync(p, data);
+        fsSuccess = true;
       } catch {
         // Read-only filesystem in cloudflare worker, ignore
       }
+
+      const persisted = r2Success || d1Success || fsSuccess;
+      if (!persisted) {
+        throw new Error(
+          "ফাইল সংরক্ষণ করা যায়নি — কোনো স্টোরেজ (R2/D1/local) উপলব্ধ নয়। Storage binding পরীক্ষা করুন।"
+        );
+      }
+      return true;
     },
 
     async get(key: string): Promise<StoredObject | null> {

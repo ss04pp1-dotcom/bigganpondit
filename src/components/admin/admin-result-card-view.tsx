@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Building2,
   Sparkles,
-  Award,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,7 +58,7 @@ interface CardData {
 }
 
 export function AdminResultCardView() {
-  const [mode, setMode] = useState<"MONTHLY" | "ANNUAL" | "MODEL">("MONTHLY");
+  const [mode, setMode] = useState<"MONTHLY" | "ANNUAL">("MONTHLY");
   const [className, setClassName] = useState("10");
   const [division, setDivision] = useState("SCIENCE");
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
@@ -70,11 +71,14 @@ export function AdminResultCardView() {
   const [availableDirectors, setAvailableDirectors] = useState<DirectorOption[]>([]);
   const [selectedDirectorId, setSelectedDirectorId] = useState<number | "BOTH">(1);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [publicationLogoUrl, setPublicationLogoUrl] = useState<string | null>(null);
-  const [publicationName, setPublicationName] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState<string>("বিজ্ঞান পণ্ডিত একাডেমি");
   const [cardBgUrl, setCardBgUrl] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"SHEET" | "BOOKLET" | "ALL">("ALL");
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  // Reset preview index when filters change
+  useEffect(() => {
+    setPreviewIndex(0);
+  }, [mode, className, division, month, year, studentId]);
 
   const requiresDiv = className === "9" || className === "10";
 
@@ -98,8 +102,6 @@ export function AdminResultCardView() {
         setStudentsList(json.studentsList || []);
         setAvailableDirectors(json.availableDirectors || []);
         setLogoUrl(json.logoUrl || null);
-        setPublicationLogoUrl(json.publicationLogoUrl || null);
-        setPublicationName(json.publicationName || null);
         if (json.cardBgUrl !== undefined) setCardBgUrl(json.cardBgUrl);
         if (json.academyName) setAcademyName(json.academyName);
 
@@ -149,18 +151,6 @@ export function AdminResultCardView() {
                 >
                   <FileText className="h-3.5 w-3.5" />
                   <span>মাসিক রেজাল্ট কার্ড</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("MODEL")}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
-                    mode === "MODEL"
-                      ? "bg-white text-purple-700 shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <Award className="h-3.5 w-3.5" />
-                  <span>মডেল টেস্ট</span>
                 </button>
                 <button
                   type="button"
@@ -225,8 +215,8 @@ export function AdminResultCardView() {
               </div>
             )}
 
-            {/* Month (for Monthly and Model Test mode) */}
-            {(mode === "MONTHLY" || mode === "MODEL") && (
+            {/* Month (for Monthly mode) */}
+            {mode === "MONTHLY" && (
               <div className="space-y-1.5">
                 <Label className="text-[12px] font-semibold text-slate-700">মাস</Label>
                 <Select value={month} onValueChange={setMonth}>
@@ -341,52 +331,118 @@ export function AdminResultCardView() {
       )}
 
       {/* Render Cards */}
-      {!loading && cards.length > 0 && (
-        <div className="space-y-8 print:space-y-0 print:m-0 print:p-0">
-          {cards.map((card, idx) => {
-            const isPreviewCard = idx === 0;
-            const isLastCard = idx === cards.length - 1;
+      {!loading && cards.length > 0 && (() => {
+        const safeIndex = Math.min(Math.max(0, previewIndex), Math.max(0, cards.length - 1));
+        const currentCard = cards[safeIndex];
 
-            return (
-              <div
-                key={`card-${card.student.id}-${idx}`}
-                className={
-                  isPreviewCard
-                    ? "mb-8 print:mb-0 print:p-0"
-                    : "rc-print-card-hidden-screen print:block print:mb-0 print:p-0"
-                }
-              >
-                <OfficialResultCard
-                  mode={mode}
-                  month={Number(month)}
-                  year={Number(year)}
-                  student={card.student}
-                  subjects={card.subjects}
-                  overall={card.overall}
-                  position={card.position}
-                  fine={card.fine}
-                  topStudent={card.topStudent}
-                  teacherComments={card.teacherComments}
-                  availableDirectors={availableDirectors}
-                  selectedDirectorId={selectedDirectorId}
-                  onDirectorChange={(newDirId) => setSelectedDirectorId(newDirId)}
-                  logoUrl={logoUrl}
-                  publicationLogoUrl={publicationLogoUrl}
-                  publicationName={publicationName}
-                  academyName={academyName}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  defaultTab="ALL"
-                  cardBgUrl={cardBgUrl}
-                  onCardBgChange={setCardBgUrl}
-                  isLastCard={isLastCard}
-                  hideCardControls={cards.length > 1 && !isPreviewCard}
-                />
+        return (
+          <div className="space-y-4 print:space-y-0 print:m-0 print:p-0">
+            {/* Batch Preview & Print Navigation Bar (Hidden on Print) */}
+            {cards.length > 1 && (
+              <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-3 shadow-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-2xs">
+                    <Users className="h-3.5 w-3.5" />
+                    সকল শিক্ষার্থী ({bn(cards.length)} জন)
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700">
+                    স্ক্রিন প্রিভিউ: কার্ড <b className="text-emerald-800">{bn(safeIndex + 1)}</b> / {bn(cards.length)}
+                  </span>
+                  {currentCard && (
+                    <span className="rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-800">
+                      {currentCard.student.name} — রোল: {bn(currentCard.student.roll)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Switcher & Batch Print */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={safeIndex === 0}
+                    className="h-8 gap-1 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    পূর্ববর্তী
+                  </Button>
+
+                  {/* Jump selector */}
+                  <Select
+                    value={String(safeIndex)}
+                    onValueChange={(val) => setPreviewIndex(Number(val))}
+                  >
+                    <SelectTrigger className="h-8 w-44 bg-white text-xs font-semibold">
+                      <SelectValue placeholder="কার্ড নির্বাচন..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 text-xs">
+                      {cards.map((c, i) => (
+                        <SelectItem key={c.student.id} value={String(i)}>
+                          {bn(i + 1)}. {c.student.name} (রোল {bn(c.student.roll)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPreviewIndex((prev) => Math.min(cards.length - 1, prev + 1))}
+                    disabled={safeIndex === cards.length - 1}
+                    className="h-8 gap-1 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  >
+                    পরবর্তী
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            )}
+
+            {/* Cards List: On screen ONLY 1 card is displayed; for print ALL cards are printed! */}
+            <div className="space-y-0 print:space-y-0 print:m-0 print:p-0">
+              {cards.map((card, idx) => {
+                const isPreview = idx === safeIndex;
+                const isLastCard = idx === cards.length - 1;
+                return (
+                  <div
+                    key={`card-${card.student.id}-${idx}`}
+                    className={isPreview ? "block print:block" : "hidden print:block"}
+                  >
+                    <OfficialResultCard
+                      mode={mode}
+                      month={Number(month)}
+                      year={Number(year)}
+                      student={card.student}
+                      subjects={card.subjects}
+                      overall={card.overall}
+                      position={card.position}
+                      fine={card.fine}
+                      topStudent={card.topStudent}
+                      teacherComments={card.teacherComments}
+                      availableDirectors={availableDirectors}
+                      selectedDirectorId={selectedDirectorId}
+                      onDirectorChange={(newDirId) => setSelectedDirectorId(newDirId)}
+                      logoUrl={logoUrl}
+                      academyName={academyName}
+                      defaultTab="ALL"
+                      cardBgUrl={cardBgUrl}
+                      onCardBgChange={setCardBgUrl}
+                      isLastCard={isLastCard}
+                      hideCardControls={!isPreview}
+                      isAdmin={true}
+                      canPrint={true}
+                      showPrintButton={true}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

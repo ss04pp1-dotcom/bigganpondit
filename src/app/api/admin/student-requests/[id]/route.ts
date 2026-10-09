@@ -79,8 +79,10 @@ export async function POST(req: Request, ctx: Ctx) {
       .prepare(
         `INSERT INTO students (
           user_id, name, class_id, division, section, roll, photo_key,
-          father_name, mother_name, school_name, phone, address, blood_group, dob
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          father_name, father_occupation, mother_name, mother_occupation,
+          guardian_name, guardian_occupation, guardian_relation,
+          school_name, phone, address, blood_group, dob, raw_password
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         userId,
@@ -91,12 +93,18 @@ export async function POST(req: Request, ctx: Ctx) {
         item.roll,
         item.photo_key ?? null,
         item.father_name ?? null,
+        item.father_occupation ?? null,
         item.mother_name ?? null,
+        item.mother_occupation ?? null,
+        item.guardian_name ?? null,
+        item.guardian_occupation ?? null,
+        item.guardian_relation ?? null,
         item.school_name ?? null,
         item.phone ?? null,
         item.address ?? null,
         item.blood_group ?? null,
-        item.dob ?? null
+        item.dob ?? null,
+        item.raw_password ?? "1234"
       )
       .run();
     const studentId = Number(studentRes.meta.last_row_id ?? 0);

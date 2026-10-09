@@ -15,12 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_ACADEMY_NAME,
-  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
   bn,
   classLabel,
   divisionLabel,
@@ -69,9 +66,6 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const dirInfo = await getDirectorSignatureInfo(db);
   const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
@@ -191,9 +185,10 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
             directorInfo={dirInfo}
             availableDirectors={availableDirectors}
             logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-            publicationLogoUrl={publicationLogoUrl}
-            publicationName={publicationName}
             defaultTab="SHEET"
+            isAdmin={false}
+            canPrint={false}
+            showPrintButton={false}
           />
         
           <Card className="no-print">

@@ -56,6 +56,19 @@ export interface StudentRow {
   section: string | null;
   roll: number;
   photo_key: string | null;
+  father_name?: string | null;
+  father_occupation?: string | null;
+  mother_name?: string | null;
+  mother_occupation?: string | null;
+  guardian_name?: string | null;
+  guardian_occupation?: string | null;
+  guardian_relation?: string | null;
+  school_name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  blood_group?: string | null;
+  dob?: string | null;
+  raw_password?: string | null;
 }
 
 export interface SubjectRow {
@@ -82,8 +95,6 @@ export interface ExamRow {
   exam_date: string;
   title: string;
   total_marks: number;
-  exam_type?: string;
-  is_published?: number;
   created_by: number | null;
 }
 
@@ -119,12 +130,18 @@ export interface StudentRequestRow {
   password_hash: string;
   photo_key: string | null;
   father_name: string | null;
+  father_occupation?: string | null;
   mother_name: string | null;
+  mother_occupation?: string | null;
+  guardian_name?: string | null;
+  guardian_occupation?: string | null;
+  guardian_relation?: string | null;
   school_name: string | null;
   phone: string | null;
   address: string | null;
   blood_group: string | null;
   dob: string | null;
+  raw_password?: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   admin_notes: string | null;
   reviewed_by: number | null;

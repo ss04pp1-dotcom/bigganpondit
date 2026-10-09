@@ -251,7 +251,7 @@ async function ensureDemoData(db: D1Database) {
     if (!c) continue;
     const section = s.classNum === "9" || s.classNum === "10" ? "ক" : null;
     await db
-      .prepare("INSERT INTO students (user_id, name, class_id, division, section, roll) VALUES (?, ?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO students (user_id, name, class_id, division, section, roll, raw_password) VALUES (?, ?, ?, ?, ?, ?, '1234')")
       .bind(userId, s.name, c, s.division, section, s.roll)
       .run();
   }

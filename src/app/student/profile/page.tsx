@@ -28,12 +28,20 @@ export default async function ProfilePage() {
   const studentExtra = user.studentId
     ? await db
         .prepare(
-          "SELECT father_name, mother_name, school_name, phone, address, blood_group FROM students WHERE id = ?"
+          `SELECT father_name, father_occupation, mother_name, mother_occupation,
+                  guardian_name, guardian_occupation, guardian_relation,
+                  school_name, phone, address, blood_group
+           FROM students WHERE id = ?`
         )
         .bind(user.studentId)
         .first<{
           father_name?: string | null;
+          father_occupation?: string | null;
           mother_name?: string | null;
+          mother_occupation?: string | null;
+          guardian_name?: string | null;
+          guardian_occupation?: string | null;
+          guardian_relation?: string | null;
           school_name?: string | null;
           phone?: string | null;
           address?: string | null;
@@ -53,7 +61,12 @@ export default async function ProfilePage() {
 
   if (studentExtra?.school_name) info.push(["বিদ্যালয় / প্রতিষ্ঠান", studentExtra.school_name]);
   if (studentExtra?.father_name) info.push(["পিতার নাম", studentExtra.father_name]);
+  if (studentExtra?.father_occupation) info.push(["পিতার পেশা", studentExtra.father_occupation]);
   if (studentExtra?.mother_name) info.push(["মাতার নাম", studentExtra.mother_name]);
+  if (studentExtra?.mother_occupation) info.push(["মাতার পেশা", studentExtra.mother_occupation]);
+  if (studentExtra?.guardian_name) info.push(["অভিভাবকের নাম", studentExtra.guardian_name]);
+  if (studentExtra?.guardian_relation) info.push(["অভিভাবকের সাথে সম্পর্ক", studentExtra.guardian_relation]);
+  if (studentExtra?.guardian_occupation) info.push(["অভিভাবকের পেশা", studentExtra.guardian_occupation]);
   if (studentExtra?.phone) info.push(["অভিভাবকের ফোন", bn(studentExtra.phone)]);
   if (studentExtra?.blood_group) info.push(["রক্তের গ্রুপ", studentExtra.blood_group]);
   if (studentExtra?.address) info.push(["ঠিকানা", studentExtra.address]);

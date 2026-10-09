@@ -3,12 +3,8 @@
 
 export const APP_TITLE = "নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার";
 export const DEFAULT_ACADEMY_NAME = "বিজ্ঞান পণ্ডিত একাডেমি";
-export const DEFAULT_PUBLICATION_NAME = "বিজ্ঞান পণ্ডিত প্রকাশনী";
 export const SETTING_ACADEMY_NAME = "academy_name";
 export const SETTING_ACADEMY_LOGO = "academy_logo_key";
-export const SETTING_PUBLICATION_NAME = "publication_name";
-export const SETTING_PUBLICATION_LOGO = "publication_logo_key";
-export const SETTING_PUBLICATION_DESCRIPTION = "publication_description";
 export const SETTING_SCHEMA_VERSION = "schema_version";
 export const SETTING_BACKUP_REGISTRY = "backup_registry";
 export const SETTING_ADMIN_EMAIL = "admin_recovery_email";
@@ -124,14 +120,6 @@ const BN_DIGITS: Record<string, string> = {
   "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
   "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
 };
-const EN_DIGITS: Record<string, string> = {
-  "০": "0", "১": "1", "২": "2", "৩": "3", "৪": "4",
-  "৫": "5", "৬": "6", "৭": "7", "৮": "8", "৯": "9",
-};
-export function toEnDigits(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return "";
-  return String(value).replace(/[০-৯]/g, (d) => EN_DIGITS[d] ?? d);
-}
 export function bn(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
   return String(value).replace(/[0-9]/g, (d) => BN_DIGITS[d] ?? d);
@@ -150,8 +138,8 @@ export function fmtPct(n: number | null | undefined): string {
   return `${fmtNum(Math.round(n * 100) / 100)}%`;
 }
 export function fmtGpa(n: number | null | undefined): string {
-  if (n === null || n === undefined || Number.isNaN(n)) return "0.00";
-  return Number(n).toFixed(2);
+  if (n === null || n === undefined || Number.isNaN(n)) return "০.০০";
+  return bn(n.toFixed(2));
 }
 
 // ---- Friendly Bangla messages (spec section 68) ----

@@ -4,11 +4,8 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { handleError, ok } from "@/lib/api";
 import {
   DEFAULT_ACADEMY_NAME,
-  DEFAULT_PUBLICATION_NAME,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
 } from "@/lib/constants";
 import {
   buildMonthlyClassSummary,
@@ -24,8 +21,7 @@ export async function GET(req: Request) {
     const db = await getDb();
     const url = new URL(req.url);
 
-    const rawMode = url.searchParams.get("mode")?.toUpperCase();
-    const mode = (rawMode === "ANNUAL" ? "ANNUAL" : rawMode === "MODEL" ? "MODEL" : "MONTHLY") as "MONTHLY" | "ANNUAL" | "MODEL";
+    const mode = (url.searchParams.get("mode")?.toUpperCase() === "ANNUAL" ? "ANNUAL" : "MONTHLY") as "MONTHLY" | "ANNUAL";
     const className = url.searchParams.get("class") || "10";
     const requiresDiv = className === "9" || className === "10";
     const rawDiv = url.searchParams.get("division");
@@ -43,10 +39,8 @@ export async function GET(req: Request) {
     const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
     const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
     const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
-    const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
-    const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-    const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-    const cardBgKey = await getSetting("card_bg_image_key", "");
+    const cardBgKey =
+      (await getSetting("card_cover_bg_url", "")) || (await getSetting("card_bg_image_key", ""));
     const cardBgUrl = cardBgKey
       ? cardBgKey.startsWith("http") || cardBgKey.startsWith("data:") || cardBgKey.startsWith("/card")
         ? cardBgKey
@@ -85,27 +79,25 @@ export async function GET(req: Request) {
 
     // Cohort summary for monthly position calculation
     let monthlySummary: any = null;
-    if ((mode === "MONTHLY" || mode === "MODEL") && classId) {
+    if (mode === "MONTHLY" && classId) {
       monthlySummary = await buildMonthlyClassSummary(db, {
         classId,
         division,
         month,
         year,
         subjectIds: null,
-        mode,
       }).catch(() => null);
     }
 
-    const cards: any[] = [];
+    const cards = [];
 
     for (const st of studentsToProcess) {
-      if (mode === "MONTHLY" || mode === "MODEL") {
+      if (mode === "MONTHLY") {
         const report = await buildMonthlyReport(db, {
           studentId: st.id,
           month,
           year,
           subjectIds: null,
-          mode,
         }).catch(() => null);
 
         const topEntry = monthlySummary?.entries?.find((e: any) => e.position === 1) || monthlySummary?.entries?.[0];
@@ -124,17 +116,9 @@ export async function GET(req: Request) {
           const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
           const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
           totalStudentAbsences += absCount;
-
-          const examFails = exams.filter(
-            (e) => e.attendance !== "ABSENT" && (e.grade === "F" || (e.total > 0 && e.obtained / e.total < 0.33))
-          ).length;
-
-          if (examFails > 0) {
-            totalStudentFails += examFails;
-          } else if (s.grade === "F") {
-            totalStudentFails += 1;
+          if (s.grade === "F" && !s.isFourth) {
+            totalStudentFails++;
           }
-
           const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
 
           return {
@@ -297,8 +281,6 @@ export async function GET(req: Request) {
       studentsList: students.map((s) => ({ id: s.id, name: s.name, roll: s.roll })),
       availableDirectors,
       logoUrl,
-      publicationLogoUrl,
-      publicationName,
       cardBgUrl,
       academyName,
       mode,

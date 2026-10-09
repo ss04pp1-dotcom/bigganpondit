@@ -42,12 +42,18 @@ CREATE TABLE IF NOT EXISTS students (
   roll        INTEGER NOT NULL CHECK (roll > 0),
   photo_key   TEXT,
   father_name TEXT,
+  father_occupation TEXT,
   mother_name TEXT,
+  mother_occupation TEXT,
+  guardian_name TEXT,
+  guardian_occupation TEXT,
+  guardian_relation TEXT,
   school_name TEXT,
   phone       TEXT,
   address     TEXT,
   blood_group TEXT,
   dob         TEXT,
+  raw_password TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -81,8 +87,6 @@ CREATE TABLE IF NOT EXISTS exams (
   exam_date   TEXT NOT NULL,
   title       TEXT NOT NULL,
   total_marks INTEGER NOT NULL CHECK (total_marks > 0),
-  exam_type   TEXT NOT NULL DEFAULT 'MONTHLY',
-  is_published INTEGER NOT NULL DEFAULT 0,
   created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -129,8 +133,6 @@ CREATE INDEX IF NOT EXISTS idx_exams_class_div ON exams(class_id, (COALESCE(divi
 
 CREATE INDEX IF NOT EXISTS idx_marks_exam    ON marks(exam_id);
 CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
-CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
-CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_exams_lookup  ON exams(subject_id, month, year);
 CREATE INDEX IF NOT EXISTS idx_teacher_subjects_subject ON teacher_subjects(subject_id);
 
@@ -198,6 +200,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
   uploaded_by     INTEGER NOT NULL REFERENCES users(id),
   uploader_name   TEXT NOT NULL,
   description     TEXT,
+  download_allowed INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -227,12 +230,18 @@ CREATE TABLE IF NOT EXISTS student_requests (
   password_hash TEXT NOT NULL,
   photo_key     TEXT,
   father_name   TEXT,
+  father_occupation TEXT,
   mother_name   TEXT,
+  mother_occupation TEXT,
+  guardian_name TEXT,
+  guardian_occupation TEXT,
+  guardian_relation TEXT,
   school_name   TEXT,
   phone         TEXT,
   address       TEXT,
   blood_group   TEXT,
   dob           TEXT,
+  raw_password  TEXT,
   status        TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
   admin_notes   TEXT,
   reviewed_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,

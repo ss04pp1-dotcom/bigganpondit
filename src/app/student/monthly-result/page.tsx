@@ -4,20 +4,18 @@ import {
   buildMonthlyClassSummary,
   buildMonthlyReport,
   getDirectorSignatureInfo,
-  getAllDirectorsList,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
-import { OfficialResultCard } from "@/components/app/official-result-card";
+import { StudentMarksheet } from "@/components/students/student-marksheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
-  DEFAULT_PUBLICATION_NAME,
+  DEFAULT_ACADEMY_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
+  SETTING_ACADEMY_NAME,
   bn,
 } from "@/lib/constants";
 
@@ -35,7 +33,6 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const curMonth = new Date().getMonth() + 1;
   const month = Number(one(sp.month)) || curMonth;
   const year = Number(one(sp.year)) || curYear;
-  const mode = one(sp.mode)?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
 
   const classRow = await db
     .prepare("SELECT id FROM classes WHERE name = ?")
@@ -45,22 +42,19 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
   const classId = classRow?.id ?? 0;
 
   const report = user.studentId && classId
-    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null, mode })
+    ? await buildMonthlyReport(db, { studentId: user.studentId, month, year, subjectIds: null })
     : null;
 
   const summaryAll = classId
-    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null, mode })
+    ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === user.studentId)?.position : undefined;
 
   const dirInfo = await getDirectorSignatureInfo(db);
-  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
+  const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
 
   const officialSubjects = (report?.subjects ?? []).map((s) => {
     const t = teacherMap.get(s.subjectId);
@@ -97,16 +91,6 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         <CardContent className="pt-4">
           <form method="get" action="/student/monthly-result" className="grid grid-cols-2 gap-3 sm:w-96">
             <div className="space-y-1.5">
-              <Label className="text-[12px]">ফলাফলের ধরন</Label>
-              <Select name="mode" defaultValue={mode}>
-                <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MONTHLY">মাসিক</SelectItem>
-                  <SelectItem value="MODEL">মডেল টেস্ট</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
               <Label className="text-[12px]">মাস</Label>
               <Select name="month" defaultValue={String(month)}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
@@ -135,28 +119,25 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         </CardContent>
       </Card>
 
-      {/* 100% Pixel to Pixel Official Result Card & Sheet */}
-      <OfficialResultCard
-        mode={mode}
-        month={month}
-        year={year}
+      {/* ডেডিকেটেড স্টুডেন্ট একাডেমিক মার্কশিট (এডমিনের রেজাল্ট কার্ড নয়) */}
+      <StudentMarksheet
+        title="মাসিক একাডেমিক মার্কশিট"
+        sessionText={`${MONTHS_BN[month - 1]} ${bn(year)}`}
         student={{
           name: user.name,
           roll: user.roll ?? 1,
           className: user.className ?? "10",
           division: user.division,
           section: user.section,
+          photoKey: user.photoKey,
+          username: user.username,
         }}
         subjects={officialSubjects}
         overall={overall}
         position={position}
         directorInfo={dirInfo}
-        availableDirectors={availableDirectors}
+        academyName={academyName}
         logoUrl={logoUrl}
-        publicationLogoUrl={publicationLogoUrl}
-        publicationName={publicationName}
-        defaultTab="ALL"
-        showPrintButton={true}
       />
     </div>
   );

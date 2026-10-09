@@ -93,20 +93,6 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
-  // Ensure exams exam_type column exists in existing databases
-  try {
-    await db.exec("ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY';");
-  } catch {
-    // Column already exists
-  }
-
-  // Ensure exams is_published column exists (0 = draft/unpublished, 1 = published by admin)
-  try {
-    await db.exec("ALTER TABLE exams ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0;");
-  } catch {
-    // Column already exists
-  }
-
   // Ensure storage_files table exists for fallback file persistence
   try {
     await db.exec("CREATE TABLE IF NOT EXISTS storage_files (key TEXT PRIMARY KEY, data TEXT, updated_at TEXT);");
@@ -302,15 +288,42 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     // Column already exists
   }
 
-  // Ensure composite performance indexes exist
   try {
-    await db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_marks_student_exam ON marks(student_id, exam_id);
-      CREATE INDEX IF NOT EXISTS idx_exams_class_month_year ON exams(class_id, month, year);
-    `);
+    await db.exec(`ALTER TABLE students ADD COLUMN raw_password TEXT;`);
   } catch {
-    // Indexes already exist
+    // Column already exists
   }
+
+  try {
+    await db.exec(`ALTER TABLE student_requests ADD COLUMN raw_password TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.exec(`UPDATE students SET raw_password = '1234' WHERE raw_password IS NULL;`);
+  } catch {
+    // Ignore
+  }
+
+  try {
+    await db.exec(`ALTER TABLE notebooks ADD COLUMN download_allowed INTEGER NOT NULL DEFAULT 0;`);
+  } catch {
+    // Column already exists
+  }
+
+  // Parent & Guardian occupation and relationship columns
+  try { await db.exec(`ALTER TABLE students ADD COLUMN father_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE students ADD COLUMN mother_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_name TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE students ADD COLUMN guardian_relation TEXT;`); } catch {}
+
+  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN father_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN mother_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_name TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_occupation TEXT;`); } catch {}
+  try { await db.exec(`ALTER TABLE student_requests ADD COLUMN guardian_relation TEXT;`); } catch {}
 
   try {
     // 2) seed (idempotent); initial admin comes from environment variables

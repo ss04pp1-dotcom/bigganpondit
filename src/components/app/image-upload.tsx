@@ -2,9 +2,9 @@
 
 // Image upload widget: picks a file, previews it, uploads to /api/uploads (R2).
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Camera, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -65,18 +65,16 @@ export function ImageUpload({
   label,
   className,
   onUploaded,
-  onRemove,
   compact = false,
   disabled = false,
 }: {
-  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg" | "publication-logo";
+  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg";
   studentId?: number;
   teacherId?: number;
   currentUrl?: string | null;
   label: string;
   className?: string;
   onUploaded?: (key: string, url: string) => void;
-  onRemove?: () => void;
   compact?: boolean;
   disabled?: boolean;
 }) {
@@ -86,28 +84,11 @@ export function ImageUpload({
   const [preview, setPreview] = useState<string | null>(currentUrl ?? null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    setPreview(currentUrl ?? null);
-  }, [currentUrl]);
-
   async function pick(file: File) {
     if (disabled) return;
-    const maxBytes =
-      type === "banner"
-        ? 15 * 1024 * 1024
-        : type === "publication-logo" || type === "logo"
-        ? 10 * 1024 * 1024
-        : 5 * 1024 * 1024;
+    const maxBytes = type === "banner" ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxBytes) {
-      toast({
-        title:
-          type === "banner"
-            ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
-            : type === "publication-logo" || type === "logo"
-            ? "লোগো ফাইলটি অনেক বড় (সর্বোচ্চ ১০ MB)।"
-            : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।",
-        variant: "destructive",
-      });
+      toast({ title: type === "banner" ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।" : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।", variant: "destructive" });
       return;
     }
     let fileToUpload = file;
@@ -128,7 +109,7 @@ export function ImageUpload({
       if (!res.ok || !json.ok) throw new Error(json.error ?? "আপলোড ব্যর্থ হয়েছে।");
       setPreview(json.url);
       onUploaded?.(json.key, json.url);
-      toast({ title: json.message || "সফলভাবে সংরক্ষণ করা হয়েছে।" });
+      toast({ title: "সফলভাবে সংরক্ষণ করা হয়েছে।" });
       router.refresh();
     } catch (e) {
       setPreview(currentUrl ?? null);
@@ -139,32 +120,18 @@ export function ImageUpload({
     }
   }
 
-  const maxSizeText =
-    type === "banner"
-      ? "সর্বোচ্চ ১৫ MB"
-      : type === "publication-logo" || type === "logo"
-      ? "সর্বোচ্চ ১০ MB"
-      : "সর্বোচ্চ ৫ MB";
-
   return (
     <div className={cn("flex items-center gap-4", className)}>
       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-input bg-muted">
         {preview ? (
-          <img
-            src={preview}
-            alt={label}
-            className="h-full w-full object-contain"
-            onError={() => {
-              // Ignore image render error
-            }}
-          />
+          <img src={preview} alt={label} className="h-full w-full object-contain" />
         ) : (
           <Camera className="h-6 w-6 text-muted-foreground" />
         )}
       </div>
       <div className="space-y-2">
         <p className="text-[13px] font-medium">{label}</p>
-        <p className="text-[12px] text-muted-foreground">JPG / PNG / WebP — {maxSizeText}</p>
+        <p className="text-[12px] text-muted-foreground">JPG / PNG / WebP — সর্বোচ্চ ৫ MB</p>
         <input
           ref={inputRef}
           type="file"
@@ -176,27 +143,11 @@ export function ImageUpload({
             e.target.value = "";
           }}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-2">
           <Button type="button" size="sm" variant={compact ? "outline" : "default"} disabled={busy || disabled} onClick={() => inputRef.current?.click()}>
             {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-4 w-4" />}
             {preview ? "প্রতিস্থাপন করুন" : "আপলোড করুন"}
           </Button>
-          {preview && onRemove && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy || disabled}
-              onClick={() => {
-                setPreview(null);
-                onRemove();
-              }}
-              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-            >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              মুছুন
-            </Button>
-          )}
         </div>
       </div>
     </div>

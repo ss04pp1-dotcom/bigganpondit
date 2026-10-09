@@ -148,8 +148,10 @@ export async function POST(req: Request) {
         classes: ["id", "name", "sort_order", "created_at", "updated_at"],
         students: [
           "id", "user_id", "name", "class_id", "division", "section", "roll", "photo_key",
-          "father_name", "mother_name", "school_name", "phone", "address", "blood_group", "dob",
-          "created_at", "updated_at"
+          "father_name", "father_occupation", "mother_name", "mother_occupation",
+          "guardian_name", "guardian_occupation", "guardian_relation",
+          "school_name", "phone", "address", "blood_group", "dob", "raw_password",
+          "hide_photo_from_students", "created_at", "updated_at"
         ],
         subjects: ["id", "name", "class_id", "division", "is_fourth_subject", "created_at", "updated_at"],
         teacher_subjects: ["id", "teacher_id", "subject_id", "created_at", "updated_at"],
@@ -158,14 +160,15 @@ export async function POST(req: Request) {
         settings: ["id", "key", "value", "updated_at"],
         directors: ["id", "user_id", "institution", "photo_key", "signature_key", "remarks", "created_at", "updated_at"],
         notices: ["id", "title", "content", "author_id", "author_name", "author_role", "status", "is_ticker", "created_at", "approved_at"],
-        notebooks: ["id", "title", "class_id", "subject_id", "file_key", "file_name", "file_size", "uploaded_by", "uploader_name", "description", "created_at"],
+        notebooks: ["id", "title", "class_id", "subject_id", "file_key", "file_name", "file_size", "uploaded_by", "uploader_name", "description", "download_allowed", "created_at"],
         attendance: ["id", "student_id", "class_id", "date", "status", "remarks", "recorded_by", "created_at"],
 
         webauthn_credentials: ["id", "user_id", "credential_id", "public_key", "counter", "device_name", "created_at", "updated_at"],
         student_requests: [
           "id", "teacher_id", "name", "class_id", "division", "section", "roll", "username",
-          "password_hash", "photo_key", "father_name", "mother_name", "school_name", "phone",
-          "address", "blood_group", "dob", "status", "admin_notes", "reviewed_by", "reviewed_at",
+          "password_hash", "photo_key", "father_name", "father_occupation", "mother_name", "mother_occupation",
+          "guardian_name", "guardian_occupation", "guardian_relation",
+          "school_name", "phone", "address", "blood_group", "dob", "raw_password", "status", "admin_notes", "reviewed_by", "reviewed_at",
           "created_at", "updated_at"
         ],
       };

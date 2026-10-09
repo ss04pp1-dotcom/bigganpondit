@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   Expand,
   Shrink,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bn, classLabel } from "@/lib/constants";
@@ -31,9 +32,11 @@ interface PdfBookReaderProps {
     id: number;
     title: string;
     file_key: string;
+    file_name?: string;
     class_name?: string | null;
     subject_name?: string | null;
     uploader_name?: string;
+    download_allowed?: number | boolean;
   };
   onClose: () => void;
 }
@@ -418,11 +421,13 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
         themeStyles[theme]
       )}
       onContextMenu={(e) => {
-        e.preventDefault();
-        toast({
-          title: "কপিরাইট সুরক্ষা",
-          description: "প্রকাশনীর এই বইটি শুধুমাত্র অনলাইনে পড়ার জন্য সংরক্ষিত। ডাউনলোড নিষিদ্ধ।",
-        });
+        if (!book.download_allowed) {
+          e.preventDefault();
+          toast({
+            title: "কপিরাইট সুরক্ষা (রিড-অনলি)",
+            description: "প্রকাশনীর এই বইটি শুধুমাত্র অনলাইনে পড়ার জন্য সংরক্ষিত। ডাউনলোড নিষিদ্ধ।",
+          });
+        }
       }}
     >
       {/* ================= শীর্ষ কন্ট্রোল বার ================= */}
@@ -594,11 +599,33 @@ export function PdfBookReader({ book, onClose }: PdfBookReaderProps) {
 
         {/* ডান অংশ: থিম, সুরক্ষা ব্যাজ ও উইন্ডো কন্ট্রোল */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* সুরক্ষা ব্যাজ */}
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-400">
-            <Lock className="h-3 w-3" />
-            <span>সুরক্ষিত মোড</span>
-          </div>
+          {/* ডাউনলোড বাটন (শুধুমাত্র যদি এডমিন অনুমোদন দেয়) */}
+          {!!book.download_allowed && (
+            <a
+              href={`/api/files/${book.file_key}`}
+              download={book.file_name || `${book.title}.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-[11px] font-bold shadow-xs transition"
+              title="পিডিএফ ফাইল ডাউনলোড করুন"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">ডাউনলোড</span>
+            </a>
+          )}
+
+          {/* সুরক্ষা / ডাউনলোড ব্যাজ */}
+          {book.download_allowed ? (
+            <div className="hidden sm:flex items-center gap-1.5 rounded-lg bg-emerald-950/70 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
+              <Download className="h-3 w-3" />
+              <span>ডাউনলোড + রিড</span>
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-1.5 rounded-lg bg-amber-950/60 border border-amber-500/30 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+              <Lock className="h-3 w-3" />
+              <span>সুরক্ষিত রিড-অনলি</span>
+            </div>
+          )}
 
           {/* থিম নির্বাচক */}
           <div className="flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700">

@@ -5,19 +5,13 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
-import {
-  ALLOWED_IMAGE_EXT,
-  MAX_UPLOAD_BYTES,
-  MSG,
-  SETTING_ACADEMY_LOGO,
-  SETTING_PUBLICATION_LOGO,
-} from "@/lib/constants";
+import { ALLOWED_IMAGE_EXT, MAX_UPLOAD_BYTES, MSG, SETTING_ACADEMY_LOGO } from "@/lib/constants";
 import { setSetting } from "@/lib/db";
 import { getBucket } from "@/lib/storage/r2";
 import { teacherClassAllowed } from "@/lib/permissions";
 
-function detectImageType(bytes: Uint8Array, mime?: string, fileName?: string): "jpg" | "png" | "webp" | null {
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return "jpg";
+function detectImageType(bytes: Uint8Array): "jpg" | "png" | "webp" | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
   if (
     bytes.length >= 8 &&
     bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e &&
@@ -29,18 +23,6 @@ function detectImageType(bytes: Uint8Array, mime?: string, fileName?: string): "
     bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
     bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
   ) return "webp";
-
-  // Fallback to MIME type or file extension
-  const m = (mime || "").toLowerCase();
-  if (m === "image/jpeg" || m === "image/jpg") return "jpg";
-  if (m === "image/png") return "png";
-  if (m === "image/webp") return "webp";
-
-  const fn = (fileName || "").toLowerCase();
-  if (fn.endsWith(".jpg") || fn.endsWith(".jpeg")) return "jpg";
-  if (fn.endsWith(".png")) return "png";
-  if (fn.endsWith(".webp")) return "webp";
-
   return null;
 }
 
@@ -94,27 +76,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // Type-specific file size limits
-    const maxBytes =
-      type === "banner"
-        ? 15 * 1024 * 1024 // 15 MB
-        : type === "publication-logo" || type === "logo"
-        ? 10 * 1024 * 1024 // 10 MB (supports 10mb jpg/png requested by user)
-        : MAX_UPLOAD_BYTES; // 5 MB
-
-    if (file.size > maxBytes) {
-      throw new ApiError(
-        400,
-        type === "banner"
-          ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
-          : type === "publication-logo" || type === "logo"
-          ? "লোগো ফাইলটি অনেক বড় (সর্বোচ্চ ১০ MB)।"
-          : MSG.fileTooLarge
-      );
-    }
+    if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(400, MSG.fileTooLarge);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const detected = detectImageType(bytes, file.type, file.name);
+    const detected = detectImageType(bytes);
     if (!detected) throw new ApiError(400, MSG.invalidFileType + " (শুধু JPG/PNG/WebP)");
     if (!ALLOWED_IMAGE_EXT.includes(detected)) throw new ApiError(400, MSG.invalidFileType);
 
@@ -156,22 +121,6 @@ export async function POST(req: Request) {
       await setSetting(SETTING_ACADEMY_LOGO, key);
       if (current?.value) await bucket.delete(current.value).catch(() => {});
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
-    }
-
-    if (type === "publication-logo") {
-      if (user.role !== "ADMIN") {
-        throw new ApiError(403, "শুধুমাত্র প্রশাসক প্রকাশনীর লোগো পরিবর্তন করতে পারেন।");
-      }
-      const current = await db
-        .prepare("SELECT value FROM settings WHERE key = ?")
-        .bind(SETTING_PUBLICATION_LOGO)
-        .first<{ value: string | null }>(undefined as never)
-        .catch(() => null);
-      const key = `academy/publication/logo-${uuid}.${detected}`;
-      await bucket.put(key, bytes);
-      await setSetting(SETTING_PUBLICATION_LOGO, key);
-      if (current?.value) await bucket.delete(current.value).catch(() => {});
-      return ok({ key, url: `/api/files/${key}`, message: "প্রকাশনীর লোগো সংরক্ষিত হয়েছে।" });
     }
 
     if (type === "signature") {
@@ -257,7 +206,7 @@ export async function POST(req: Request) {
     }
 
     if (type === "card-bg") {
-      if (user.role !== "ADMIN" && user.role !== "DIRECTOR") throw new ApiError(403, MSG.noPermissionView);
+      if (user.role !== "ADMIN") throw new ApiError(403, MSG.noPermissionView);
       const key = `academy/card-bg/${uuid}.${detected}`;
       await bucket.put(key, bytes);
       await setSetting("card_bg_image_key", key);

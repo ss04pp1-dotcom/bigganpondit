@@ -14,6 +14,7 @@ export async function GET(req: Request) {
     let query = `
       SELECT n.id, n.title, n.class_id, n.subject_id, n.file_key, n.file_name, n.file_size,
              n.uploaded_by, n.uploader_name, n.description, n.created_at,
+             COALESCE(n.download_allowed, 0) as download_allowed,
              c.name as class_name, s.name as subject_name
       FROM notebooks n
       LEFT JOIN classes c ON c.id = n.class_id
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
       fileName?: string;
       fileSize?: number;
       description?: string;
+      downloadAllowed?: boolean | number;
     };
 
     if (!body.title?.trim() || !body.fileKey?.trim()) {
@@ -103,11 +105,13 @@ export async function POST(req: Request) {
       }
     }
 
+    const isDownloadAllowed = (user.role === "ADMIN" || user.role === "DIRECTOR") && !!body.downloadAllowed ? 1 : 0;
+
     const res = await db
       .prepare(
         `INSERT INTO notebooks (
-           title, class_id, subject_id, file_key, file_name, file_size, uploaded_by, uploader_name, description
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           title, class_id, subject_id, file_key, file_name, file_size, uploaded_by, uploader_name, description, download_allowed
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         body.title.trim(),
@@ -118,7 +122,8 @@ export async function POST(req: Request) {
         body.fileSize ? Number(body.fileSize) : null,
         user.id,
         user.name || user.username || "ব্যবহারকারী",
-        body.description?.trim() || null
+        body.description?.trim() || null,
+        isDownloadAllowed
       )
       .run();
 

@@ -23,7 +23,9 @@ export async function GET(req: Request) {
       const own = await db
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
-                  st.father_name, st.mother_name, st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
+                  st.guardian_name, st.guardian_occupation, st.guardian_relation,
+                  st.school_name, st.phone, st.address, st.blood_group, st.dob,
                   c.name as class_name, u.username
            FROM students st JOIN classes c ON c.id = st.class_id JOIN users u ON u.id = st.user_id
            WHERE st.id = ?`
@@ -67,7 +69,9 @@ export async function GET(req: Request) {
       await db
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
-                  st.father_name, st.mother_name, st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
+                  st.guardian_name, st.guardian_occupation, st.guardian_relation,
+                  st.school_name, st.phone, st.address, st.blood_group, st.dob,
                   st.hide_photo_from_students,
                   c.name as class_name, c.sort_order, u.username
            FROM students st
@@ -160,9 +164,11 @@ export async function POST(req: Request) {
       const insRes = await db
         .prepare(
           `INSERT INTO student_requests (
-            teacher_id, name, class_id, division, section, roll, username, password_hash,
-            father_name, mother_name, school_name, phone, address, blood_group, dob, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+            teacher_id, name, class_id, division, section, roll, username, password_hash, raw_password,
+            father_name, father_occupation, mother_name, mother_occupation,
+            guardian_name, guardian_occupation, guardian_relation,
+            school_name, phone, address, blood_group, dob, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
         )
         .bind(
           user.teacherId ?? null,
@@ -173,8 +179,14 @@ export async function POST(req: Request) {
           body.roll,
           body.username,
           hash,
+          body.password,
           body.fatherName ?? null,
+          body.fatherOccupation ?? null,
           body.motherName ?? null,
+          body.motherOccupation ?? null,
+          body.guardianName ?? null,
+          body.guardianOccupation ?? null,
+          body.guardianRelation ?? null,
           body.schoolName ?? null,
           body.phone ?? null,
           body.address ?? null,
@@ -205,8 +217,10 @@ export async function POST(req: Request) {
       .prepare(
         `INSERT INTO students (
           user_id, name, class_id, division, section, roll,
-          father_name, mother_name, school_name, phone, address, blood_group, dob, hide_photo_from_students
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          father_name, father_occupation, mother_name, mother_occupation,
+          guardian_name, guardian_occupation, guardian_relation,
+          school_name, phone, address, blood_group, dob, hide_photo_from_students, raw_password
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         userId,
@@ -216,13 +230,19 @@ export async function POST(req: Request) {
         body.section ?? null,
         body.roll,
         body.fatherName ?? null,
+        body.fatherOccupation ?? null,
         body.motherName ?? null,
+        body.motherOccupation ?? null,
+        body.guardianName ?? null,
+        body.guardianOccupation ?? null,
+        body.guardianRelation ?? null,
         body.schoolName ?? null,
         body.phone ?? null,
         body.address ?? null,
         body.bloodGroup ?? null,
         body.dob ?? null,
-        body.hidePhotoFromStudents ? 1 : 0
+        body.hidePhotoFromStudents ? 1 : 0,
+        body.password
       )
       .run();
 

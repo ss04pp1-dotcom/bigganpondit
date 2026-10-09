@@ -158,15 +158,15 @@ export function CardBgModal({
         await fetch("/api/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cardBgUrl: json.url }),
+          body: JSON.stringify({ cardBgUrl: json.url, cardCoverBgUrl: json.url }),
         });
-        toast({ title: "নতুন ব্যাকগ্রাউন্ড ছবি সফলভাবে সেট ও সংরক্ষণ করা হয়েছে!" });
+        toast({ title: "✅ কভার পেজের ব্যাকগ্রাউন্ড ছবি স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
       } else {
         // Still keep local preview URL
-        toast({ title: "ব্যাকগ্রাউন্ড ছবি প্রয়োগ করা হয়েছে।" });
+        toast({ title: "কভার ব্যাকগ্রাউন্ড ছবি প্রয়োগ করা হয়েছে।" });
       }
     } catch (e) {
-      toast({ title: "ব্যাকগ্রাউন্ড ছবি প্রিভিউতে যুক্ত হয়েছে।" });
+      toast({ title: "কভার ব্যাকগ্রাউন্ড ছবি প্রিভিউতে যুক্ত হয়েছে।" });
     } finally {
       setUploading(false);
     }
@@ -178,9 +178,9 @@ export function CardBgModal({
       await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardBgUrl: url || "" }),
+        body: JSON.stringify({ cardBgUrl: url || "", cardCoverBgUrl: url || "" }),
       });
-      toast({ title: url ? "নতুন কার্ড ডিজাইন প্রয়োগ করা হয়েছে!" : "ডিফল্ট ব্যাকগ্রাউন্ডে ফিরে আসা হয়েছে।" });
+      toast({ title: url ? "✅ নতুন কভার ডিজাইন স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" : "ডিফল্ট ব্যাকগ্রাউন্ডে ফিরে আসা হয়েছে।" });
     } catch {
       // ignore
     }
@@ -192,10 +192,10 @@ export function CardBgModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl font-bold text-slate-900">
             <Palette className="h-5 w-5 text-emerald-600" />
-            রেজাল্ট কার্ডের ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন
+            কভার পেজের ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm text-slate-600">
-            আপনার পছন্দের যেকোনো ফটো/সার্টিফিকেট বর্ডার ব্যাকগ্রাউন্ড হিসেবে আপলোড করুন অথবা রেডিমেড প্রিমিয়াম ডিজাইন নির্বাচন করুন।
+            আপনার পছন্দের যেকোনো ফটো/সার্টিফিকেট বর্ডার আপলোড করুন। এটি শুধুমাত্র কভার পেজের ব্যাকগ্রাউন্ডে স্থায়ীভাবে প্রয়োগ হবে, রেজাল্ট শিট অফিশিয়াল স্ট্যান্ডার্ড থাকবে।
           </DialogDescription>
         </DialogHeader>
 

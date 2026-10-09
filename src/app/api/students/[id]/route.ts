@@ -112,13 +112,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.section !== undefined) { studentCols.push("section = ?"); studentVals.push(body.section ?? null); }
     if (body.roll !== undefined) { studentCols.push("roll = ?"); studentVals.push(body.roll); }
     if (body.fatherName !== undefined) { studentCols.push("father_name = ?"); studentVals.push(body.fatherName ?? null); }
+    if (body.fatherOccupation !== undefined) { studentCols.push("father_occupation = ?"); studentVals.push(body.fatherOccupation ?? null); }
     if (body.motherName !== undefined) { studentCols.push("mother_name = ?"); studentVals.push(body.motherName ?? null); }
+    if (body.motherOccupation !== undefined) { studentCols.push("mother_occupation = ?"); studentVals.push(body.motherOccupation ?? null); }
+    if (body.guardianName !== undefined) { studentCols.push("guardian_name = ?"); studentVals.push(body.guardianName ?? null); }
+    if (body.guardianOccupation !== undefined) { studentCols.push("guardian_occupation = ?"); studentVals.push(body.guardianOccupation ?? null); }
+    if (body.guardianRelation !== undefined) { studentCols.push("guardian_relation = ?"); studentVals.push(body.guardianRelation ?? null); }
     if (body.schoolName !== undefined) { studentCols.push("school_name = ?"); studentVals.push(body.schoolName ?? null); }
     if (body.phone !== undefined) { studentCols.push("phone = ?"); studentVals.push(body.phone ?? null); }
     if (body.address !== undefined) { studentCols.push("address = ?"); studentVals.push(body.address ?? null); }
     if (body.bloodGroup !== undefined) { studentCols.push("blood_group = ?"); studentVals.push(body.bloodGroup ?? null); }
     if (body.dob !== undefined) { studentCols.push("dob = ?"); studentVals.push(body.dob ?? null); }
     if (body.hidePhotoFromStudents !== undefined) { studentCols.push("hide_photo_from_students = ?"); studentVals.push(body.hidePhotoFromStudents ? 1 : 0); }
+    if (body.password) {
+      studentCols.push("raw_password = ?");
+      studentVals.push(body.password);
+    }
 
     const userCols: string[] = [];
     const userVals: unknown[] = [];

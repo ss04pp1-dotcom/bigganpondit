@@ -20,6 +20,8 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
+  Download,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -47,6 +49,7 @@ interface NotebookItem {
   created_at: string;
   class_name: string | null;
   subject_name: string | null;
+  download_allowed?: number | boolean;
 }
 
 export function NotebookViewer({
@@ -71,21 +74,11 @@ export function NotebookViewer({
   const [uploadDesc, setUploadDesc] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadDownloadAllowed, setUploadDownloadAllowed] = useState(false);
 
   // Class & subject list
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string }>>([]);
   const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string }>>([]);
-
-  // Publication branding info
-  const [pubInfo, setPubInfo] = useState<{
-    name: string;
-    description: string;
-    logoUrl: string | null;
-  }>({
-    name: "বিজ্ঞান পণ্ডিত প্রকাশনী",
-    description: "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
-    logoUrl: null,
-  });
 
   const { toast } = useToast();
 
@@ -114,22 +107,6 @@ export function NotebookViewer({
       .then((json) => {
         if (json.ok && Array.isArray(json.subjects)) {
           setSubjectsList(json.subjects);
-        }
-      })
-      .catch(() => {});
-
-    // Load publication branding settings
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.ok) {
-          setPubInfo({
-            name: json.publicationName || "বিজ্ঞান পণ্ডিত প্রকাশনী",
-            description:
-              json.publicationDescription ||
-              "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
-            logoUrl: json.publicationLogoUrl || null,
-          });
         }
       })
       .catch(() => {});
@@ -194,6 +171,7 @@ export function NotebookViewer({
           fileName: uploadFile.name,
           fileSize: uploadFile.size,
           description: uploadDesc.trim() || undefined,
+          downloadAllowed: uploadDownloadAllowed,
         }),
       });
 
@@ -208,11 +186,40 @@ export function NotebookViewer({
       setUploadTitle("");
       setUploadDesc("");
       setUploadFile(null);
+      setUploadDownloadAllowed(false);
       loadNotebooks();
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleToggleDownload(id: number, currentAllowed: boolean | number | undefined) {
+    const nextVal = !currentAllowed;
+    try {
+      const res = await fetch(`/api/notebooks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ downloadAllowed: nextVal }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "অনুমতি পরিবর্তন ব্যর্থ হয়েছে।");
+      }
+      toast({
+        title: nextVal ? "ডাউনলোড অনুমতি দেওয়া হয়েছে! 📥" : "রিড-অনলি মোড সক্রিয় (ডাউনলোড বন্ধ) 🔒",
+        description: data.message,
+      });
+      setNotebooks((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, download_allowed: nextVal ? 1 : 0 } : b))
+      );
+    } catch (err: any) {
+      toast({
+        title: "সমস্যা হয়েছে",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   }
 
@@ -238,31 +245,13 @@ export function NotebookViewer({
       <Card className="border-cyan-100 bg-white shadow-xs">
         <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            {pubInfo.logoUrl ? (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50 p-1 shadow-2xs">
-                <img
-                  src={pubInfo.logoUrl}
-                  alt={pubInfo.name}
-                  className="h-full w-full object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = "none";
-                  }}
-                />
-              </div>
-            ) : (
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md">
-                <BookMarked className="h-6 w-6" />
-              </span>
-            )}
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-600 text-white shadow-md">
+              <BookMarked className="h-6 w-6" />
+            </span>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-[18px] font-bold text-slate-900">{pubInfo.name}</h2>
-                <span className="rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-bold text-cyan-800">
-                  ডিজিটাল লাইব্রেরি
-                </span>
-              </div>
-              <p className="text-[12px] text-slate-500 mt-0.5">
-                {pubInfo.description}
+              <h2 className="text-[18px] font-bold text-slate-900">প্রকাশনী ও ডিজিটাল লাইব্রেরি</h2>
+              <p className="text-[12px] text-slate-500">
+                অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)
               </p>
             </div>
           </div>
@@ -339,9 +328,15 @@ export function NotebookViewer({
               className="group overflow-hidden border border-slate-200 bg-white shadow-2xs transition-all hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md"
             >
               <div className="flex h-32 items-center justify-center bg-gradient-to-br from-cyan-900 via-slate-900 to-indigo-950 p-4 text-center text-white relative">
-                <div className="absolute top-2.5 left-2.5 flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-bold backdrop-blur-xs text-cyan-200">
-                  <Lock className="h-2.5 w-2.5" /> সুরক্ষিত রিড-অনলি
-                </div>
+                {b.download_allowed ? (
+                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1 rounded-md bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold text-white shadow-2xs">
+                    <Download className="h-2.5 w-2.5" /> ডাউনলোড + রিড
+                  </div>
+                ) : (
+                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-bold backdrop-blur-xs text-cyan-200">
+                    <Lock className="h-2.5 w-2.5" /> সুরক্ষিত রিড-অনলি
+                  </div>
+                )}
                 {b.class_name && (
                   <div className="absolute top-2.5 right-2.5 rounded-md bg-cyan-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-2xs">
                     {classLabel(b.class_name)}
@@ -372,6 +367,37 @@ export function NotebookViewer({
                   </p>
                 )}
 
+                {/* অ্যাডমিন ও পরিচালকের জন্য দ্রুত ডাউনলোড অনুমোদন টগল */}
+                {(user.role === "ADMIN" || user.role === "DIRECTOR") && (
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 p-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {b.download_allowed ? (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                          <Check className="h-3.5 w-3.5 text-emerald-600" /> ডাউনলোড অনুমোদিত
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                          <Lock className="h-3 w-3 text-slate-400" /> রিড-অনলি (ডাউনলোড বন্ধ)
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleToggleDownload(b.id, b.download_allowed)}
+                      className={cn(
+                        "h-6 text-[11px] font-semibold px-2 shadow-2xs",
+                        b.download_allowed
+                          ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                          : "border-emerald-300 text-emerald-700 bg-emerald-50/70 hover:bg-emerald-100"
+                      )}
+                    >
+                      {b.download_allowed ? "ডাউনলোড বন্ধ করুন" : "ডাউনলোড অনুমোদন দিন"}
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-400">
                   <span>{bn(b.created_at.split("T")[0] || b.created_at.slice(0, 10))}</span>
                   <div className="flex items-center gap-2">
@@ -385,6 +411,20 @@ export function NotebookViewer({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
+                    )}
+                    {/* ডাউনলোড বাটন — শুধুমাত্র যেটাতে এডমিন ডাউনলোডের অনুমতি দিয়েছে */}
+                    {!!b.download_allowed && (
+                      <a
+                        href={`/api/files/${b.file_key}`}
+                        download={b.file_name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center h-7 gap-1 rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-2xs transition"
+                        title="পিডিএফ ফাইল ডাউনলোড করুন"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        ডাউনলোড
+                      </a>
                     )}
                     <Button
                       size="sm"
@@ -484,6 +524,50 @@ export function NotebookViewer({
                   নির্বাচিত ফাইল: {uploadFile.name} ({(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)
                 </p>
               )}
+            </div>
+
+            {/* রিড-অনলি বনাম ডাউনলোড অনুমোদন অপশন */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">শিক্ষার্থীদের জন্য পড়ার সুবিধা (অনুমোদন) *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUploadDownloadAllowed(false)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 p-2.5 rounded-xl border text-left transition",
+                    !uploadDownloadAllowed
+                      ? "border-cyan-500 bg-cyan-50/80 text-cyan-950 font-bold ring-1 ring-cyan-500"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <Lock className="h-3.5 w-3.5 text-cyan-600" />
+                    <span>শুধুমাত্র রিড-অনলি</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-normal leading-tight">
+                    শিক্ষার্থীরা শুধু অ্যাপে পড়তে পারবে, ডাউনলোড বন্ধ থাকবে।
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setUploadDownloadAllowed(true)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 p-2.5 rounded-xl border text-left transition",
+                    uploadDownloadAllowed
+                      ? "border-emerald-500 bg-emerald-50/80 text-emerald-950 font-bold ring-1 ring-emerald-500"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <Download className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>ডাউনলোড + রিড</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-normal leading-tight">
+                    শিক্ষার্থীরা পড়তে ও অফলাইনে PDF ডাউনলোড করতে পারবে।
+                  </p>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1.5">

@@ -3,22 +3,20 @@ import { getDb, getSetting } from "@/lib/db";
 import {
   buildStudentAnnualReport,
   getDirectorSignatureInfo,
-  getAllDirectorsList,
   getStudentExamRows,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
-import { OfficialResultCard } from "@/components/app/official-result-card";
+import { StudentMarksheet } from "@/components/students/student-marksheet";
 import { AnnualChart } from "@/components/app/annual-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import {
-  DEFAULT_PUBLICATION_NAME,
+  DEFAULT_ACADEMY_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
+  SETTING_ACADEMY_NAME,
   bn,
   fmtGpa,
   fmtNum,
@@ -41,13 +39,10 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
 
   const report = await buildStudentAnnualReport(db, { studentId: user.studentId!, year, subjectIds: null });
   const dirInfo = await getDirectorSignatureInfo(db);
-  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
+  const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const logoUrl = logoKey ? `/api/files/${logoKey}` : null;
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
 
   const examRows = await getStudentExamRows(db, {
     studentId: user.studentId!,
@@ -114,26 +109,24 @@ export default async function StudentAnnualPage({ searchParams }: { searchParams
         </CardContent>
       </Card>
 
-      {/* 100% Pixel to Pixel Official Result Sheet & Booklet */}
-      <OfficialResultCard
-        mode="ANNUAL"
-        year={year}
+      {/* ডেডিকেটেড স্টুডেন্ট একাডেমিক মার্কশিট (এডমিনের রেজাল্ট কার্ড নয়) */}
+      <StudentMarksheet
+        title="বার্ষিক একাডেমিক মার্কশিট"
+        sessionText={`শিক্ষাবর্ষ: ${bn(year)}`}
         student={{
           name: user.name,
           roll: user.roll ?? 1,
           className: user.className ?? "10",
           division: user.division,
           section: user.section,
+          photoKey: user.photoKey,
+          username: user.username,
         }}
         subjects={officialSubjects}
         overall={overall}
         directorInfo={dirInfo}
-        availableDirectors={availableDirectors}
+        academyName={academyName}
         logoUrl={logoUrl}
-        publicationLogoUrl={publicationLogoUrl}
-        publicationName={publicationName}
-        defaultTab="ALL"
-        showPrintButton={true}
       />
 
       {/* 12 Months Progress & Graph */}

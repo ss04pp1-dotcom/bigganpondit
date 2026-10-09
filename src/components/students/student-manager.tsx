@@ -25,7 +25,9 @@ import {
   Phone,
   MessageSquare,
   Send,
+  Fingerprint,
 } from "lucide-react";
+import { BiometricPasswordDialog } from "./biometric-password-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -72,7 +74,12 @@ interface Row {
   class_name: string;
   username: string;
   father_name?: string | null;
+  father_occupation?: string | null;
   mother_name?: string | null;
+  mother_occupation?: string | null;
+  guardian_name?: string | null;
+  guardian_occupation?: string | null;
+  guardian_relation?: string | null;
   school_name?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -96,7 +103,12 @@ interface RequestRow {
   username: string;
   photo_key: string | null;
   father_name: string | null;
+  father_occupation?: string | null;
   mother_name: string | null;
+  mother_occupation?: string | null;
+  guardian_name?: string | null;
+  guardian_occupation?: string | null;
+  guardian_relation?: string | null;
   school_name: string | null;
   phone: string | null;
   address: string | null;
@@ -120,7 +132,12 @@ interface FormState {
   password: string;
   photo_key: string | null;
   fatherName?: string;
+  fatherOccupation?: string;
   motherName?: string;
+  motherOccupation?: string;
+  guardianName?: string;
+  guardianOccupation?: string;
+  guardianRelation?: string;
   schoolName?: string;
   phone?: string;
   address?: string;
@@ -139,7 +156,12 @@ const emptyForm: FormState = {
   password: "",
   photo_key: null,
   fatherName: "",
+  fatherOccupation: "",
   motherName: "",
+  motherOccupation: "",
+  guardianName: "",
+  guardianOccupation: "",
+  guardianRelation: "",
   schoolName: "",
   phone: "",
   address: "",
@@ -204,6 +226,7 @@ export function StudentManager({
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectModalReq, setRejectModalReq] = useState<RequestRow | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [viewReq, setViewReq] = useState<RequestRow | null>(null);
 
   // SMS Modal state
   const [smsOpen, setSmsOpen] = useState(false);
@@ -212,6 +235,9 @@ export function StudentManager({
   const [smsMessage, setSmsMessage] = useState("");
   const [smsSending, setSmsSending] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(new Set());
+
+  // Biometric fingerprint password reveal state for Admin
+  const [bioStudent, setBioStudent] = useState<Row | null>(null);
 
   const { toast } = useToast();
 
@@ -325,7 +351,12 @@ export function StudentManager({
       username: form.username.trim(),
       password: form.password,
       fatherName: form.fatherName?.trim() || null,
+      fatherOccupation: form.fatherOccupation?.trim() || null,
       motherName: form.motherName?.trim() || null,
+      motherOccupation: form.motherOccupation?.trim() || null,
+      guardianName: form.guardianName?.trim() || null,
+      guardianOccupation: form.guardianOccupation?.trim() || null,
+      guardianRelation: form.guardianRelation?.trim() || null,
       schoolName: form.schoolName?.trim() || null,
       phone: form.phone?.trim() || null,
       address: form.address?.trim() || null,
@@ -628,6 +659,18 @@ export function StudentManager({
                             {role === "ADMIN" && (
                               <Button
                                 size="sm"
+                                variant="outline"
+                                className="h-7 px-2.5 rounded text-[11px] font-semibold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center gap-1"
+                                onClick={() => setBioStudent(row)}
+                                title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
+                              >
+                                <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
+                                পাসওয়ার্ড
+                              </Button>
+                            )}
+                            {role === "ADMIN" && (
+                              <Button
+                                size="sm"
                                 className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
                                 onClick={() => {
                                   setPendingPhoto(null);
@@ -642,7 +685,12 @@ export function StudentManager({
                                     password: "",
                                     photo_key: row.photo_key,
                                     fatherName: row.father_name ?? "",
+                                    fatherOccupation: row.father_occupation ?? "",
                                     motherName: row.mother_name ?? "",
+                                    motherOccupation: row.mother_occupation ?? "",
+                                    guardianName: row.guardian_name ?? "",
+                                    guardianOccupation: row.guardian_occupation ?? "",
+                                    guardianRelation: row.guardian_relation ?? "",
                                     schoolName: row.school_name ?? "",
                                     phone: row.phone ?? "",
                                     address: row.address ?? "",
@@ -748,7 +796,7 @@ export function StudentManager({
                       <th className="px-4 py-3">ইউজারনেম</th>
                       <th className="px-4 py-3">{role === "ADMIN" ? "অনুরোধকারী শিক্ষক" : "আবেদনের তারিখ"}</th>
                       <th className="px-4 py-3 text-center">স্ট্যাটাস</th>
-                      {role === "ADMIN" && <th className="px-4 py-3 text-right">কার্যক্রম</th>}
+                      <th className="px-4 py-3 text-right">কার্যক্রম</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -815,10 +863,20 @@ export function StudentManager({
                             </div>
                           )}
                         </td>
-                        {role === "ADMIN" && (
-                          <td className="px-4 py-3 text-right">
-                            {req.status === "PENDING" ? (
-                              <div className="flex items-center justify-end gap-1.5">
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1 text-slate-700 hover:text-slate-900 border-slate-200 hover:bg-slate-100 text-xs font-semibold px-2"
+                              onClick={() => setViewReq(req)}
+                              title="সম্পূর্ণ বিবরণ দেখুন"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-blue-600" />
+                              বিবরণ
+                            </Button>
+                            {role === "ADMIN" && req.status === "PENDING" && (
+                              <>
                                 <Button
                                   size="sm"
                                   disabled={approvingId === req.id}
@@ -844,12 +902,10 @@ export function StudentManager({
                                 >
                                   <X className="h-3.5 w-3.5" /> বাতিল
                                 </Button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">সম্পন্ন</span>
+                              </>
                             )}
-                          </td>
-                        )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -896,6 +952,114 @@ export function StudentManager({
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Details Dialog */}
+      <Dialog open={!!viewReq} onOpenChange={(open) => !open && setViewReq(null)}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <StudentAvatar photoKey={viewReq?.photo_key ?? null} name={viewReq?.name ?? ""} size="lg" />
+              <div>
+                <DialogTitle className="text-lg">{viewReq?.name}</DialogTitle>
+                <p className="text-[12px] text-muted-foreground">
+                  {viewReq && classLabel(viewReq.class_name)}
+                  {viewReq?.division ? ` — ${divisionLabel(viewReq.division)}` : ""} • রোল {viewReq ? bn(viewReq.roll) : ""}
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {viewReq && (
+            <div className="space-y-3 pt-2 text-[13px]">
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3">
+                <div>
+                  <span className="text-muted-foreground">ইউজারনেম:</span>
+                  <p className="font-mono font-medium">@{viewReq.username}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">শাখা:</span>
+                  <p className="font-medium">{viewReq.section ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">পিতার নাম:</span>
+                  <p className="font-medium">{viewReq.father_name || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">পিতার পেশা:</span>
+                  <p className="font-medium">{viewReq.father_occupation || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">মাতার নাম:</span>
+                  <p className="font-medium">{viewReq.mother_name || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">মাতার পেশা:</span>
+                  <p className="font-medium">{viewReq.mother_occupation || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">অভিভাবকের নাম:</span>
+                  <p className="font-medium">{viewReq.guardian_name || viewReq.father_name || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">অভিভাবকের সাথে সম্পর্ক:</span>
+                  <p className="font-medium">{viewReq.guardian_relation || (viewReq.father_name ? "পিতা" : "—")}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">অভিভাবকের পেশা:</span>
+                  <p className="font-medium">{viewReq.guardian_occupation || viewReq.father_occupation || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">অভিভাবকের ফোন:</span>
+                  <p className="font-medium">{viewReq.phone ? bn(viewReq.phone) : "—"}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">রক্তের গ্রুপ:</span>
+                  <p className="font-medium">{viewReq.blood_group || "—"}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">প্রতিষ্ঠান / স্কুল:</span>
+                  <p className="font-medium">{viewReq.school_name || "—"}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">ঠিকানা:</span>
+                  <p className="font-medium">{viewReq.address || "—"}</p>
+                </div>
+                <div className="col-span-2 border-t border-border/60 pt-2 mt-1">
+                  <span className="text-muted-foreground">অনুরোধকারী শিক্ষক:</span>
+                  <p className="font-medium">{viewReq.teacher_name ?? "শিক্ষক"} {viewReq.teacher_short_name ? `(${viewReq.teacher_short_name})` : ""}</p>
+                </div>
+              </div>
+
+              {role === "ADMIN" && viewReq.status === "PENDING" && (
+                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const r = viewReq;
+                      setViewReq(null);
+                      setRejectModalReq(r);
+                      setRejectNote("");
+                    }}
+                    className="text-rose-600 border-rose-200 hover:bg-rose-50"
+                  >
+                    <X className="h-4 w-4 mr-1" /> আবেদন বাতিল
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      const id = viewReq.id;
+                      setViewReq(null);
+                      await handleApprove(id);
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <Check className="h-4 w-4 mr-1" /> অনুমোদন করুন
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1013,12 +1177,73 @@ export function StudentManager({
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label>পিতার পেশা (ঐচ্ছিক)</Label>
+                  <Input
+                    value={form.fatherOccupation ?? ""}
+                    onChange={(e) => setForm({ ...form, fatherOccupation: e.target.value })}
+                    className="h-10"
+                    placeholder="যেমন: কৃষক, শিক্ষক, ব্যবসায়ী, চাকরিজীবী"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
                   <Label>মাতার নাম (ঐচ্ছিক)</Label>
                   <Input
                     value={form.motherName ?? ""}
                     onChange={(e) => setForm({ ...form, motherName: e.target.value })}
                     className="h-10"
                     placeholder="মাতার নাম"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>মাতার পেশা (ঐচ্ছিক)</Label>
+                  <Input
+                    value={form.motherOccupation ?? ""}
+                    onChange={(e) => setForm({ ...form, motherOccupation: e.target.value })}
+                    className="h-10"
+                    placeholder="যেমন: গৃহিণী, শিক্ষিকা, চাকরিজীবী"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>অভিভাবকের নাম (ঐচ্ছিক)</Label>
+                  <Input
+                    value={form.guardianName ?? ""}
+                    onChange={(e) => setForm({ ...form, guardianName: e.target.value })}
+                    className="h-10"
+                    placeholder="পিতা/মাতা ছাড়া অন্য হলে"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>অভিভাবকের সাথে সম্পর্ক</Label>
+                  <Input
+                    value={form.guardianRelation ?? ""}
+                    onChange={(e) => setForm({ ...form, guardianRelation: e.target.value })}
+                    className="h-10"
+                    placeholder="যেমন: পিতা / মাতা / বড় ভাই / চাচা"
+                    list="guardian-relations-list"
+                  />
+                  <datalist id="guardian-relations-list">
+                    <option value="পিতা" />
+                    <option value="মাতা" />
+                    <option value="বড় ভাই" />
+                    <option value="বড় বোন" />
+                    <option value="চাচা" />
+                    <option value="মামা" />
+                    <option value="দাদা" />
+                    <option value="নানা" />
+                    <option value="অন্যান্য" />
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>অভিভাবকের পেশা</Label>
+                  <Input
+                    value={form.guardianOccupation ?? ""}
+                    onChange={(e) => setForm({ ...form, guardianOccupation: e.target.value })}
+                    className="h-10"
+                    placeholder="যেমন: ব্যবসায়ী / চাকরিজীবী"
                   />
                 </div>
               </div>
@@ -1140,7 +1365,20 @@ export function StudentManager({
       </Dialog>
 
       {/* view dialog */}
-      <StudentViewDialog studentId={viewId} onClose={() => setViewId(null)} students={rows} />
+      <StudentViewDialog
+        studentId={viewId}
+        onClose={() => setViewId(null)}
+        students={rows}
+        role={role}
+        onRevealPassword={(st) => setBioStudent(st)}
+      />
+
+      {/* Biometric Fingerprint Password Dialog for Admin */}
+      <BiometricPasswordDialog
+        open={!!bioStudent}
+        onOpenChange={(open) => !open && setBioStudent(null)}
+        student={bioStudent}
+      />
 
       {/* SMS MODAL FOR ADMIN — Point 05 */}
     <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
@@ -1269,10 +1507,14 @@ function StudentViewDialog({
   studentId,
   onClose,
   students,
+  role = "ADMIN",
+  onRevealPassword,
 }: {
   studentId: number | null;
   onClose: () => void;
   students: Row[];
+  role?: "ADMIN" | "TEACHER";
+  onRevealPassword?: (student: Row) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");
   const [data, setData] = useState<{
@@ -1365,14 +1607,34 @@ function StudentViewDialog({
                 <p className="font-medium">{student.father_name || "—"}</p>
               </div>
               <div>
+                <span className="text-muted-foreground">পিতার পেশা:</span>
+                <p className="font-medium">{student.father_occupation || "—"}</p>
+              </div>
+              <div>
                 <span className="text-muted-foreground">মাতার নাম:</span>
                 <p className="font-medium">{student.mother_name || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">মাতার পেশা:</span>
+                <p className="font-medium">{student.mother_occupation || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">অভিভাবকের নাম:</span>
+                <p className="font-medium">{student.guardian_name || student.father_name || "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">অভিভাবকের সাথে সম্পর্ক:</span>
+                <p className="font-medium">{student.guardian_relation || (student.father_name ? "পিতা" : "—")}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">অভিভাবকের পেশা:</span>
+                <p className="font-medium">{student.guardian_occupation || student.father_occupation || "—"}</p>
               </div>
               <div>
                 <span className="text-muted-foreground">অভিভাবকের ফোন:</span>
                 <p className="font-medium">{student.phone ? bn(student.phone) : "—"}</p>
               </div>
-              <div>
+              <div className="col-span-2">
                 <span className="text-muted-foreground">রক্তের গ্রুপ:</span>
                 <p className="font-medium">{student.blood_group || "—"}</p>
               </div>
@@ -1384,6 +1646,35 @@ function StudentViewDialog({
                 <span className="text-muted-foreground">ঠিকানা:</span>
                 <p className="font-medium">{student.address || "—"}</p>
               </div>
+
+              {/* অ্যাডমিনের জন্য ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখার কার্ড */}
+              {role === "ADMIN" && (
+                <div className="col-span-2 mt-2 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-blue-50/60 to-indigo-50/70 p-3.5 shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
+                        <Fingerprint className="h-6 w-6" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-bold text-indigo-950">
+                          শিক্ষার্থীর পাসওয়ার্ড (বায়োমেট্রিক নিরাপত্তা)
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          পাসওয়ার্ড দেখতে এডমিনকে ফিঙ্গারপ্রিন্ট স্পর্শ করতে হবে
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => onRevealPassword?.(student)}
+                      className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs shrink-0"
+                    >
+                      <Fingerprint className="h-3.5 w-3.5" />
+                      ফিঙ্গার দিয়ে পাসওয়ার্ড দেখুন
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { Printer, FileText, BookOpen, Layers, Palette, Image as ImageIcon } from "lucide-react";
+import { Printer, FileText, BookOpen, Layers, Palette, Image as ImageIcon, Lock } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtGpa } from "@/lib/constants";
 import { TransparentSignature } from "@/components/app/transparent-signature";
 import { CardBgModal } from "@/components/app/card-bg-modal";
@@ -69,8 +69,6 @@ export interface OfficialResultCardProps {
   selectedDirectorId?: number | null | "BOTH";
   onDirectorChange?: (directorId: number | "BOTH") => void;
   logoUrl?: string | null;
-  publicationLogoUrl?: string | null;
-  publicationName?: string | null;
   academyName?: string | null;
   teacherComments?: {
     comment1?: string;
@@ -86,8 +84,6 @@ export interface OfficialResultCardProps {
     gpa?: number;
   };
   defaultTab?: "SHEET" | "BOOKLET" | "ALL";
-  activeTab?: "SHEET" | "BOOKLET" | "ALL";
-  onTabChange?: (tab: "SHEET" | "BOOKLET" | "ALL") => void;
   bgTheme?: BgTheme;
   onBgThemeChange?: (theme: BgTheme) => void;
   cardBgUrl?: string | null;
@@ -95,6 +91,8 @@ export interface OfficialResultCardProps {
   isLastCard?: boolean;
   hideCardControls?: boolean;
   showPrintButton?: boolean;
+  isAdmin?: boolean;
+  canPrint?: boolean;
 }
 
 /* ---- ফিক্সড মাপ (px, 96dpi) ---- */
@@ -178,45 +176,27 @@ export function OfficialResultCard({
   selectedDirectorId,
   onDirectorChange,
   logoUrl,
-  publicationLogoUrl: propPublicationLogoUrl,
-  publicationName: propPublicationName,
-  academyName,
   teacherComments,
   topStudent,
   defaultTab = "ALL",
-  activeTab: propActiveTab,
-  onTabChange,
   bgTheme: propBgTheme,
   onBgThemeChange,
   cardBgUrl: propCardBgUrl,
   onCardBgChange,
   isLastCard = true,
   hideCardControls = false,
-  showPrintButton = false,
+  showPrintButton: propShowPrintButton = false,
+  isAdmin = false,
+  canPrint: propCanPrint,
 }: OfficialResultCardProps) {
-  const [internalView, setInternalView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
-  const activeView = propActiveTab ?? internalView;
-  const setActiveView = (tab: "SHEET" | "BOOKLET" | "ALL") => {
-    setInternalView(tab);
-    onTabChange?.(tab);
-  };
+  // রেজাল্ট কার্ড শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবে
+  const canPrint = Boolean(isAdmin || propCanPrint);
+  const showPrint = Boolean(canPrint && propShowPrintButton);
+
+  const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
   const bgTheme = propBgTheme ?? "FLORAL";
   const [activeBgUrl, setActiveBgUrl] = useState<string | null>(propCardBgUrl || null);
-  const [activePubLogoUrl, setActivePubLogoUrl] = useState<string | null>(propPublicationLogoUrl || null);
-  const [activePubName, setActivePubName] = useState<string>(propPublicationName || "পাণ্ডিত্য প্রকাশন");
   const [bgModalOpen, setBgModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (propPublicationLogoUrl !== undefined) {
-      setActivePubLogoUrl(propPublicationLogoUrl || null);
-    }
-  }, [propPublicationLogoUrl]);
-
-  useEffect(() => {
-    if (propPublicationName !== undefined) {
-      setActivePubName(propPublicationName || "পাণ্ডিত্য প্রকাশন");
-    }
-  }, [propPublicationName]);
 
   useEffect(() => {
     if (propCardBgUrl !== undefined) {
@@ -225,19 +205,13 @@ export function OfficialResultCard({
       fetch("/api/settings")
         .then((r) => r.json())
         .then((data) => {
-          if (data?.ok) {
-            if (data.cardBgUrl) setActiveBgUrl(data.cardBgUrl);
-            if (propPublicationLogoUrl === undefined && data.publicationLogoUrl) {
-              setActivePubLogoUrl(data.publicationLogoUrl);
-            }
-            if (propPublicationName === undefined && data.publicationName) {
-              setActivePubName(data.publicationName);
-            }
+          if (data?.ok && data.cardBgUrl) {
+            setActiveBgUrl(data.cardBgUrl);
           }
         })
         .catch(() => {});
     }
-  }, [propCardBgUrl, propPublicationLogoUrl, propPublicationName]);
+  }, [propCardBgUrl]);
 
   const handleCustomBgChange = (newUrl: string | null) => {
     setActiveBgUrl(newUrl);
@@ -285,7 +259,7 @@ export function OfficialResultCard({
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    if (s.grade === "F") {
+    if (s.grade === "F" && !s.isFourth) {
       totalFails++;
     }
   }
@@ -337,34 +311,10 @@ export function OfficialResultCard({
   const showCover = activeView === "BOOKLET" || activeView === "ALL";
   const showSheet = activeView === "SHEET" || activeView === "ALL";
 
-  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — কাস্টম ব্যাকগ্রাউন্ড শুধুমাত্র কভার পেজে (RIGHT/LEFT) প্রযোজ্য হবে
+  // থিম অনুসারে ব্যাকগ্রাউন্ড স্টাইল — ব্যাকগ্রাউন্ড পরিবর্তন শুধুমাত্র কভার পেজের (LEFT ও RIGHT) জন্য প্রযোজ্য, রেজাল্ট শিট (SHEET)-এর নয়!
   const getPanelBg = (side: "LEFT" | "RIGHT" | "SHEET"): React.CSSProperties => {
-    // ১. রেজাল্ট কার্ড শিট (SHEET) সবসময় স্বাভাবিক ও পরিষ্কার থাকবে, কাস্টম ব্যাকগ্রাউন্ড আসবে না
-    if (side === "SHEET") {
-      if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
-      if (bgTheme === "PARCHMENT") {
-        return {
-          backgroundColor: "#fdfbf7",
-          backgroundImage: "radial-gradient(#e2d9cc 0.75px, transparent 0.75px)",
-          backgroundSize: "16px 16px",
-        };
-      }
-      if (bgTheme === "ROYAL") {
-        return {
-          backgroundColor: "#f6f9fc",
-          backgroundImage: "radial-gradient(#d3e1ef 1px, transparent 1px)",
-          backgroundSize: "20px 20px",
-        };
-      }
-      // FLORAL (Default)
-      return {
-        backgroundColor: "#eaf2dd",
-        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
-      };
-    }
-
-    // ২. শুধুমাত্র কভার পেজে (RIGHT এবং LEFT) কাস্টম ব্যাকগ্রাউন্ড ছবি প্রযোজ্য
-    if (activeBgUrl) {
+    // শুধুমাত্র কভার পেজের (বাম ও ডান প্যানেল) ব্যাকগ্রাউন্ড ছবি পরিবর্তিত হবে
+    if (side !== "SHEET" && activeBgUrl) {
       return {
         backgroundImage: `url(${activeBgUrl})`,
         backgroundSize: "cover",
@@ -373,23 +323,13 @@ export function OfficialResultCard({
         backgroundColor: "#ffffff",
       };
     }
-
-    if (bgTheme === "CLEAN") return { backgroundColor: "#ffffff", backgroundImage: "none" };
-    if (bgTheme === "PARCHMENT") {
+    // রেজাল্ট শিট (পৃষ্ঠা ২) সর্বদা অফিশিয়াল স্ট্যান্ডার্ড ব্যাকগ্রাউন্ডে থাকবে
+    if (side === "SHEET") {
       return {
-        backgroundColor: "#fdfbf7",
-        backgroundImage: "radial-gradient(#e2d9cc 0.75px, transparent 0.75px)",
-        backgroundSize: "16px 16px",
+        backgroundColor: "#eaf2dd",
+        backgroundImage: "radial-gradient(circle at 95% 85%, rgba(240, 170, 160, 0.22) 0%, rgba(180, 220, 190, 0.18) 35%, transparent 60%)",
       };
     }
-    if (bgTheme === "ROYAL") {
-      return {
-        backgroundColor: "#f6f9fc",
-        backgroundImage: "radial-gradient(#d3e1ef 1px, transparent 1px)",
-        backgroundSize: "20px 20px",
-      };
-    }
-    // FLORAL (Default)
     return {
       backgroundColor: "#f4f7fb",
       backgroundImage: "radial-gradient(circle at 10% 10%, rgba(180, 225, 190, 0.25) 0%, transparent 45%), radial-gradient(circle at 90% 90%, rgba(245, 190, 180, 0.22) 0%, transparent 45%)",
@@ -406,159 +346,179 @@ export function OfficialResultCard({
     }`;
 
   return (
-    <div ref={wrapRef} className="w-full space-y-4 font-sans text-slate-900 print:space-y-0 print:m-0 print:p-0">
-      {/* ইনজেক্টেড প্রিন্ট স্টাইল — নিশ্চিত করবে A4 Landscape, মার্জিন ০ এবং কোনো অতিরিক্ত ৩য় সাদা পেজ বা নোটিশ থাকবে না */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            @media print {
-              @page {
-                size: 297mm 210mm !important;
-                margin: 0mm !important;
-              }
-              html, body {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 297mm !important;
-                min-width: 297mm !important;
-                height: 100% !important;
-                background: #ffffff !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                overflow: visible !important;
-              }
-              .app-sidebar,
-              .app-topbar,
-              header,
-              nav,
-              .no-print,
-              .notice-ticker,
-              [class*="NoticeTicker"],
-              .marquee-container {
-                display: none !important;
-              }
-              .app-shell,
-              .app-main,
-              main,
-              .lg\\:pl-\\[176px\\] {
-                margin: 0 !important;
-                padding: 0 !important;
-                max-width: none !important;
-                width: 297mm !important;
-                display: block !important;
-              }
-              .rc-slot {
-                width: 297mm !important;
-                height: 209.5mm !important;
-                max-height: 209.5mm !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                box-shadow: none !important;
-                overflow: hidden !important;
-                break-inside: avoid !important;
-                page-break-inside: avoid !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              .rc-slot-cover {
-                break-after: page !important;
-                page-break-after: always !important;
-              }
-              .rc-slot-sheet.rc-break,
-              .rc-slot.rc-break {
-                break-after: page !important;
-                page-break-after: always !important;
-              }
-              .rc-slot-sheet.rc-last,
-              .rc-slot.rc-last {
-                break-after: auto !important;
-                page-break-after: auto !important;
-              }
-              .rc-print-card-hidden-screen {
-                display: block !important;
-              }
-              .rc-page {
-                transform: scale(0.998) !important;
-                transform-origin: 0 0 !important;
-                overflow: hidden !important;
-              }
-            }
-          `,
-        }}
-      />
+    <>
+      <div
+        ref={wrapRef}
+        className={`w-full space-y-4 font-sans text-slate-900 ${
+          canPrint ? "print:space-y-0 print:m-0 print:p-0" : "print:hidden"
+        }`}
+      >
+        {/* ইনজেক্টেড প্রিন্ট স্টাইল — শুধুমাত্র অ্যাডমিন প্রিন্ট অনুমোদিত হলে সক্রিয় থাকবে */}
+        {canPrint && (
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                @media print {
+                  @page {
+                    size: 297mm 210mm !important;
+                    margin: 0mm !important;
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    width: 297mm !important;
+                    min-width: 297mm !important;
+                    height: 100% !important;
+                    background: #ffffff !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    overflow: visible !important;
+                  }
+                  .app-sidebar,
+                  .app-topbar,
+                  header,
+                  nav,
+                  .no-print,
+                  .notice-ticker,
+                  [class*="NoticeTicker"],
+                  .marquee-container {
+                    display: none !important;
+                  }
+                  .app-shell,
+                  .app-main,
+                  main,
+                  .lg\\:pl-\\[176px\\] {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    max-width: none !important;
+                    width: 297mm !important;
+                    display: block !important;
+                  }
+                  .rc-slot {
+                    width: 297mm !important;
+                    height: 209.5mm !important;
+                    max-height: 209.5mm !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    overflow: hidden !important;
+                    break-inside: avoid !important;
+                    page-break-inside: avoid !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  .rc-slot-cover {
+                    break-after: page !important;
+                    page-break-after: always !important;
+                  }
+                  .rc-slot-sheet.rc-break,
+                  .rc-slot.rc-break {
+                    break-after: page !important;
+                    page-break-after: always !important;
+                  }
+                  .rc-slot-sheet.rc-last,
+                  .rc-slot.rc-last {
+                    break-after: auto !important;
+                    page-break-after: auto !important;
+                  }
+                  .rc-page {
+                    transform: scale(0.998) !important;
+                    transform-origin: 0 0 !important;
+                    overflow: hidden !important;
+                  }
+                }
+              `,
+            }}
+          />
+        )}
 
-      {/* কন্ট্রোল বার (প্রিন্টে লুকানো) */}
-      {!hideCardControls && (
-        <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <button onClick={() => setActiveView("BOOKLET")} className={tabCls(activeView === "BOOKLET", "bg-teal-700")}>
-              <BookOpen className="h-4 w-4" />
-              <span>পৃষ্ঠা ১ — কভার ও মন্তব্য</span>
-            </button>
-            <button onClick={() => setActiveView("SHEET")} className={tabCls(activeView === "SHEET", "bg-emerald-600")}>
-              <FileText className="h-4 w-4" />
-              <span>পৃষ্ঠা ২ — রেজাল্ট শিট</span>
-            </button>
-            <button onClick={() => setActiveView("ALL")} className={tabCls(activeView === "ALL", "bg-slate-900")}>
-              <Layers className="h-4 w-4" />
-              <span>দুই পৃষ্ঠা একসাথে</span>
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* ব্যাকগ্রাউন্ড ডিজাইন ও ছবি আপলোড বাটন */}
-            <button
-              type="button"
-              onClick={() => setBgModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 text-xs sm:text-sm font-bold text-emerald-800 hover:from-emerald-100 hover:to-teal-100 hover:border-emerald-400 transition shadow-2xs"
-            >
-              <Palette className="h-4 w-4 text-emerald-700" />
-              <span>কার্ড ব্যাকগ্রাউন্ড ছবি / ডিজাইন</span>
-            </button>
-
-            {availableDirectors && availableDirectors.length > 1 && (
-              <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
-                <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
-                <select
-                  value={String(activeDirectorId)}
-                  onChange={(e) => {
-                    const val = e.target.value === "BOTH" ? "BOTH" : Number(e.target.value);
-                    setActiveDirectorId(val);
-                    onDirectorChange?.(val);
-                  }}
-                  aria-label="স্বাক্ষর নির্বাচন"
-                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
-                >
-                  {availableDirectors.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} {d.institution ? `(${d.institution})` : ""}
-                    </option>
-                  ))}
-                  <option value="BOTH">উভয় পরিচালকের যৌথ স্বাক্ষর</option>
-                </select>
-              </div>
-            )}
-            {showPrintButton && (
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
-              >
-                <Printer className="h-4 w-4" />
-                <span>প্রিন্ট করুন (A4 Landscape)</span>
+        {/* কন্ট্রোল বার (প্রিন্টে লুকানো) */}
+        {!hideCardControls && (
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <button onClick={() => setActiveView("BOOKLET")} className={tabCls(activeView === "BOOKLET", "bg-teal-700")}>
+                <BookOpen className="h-4 w-4" />
+                <span>পৃষ্ঠা ১ — কভার ও মন্তব্য</span>
               </button>
-            )}
-          </div>
-        </div>
-      )}
+              <button onClick={() => setActiveView("SHEET")} className={tabCls(activeView === "SHEET", "bg-emerald-600")}>
+                <FileText className="h-4 w-4" />
+                <span>পৃষ্ঠা ২ — রেজাল্ট শিট</span>
+              </button>
+              <button onClick={() => setActiveView("ALL")} className={tabCls(activeView === "ALL", "bg-slate-900")}>
+                <Layers className="h-4 w-4" />
+                <span>দুই পৃষ্ঠা একসাথে</span>
+              </button>
+            </div>
 
-      {/* ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন মডাল */}
-      <CardBgModal
-        open={bgModalOpen}
-        onOpenChange={setBgModalOpen}
-        currentBgUrl={activeBgUrl}
-        onBgChange={handleCustomBgChange}
-      />
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* ব্যাকগ্রাউন্ড ডিজাইন ও ছবি আপলোড বাটন — শুধুমাত্র অ্যাডমিন */}
+              {canPrint && (
+                <button
+                  type="button"
+                  onClick={() => setBgModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 text-xs sm:text-sm font-bold text-emerald-800 hover:from-emerald-100 hover:to-teal-100 hover:border-emerald-400 transition shadow-2xs"
+                >
+                  <Palette className="h-4 w-4 text-emerald-700" />
+                  <span>কার্ড ব্যাকগ্রাউন্ড ছবি / ডিজাইন</span>
+                </button>
+              )}
+
+              {canPrint && availableDirectors && availableDirectors.length > 1 && (
+                <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs shadow-2xs">
+                  <span className="font-bold text-slate-700 whitespace-nowrap">স্বাক্ষর:</span>
+                  <select
+                    value={String(activeDirectorId)}
+                    onChange={(e) => {
+                      const val = e.target.value === "BOTH" ? "BOTH" : Number(e.target.value);
+                      setActiveDirectorId(val);
+                      onDirectorChange?.(val);
+                    }}
+                    aria-label="স্বাক্ষর নির্বাচন"
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 shadow-2xs focus:border-emerald-500 focus:outline-hidden"
+                  >
+                    {availableDirectors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.institution ? `(${d.institution})` : ""}
+                      </option>
+                    ))}
+                    <option value="BOTH">উভয় পরিচালকের যৌথ স্বাক্ষর</option>
+                  </select>
+                </div>
+              )}
+
+              {/* রেজাল্ট কার্ড প্রিন্ট অপশন — শুধুমাত্র অ্যাডমিন */}
+              {showPrint && (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-blue-700 transition"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>প্রিন্ট করুন (A4 Landscape)</span>
+                </button>
+              )}
+
+              {/* অ্যাডমিন ছাড়া অন্য ব্যবহারকারীদের জন্য বার্তা */}
+              {!canPrint && (
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-2xs">
+                  <Lock className="h-3.5 w-3.5 text-amber-600" />
+                  <span>রেজাল্ট কার্ড শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবেন</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ব্যাকগ্রাউন্ড ছবি ও ডিজাইন পরিবর্তন মডাল */}
+        {canPrint && (
+          <CardBgModal
+            open={bgModalOpen}
+            onOpenChange={setBgModalOpen}
+            currentBgUrl={activeBgUrl}
+            onBgChange={handleCustomBgChange}
+          />
+        )}
 
       {/* ================= পৃষ্ঠা ১ : কভার ================= */}
       {showCover && (
@@ -574,35 +534,19 @@ export function OfficialResultCard({
                 “মুহাম্মাদ (সা:) বলেন, তোমার নিজের জন্য তোমার পরিশ্রমই উত্তম” – সহিহ বুখারি, ২০২৭
               </div>
               
-              {/* প্রকাশনী লোগো — ইউজারের আপলোড করা অফিশিয়াল লোগো অথবা টেক্সট লোগো */}
+              {/* পাণ্ডিত্য প্রকাশন — বড় স্পষ্ট লোগো */}
               <div className="rc-logo-p rc-a flex flex-col items-center justify-center">
-                {activePubLogoUrl ? (
-                  <img
-                    src={activePubLogoUrl}
-                    alt={activePubName || "প্রকাশনী লোগো"}
-                    style={{
-                      maxHeight: "120px",
-                      maxWidth: "360px",
-                      width: "auto",
-                      height: "auto",
-                      objectFit: "contain",
-                    }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
-                        {activePubName.replace(/প্রকাশনী|প্রকাশন/g, "").trim() || "পাণ্ডিত্য"}
-                      </span>
-                      <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
-                        প্রকাশন
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
-                      মুখস্থ নয়, মেধা অন্বেষণ
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-4xl font-black tracking-tight text-[#0d3b66]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
+                    পাণ্ডিত্য
+                  </span>
+                  <span className="rounded-lg bg-[#0d3b66] px-3 py-1 text-lg font-bold text-white shadow-xs">
+                    প্রকাশন
+                  </span>
+                </div>
+                <div className="mt-1 text-[13px] font-bold tracking-widest text-slate-700">
+                  মুখস্থ নয়, মেধা অন্বেষণ
+                </div>
               </div>
             </div>
 
@@ -613,27 +557,17 @@ export function OfficialResultCard({
               {/* বিজ্ঞান পণ্ডিত — বড় আকর্ষণীয় অফিশিয়াল লোগো (Tutor Center ব্যাজ সহ) */}
               <div className="rc-logo-b rc-a flex flex-col items-center justify-center">
                 {logoUrl ? (
-                  <img
-                    src={logoUrl}
-                    alt="বিজ্ঞান পণ্ডিত"
-                    style={{ maxHeight: "172px", maxWidth: "470px", width: "auto", objectFit: "contain" }}
-                  />
+                  <img src={logoUrl} alt="বিজ্ঞান পণ্ডিত" style={{ maxHeight: "150px", width: "auto", objectFit: "contain" }} />
                 ) : (
-                  <div className="flex flex-col items-center justify-center pt-1">
+                  <div className="flex flex-col items-center justify-center pt-2">
                     <div className="relative inline-flex items-center justify-center">
-                      <span
-                        className="text-[64px] font-black tracking-tight text-[#1b5e20]"
-                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
-                      >
+                      <span className="text-[52px] font-black tracking-tight text-[#1b5e20]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
                         বিজ্ঞান
                       </span>
-                      <span
-                        className="ml-2.5 text-[64px] font-black tracking-tight text-[#e65100]"
-                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
-                      >
+                      <span className="ml-2 text-[52px] font-black tracking-tight text-[#e65100]" style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}>
                         পণ্ডিত
                       </span>
-                      <span className="absolute -top-3.5 -right-16 rounded-full bg-[#d32f2f] px-3.5 py-0.5 text-[12px] font-black uppercase text-white shadow-sm tracking-wider">
+                      <span className="absolute -top-3 -right-14 rounded-full bg-[#d32f2f] px-3 py-0.5 text-[11px] font-black uppercase text-white shadow-sm">
                         Tutor Center
                       </span>
                     </div>
@@ -641,12 +575,8 @@ export function OfficialResultCard({
                 )}
               </div>
 
-              {!logoUrl && (
-                <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
-              )}
-              <div className="rc-a rc-addr" style={logoUrl ? { top: 188 } : undefined}>
-                সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ
-              </div>
+              <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
+              <div className="rc-a rc-addr">সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ</div>
               <div className="rc-a rc-badge">রেজাল্ট কার্ড</div>
               
               <div className="rc-a rc-my">
@@ -712,7 +642,7 @@ export function OfficialResultCard({
                 মাসঃ{" "}
                 {MONTHS_BN.map((m, i) => (
                   <React.Fragment key={m}>
-                    <span className={(mode === "MONTHLY" || mode === "MODEL") && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
+                    <span className={mode === "MONTHLY" && i + 1 === monthNum ? "rc-msel font-bold" : undefined}>{m}</span>
                     {i < MONTHS_BN.length - 1 ? " / " : ""}
                   </React.Fragment>
                 ))}
@@ -777,28 +707,12 @@ export function OfficialResultCard({
                       <>
                         <td className="rc-sp" rowSpan={rows.length} />
                         <td className="rc-top" rowSpan={rows.length}>
-                          <div className="flex flex-col items-center justify-center space-y-1">
-                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
-                              {bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}
-                            </div>
-                            <div className="text-[20px] font-bold text-slate-900 leading-tight">
-                              {topStudent?.grade || "A+"}
-                            </div>
-                            <div className="text-[20px] font-bold text-blue-700 leading-tight">
-                              {fmtGpa(topStudent?.gpa ?? 5)}
-                            </div>
-                          </div>
+                          <div className="rc-vv">{bn(topStudent?.totalObtained || overall.classHighestTotal || overall.totalMarks)}</div>
+                          <div className="text-[12px] font-bold text-slate-700">{topStudent?.grade || "A+"} ({fmtGpa(topStudent?.gpa ?? 5)})</div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
-                          <div className="inline-flex flex-col items-center justify-center font-bold">
-                            <span className="text-[20px] font-bold leading-tight text-slate-900 border-b-[1.5px] border-slate-900 px-1 pb-0.5 min-w-[36px] text-center">
-                              {bn(overall.obtained)}
-                            </span>
-                            <span className="text-[18px] font-bold leading-tight text-slate-800 pt-0.5 px-1 min-w-[36px] text-center">
-                              {bn(overall.totalMarks)}
-                            </span>
-                          </div>
+                          <div className="rc-vv">{bn(overall.obtained)}/{bn(overall.totalMarks)}</div>
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
@@ -809,7 +723,7 @@ export function OfficialResultCard({
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
                           <div className="rc-vv rc-gpa">
-                            {totalFails > 0 ? "0.00" : fmtGpa(overall.gpa)}
+                            {totalFails > 0 ? "০.০০" : fmtGpa(overall.gpa)}
                           </div>
                           <div className="rc-dd" />
                         </td>
@@ -941,12 +855,28 @@ export function OfficialResultCard({
         </div>
       )}
 
-      {!hideCardControls && (
+      {!hideCardControls && canPrint && (
         <div className="no-print text-center text-xs text-slate-500">
           💡 টিপস: প্রিন্ট ডায়ালগে <b>A4</b>, <b>Landscape</b>, <b>Margins: None</b> এবং <b>Background graphics</b> টিক দিন —
           ২ পৃষ্ঠার (কভার + রেজাল্ট শিট) সম্পূর্ণ নিখুঁত পিডিএফ হবে।
         </div>
       )}
     </div>
+
+    {/* অ্যাডমিন ছাড়া অন্য কেউ পেজ প্রিন্ট করার চেষ্টা করলে রেজাল্ট কার্ড প্রিন্ট হবে না */}
+    {!canPrint && (
+      <div className="hidden print:block rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/70 p-8 text-center text-slate-800">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 mb-3">
+          <Lock className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">
+          রেজাল্ট কার্ড শুধুমাত্র একাডেমি প্রশাসন / অ্যাডমিন কর্তৃক প্রিন্টযোগ্য
+        </h3>
+        <p className="mt-1 text-xs text-slate-600 max-w-md mx-auto">
+          অফিসিয়াল সিল ও স্বাক্ষরযুক্ত মূল রেজাল্ট কার্ড সংগ্রহের জন্য একাডেমি প্রশাসনের সাথে যোগাযোগ করার অনুরোধ করা হচ্ছে।
+        </p>
+      </div>
+    )}
+  </>
   );
 }

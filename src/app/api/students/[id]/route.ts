@@ -60,7 +60,7 @@ export async function GET(req: Request, ctx: Ctx) {
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
+    const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const id = Number((await ctx.params).id);
     const body = await parseJson(req, studentUpdateSchema);
 
@@ -184,7 +184,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
+    const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const id = Number((await ctx.params).id);
 
     const st = await loadStudent(db, id);

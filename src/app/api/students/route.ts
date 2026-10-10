@@ -114,7 +114,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
-    const { user, db } = await requireApiUser(["ADMIN", "TEACHER"]);
+    const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const body = await parseJson(req, studentCreateSchema);
 
     const classRow = await db

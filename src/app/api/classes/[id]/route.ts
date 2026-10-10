@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN"]);
+    await requireApiUser(["ADMIN", "DIRECTOR"]);
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, MSG.invalidNumber);
 
@@ -57,7 +57,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN"]);
+    await requireApiUser(["ADMIN", "DIRECTOR"]);
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, MSG.invalidNumber);
 

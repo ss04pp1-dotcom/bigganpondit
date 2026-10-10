@@ -374,9 +374,7 @@ export function StudentManager({
     }
   }, [role]);
 
-  useEffect(() => {
-    load();
-    loadRequests();
+  const refreshBatchesAndClasses = useCallback(() => {
     fetch("/api/classes")
       .then((r) => r.json())
       .then((j) => {
@@ -389,7 +387,19 @@ export function StudentManager({
         if (j?.ok && Array.isArray(j.batches)) setAllBatches(j.batches);
       })
       .catch(() => {});
-  }, [load, loadRequests]);
+  }, []);
+
+  useEffect(() => {
+    load();
+    loadRequests();
+    refreshBatchesAndClasses();
+  }, [load, loadRequests, refreshBatchesAndClasses]);
+
+  useEffect(() => {
+    if (form) {
+      refreshBatchesAndClasses();
+    }
+  }, [form ? true : false, refreshBatchesAndClasses]);
 
   const visible = useMemo(() => {
     return rows.filter((r) => {
@@ -866,7 +876,7 @@ export function StudentManager({
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                        &ldquo;{row.name}&rdquo; (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -1023,7 +1033,7 @@ export function StudentManager({
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                        &ldquo;{row.name}&rdquo; (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -1395,7 +1405,7 @@ export function StudentManager({
           </DialogHeader>
           <div className="space-y-3 pt-2">
             <p className="text-[13px] text-slate-600">
-              আপনি কি নিশ্চিত যে শিক্ষার্থী <strong>'{rejectModalReq?.name}'</strong> (রোল {bn(rejectModalReq?.roll)}) এর আবেদনটি বাতিল করতে চান?
+              আপনি কি নিশ্চিত যে শিক্ষার্থী <strong>&ldquo;{rejectModalReq?.name}&rdquo;</strong> (রোল {bn(rejectModalReq?.roll)}) এর আবেদনটি বাতিল করতে চান?
             </p>
             <div className="space-y-1.5">
               <Label className="text-[12px]">বাতিলের কারণ / নোট (শিক্ষককে জানানো হবে):</Label>
@@ -1610,7 +1620,7 @@ export function StudentManager({
                     <div className="flex items-center justify-between">
                       <Label>ব্যাচ (ঐচ্ছিক)</Label>
                       <a
-                        href="/admin/classes"
+                        href={role === "DIRECTOR" ? "/director/classes" : "/admin/classes"}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] text-indigo-600 hover:underline font-medium"
@@ -1647,7 +1657,7 @@ export function StudentManager({
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <Label>শাখা (ঐচ্ছিক)</Label>
+                  <Label> শাখা (ঐচ্ছিক)</Label>
                   <Input
                     value={form.section}
                     onChange={(e) => setForm({ ...form, section: e.target.value })}
@@ -1664,7 +1674,7 @@ export function StudentManager({
                     <div className="flex items-center justify-between">
                       <Label>ব্যাচ (ঐচ্ছিক)</Label>
                       <a
-                        href="/admin/classes"
+                        href={role === "DIRECTOR" ? "/director/classes" : "/admin/classes"}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] text-indigo-600 hover:underline font-medium"

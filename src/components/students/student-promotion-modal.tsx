@@ -100,11 +100,6 @@ export function StudentPromotionModal({
   const [submitting, setSubmitting] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
 
-  // Update targetClass suggestion whenever fromClass changes
-  useEffect(() => {
-    const suggested = NEXT_CLASS_MAP[fromClass] ?? "7";
-    setTargetClass(suggested);
-  }, [fromClass]);
 
   // Load students of the source class
   useEffect(() => {
@@ -336,7 +331,13 @@ export function StudentPromotionModal({
             {/* From Class */}
             <div className="md:col-span-4 space-y-1.5">
               <Label className="text-xs font-bold text-slate-700">বর্তমান শ্রেণি (উৎস)</Label>
-              <Select value={fromClass} onValueChange={setFromClass}>
+              <Select
+                value={fromClass}
+                onValueChange={(val) => {
+                  setFromClass(val);
+                  setTargetClass(NEXT_CLASS_MAP[val] ?? "7");
+                }}
+              >
                 <SelectTrigger className="h-9.5 text-xs bg-slate-50 font-medium">
                   <SelectValue />
                 </SelectTrigger>

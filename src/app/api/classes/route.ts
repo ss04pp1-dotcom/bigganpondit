@@ -37,7 +37,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN"]);
+    await requireApiUser(["ADMIN", "DIRECTOR"]);
     const db = await getDb();
     const body = await parseJson(req, classCreateSchema);
 

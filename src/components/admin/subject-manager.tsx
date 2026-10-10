@@ -21,6 +21,8 @@ interface SubjectRowT {
   division: string | null;
   is_fourth_subject: number;
   class_name: string;
+  teacher_names?: string | null;
+  teacher_short_names?: string | null;
 }
 
 interface FormState {
@@ -125,13 +127,28 @@ export function SubjectManager() {
                 <ul className="divide-y divide-border rounded-xl border border-border">
                   {subs.map((s) => (
                     <li key={s.id} className="flex items-center gap-2 px-3 py-2.5">
-                      <span className="flex-1 text-[14px] font-medium">
-                        {s.name}
-                        {Number(s.is_fourth_subject) === 1 && (
-                          <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700">৪র্থ বিষয়</span>
-                        )}
-                      </span>
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50" onClick={() => setForm({ id: s.id, name: s.name, className: s.class_name, isFourth: Number(s.is_fourth_subject) === 1 })}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[14px] font-medium text-slate-900">{s.name}</span>
+                          {Number(s.is_fourth_subject) === 1 && (
+                            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700 font-medium">৪র্থ বিষয়</span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+                          {s.teacher_names ? (
+                            <span className="text-blue-700 font-medium flex items-center gap-1">
+                              <span>👨‍🏫 শিক্ষক:</span>
+                              <span className="font-semibold">{s.teacher_names}</span>
+                              {s.teacher_short_names && (
+                                <span className="text-slate-500">({s.teacher_short_names})</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-amber-700/80 italic">কোনো শিক্ষক নির্ধারিত নেই</span>
+                          )}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 shrink-0" onClick={() => setForm({ id: s.id, name: s.name, className: s.class_name, isFourth: Number(s.is_fourth_subject) === 1 })}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <AlertDialog>

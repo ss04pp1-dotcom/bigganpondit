@@ -49,6 +49,8 @@ export interface RoutineItem {
   subject_name: string;
   teacher_id: number | null;
   teacher_name: string;
+  teacher_photo_key?: string | null;
+  teacher_short_name?: string | null;
   start_time: string;
   end_time: string;
   room_no: string | null;
@@ -68,7 +70,7 @@ interface RoutineApiResponse {
     studentDivision?: string | null;
     teacherId?: number | null;
   };
-  teachers: { id: number; name: string; short_name: string }[];
+  teachers: { id: number; user_id?: number; name: string; short_name: string; photo_key?: string | null }[];
 }
 
 // Convert "10:00 AM" or "02:30 PM" to minutes from midnight for time comparison
@@ -101,6 +103,7 @@ export function TodayRoutineModal({
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"TODAY" | "WEEK">("TODAY");
   const [selectedClass, setSelectedClass] = useState<string>("all");
+  const [selectedTeacher, setSelectedTeacher] = useState<string>("all");
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDay());
   const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
 
@@ -121,6 +124,10 @@ export function TodayRoutineModal({
           // Auto-set selected class if student
           if (json.userContext?.studentClass) {
             setSelectedClass(json.userContext.studentClass);
+          }
+          // Auto-set teacher filter if logged-in user is a teacher
+          if (json.userContext?.role === "TEACHER" && json.userContext?.teacherId) {
+            setSelectedTeacher(String(json.userContext.teacherId));
           }
         }
       } catch (err) {
@@ -180,27 +187,44 @@ export function TodayRoutineModal({
     if (!data?.routines) return [];
     return data.routines.filter((r) => {
       if (r.day_of_week !== todayDayOfWeek) return false;
-      if (data.userContext?.role === "STUDENT") {
-        // Already scoped from API
-        return true;
-      }
       if (selectedClass !== "all" && r.class_name !== selectedClass) {
         return false;
       }
+      if (selectedTeacher !== "all") {
+        const tid = parseInt(selectedTeacher, 10);
+        if (!isNaN(tid)) {
+          if (r.teacher_id === tid) return true;
+          const matchTeacher = data.teachers?.find((t) => t.id === tid);
+          if (matchTeacher && (r.teacher_name.includes(matchTeacher.name) || r.teacher_name.includes(matchTeacher.short_name))) {
+            return true;
+          }
+          return false;
+        }
+      }
       return true;
     });
-  }, [data, todayDayOfWeek, selectedClass]);
+  }, [data, todayDayOfWeek, selectedClass, selectedTeacher]);
 
   // Filter selected day classes for weekly view
   const weeklyDayRoutines = useMemo(() => {
     if (!data?.routines) return [];
     return data.routines.filter((r) => {
       if (r.day_of_week !== selectedDay) return false;
-      if (data.userContext?.role === "STUDENT") return true;
       if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
+      if (selectedTeacher !== "all") {
+        const tid = parseInt(selectedTeacher, 10);
+        if (!isNaN(tid)) {
+          if (r.teacher_id === tid) return true;
+          const matchTeacher = data.teachers?.find((t) => t.id === tid);
+          if (matchTeacher && (r.teacher_name.includes(matchTeacher.name) || r.teacher_name.includes(matchTeacher.short_name))) {
+            return true;
+          }
+          return false;
+        }
+      }
       return true;
     });
-  }, [data, selectedDay, selectedClass]);
+  }, [data, selectedDay, selectedClass, selectedTeacher]);
 
   // Calculate status of a class
   const getClassStatus = (startTime: string, endTime: string) => {
@@ -329,11 +353,11 @@ export function TodayRoutineModal({
                 </button>
               </div>
 
-              {/* Class Filter if not student */}
-              {!isStudent && (
-                <div className="flex items-center gap-2">
+              {/* Class & Teacher Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                {!isStudent && (
                   <Select value={selectedClass} onValueChange={setSelectedClass}>
-                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-white/20 text-white font-medium w-[120px] sm:w-[140px]">
+                    <SelectTrigger className="h-8 text-xs bg-slate-800 border-white/20 text-white font-medium w-[110px] sm:w-[130px]">
                       <SelectValue placeholder="সব শ্রেণী" />
                     </SelectTrigger>
                     <SelectContent>
@@ -345,8 +369,23 @@ export function TodayRoutineModal({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-              )}
+                )}
+
+                {/* Teacher Filter */}
+                <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+                  <SelectTrigger className="h-8 text-xs bg-slate-800 border-white/20 text-white font-medium min-w-[125px] sm:min-w-[145px]">
+                    <SelectValue placeholder="সব শিক্ষক" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">সকল শিক্ষক</SelectItem>
+                    {data?.teachers?.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name} ({t.short_name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -463,9 +502,24 @@ export function TodayRoutineModal({
 
                           {/* Teacher and Room Footer */}
                           <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-1.5 text-slate-700">
-                              <GraduationCap className="h-4 w-4 text-slate-500" />
-                              <span className="font-semibold">{routine.teacher_name}</span>
+                            <div className="flex items-center gap-2 text-slate-700">
+                              {routine.teacher_photo_key ? (
+                                <img
+                                  src={`/api/files/${routine.teacher_photo_key}`}
+                                  alt={routine.teacher_name}
+                                  className="h-6 w-6 rounded-full object-cover border border-slate-200 shadow-2xs"
+                                />
+                              ) : (
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">
+                                  {routine.teacher_short_name || routine.teacher_name.slice(0, 2)}
+                                </span>
+                              )}
+                              <span className="font-semibold text-slate-800">{routine.teacher_name}</span>
+                              {routine.teacher_short_name && (
+                                <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {routine.teacher_short_name}
+                                </span>
+                              )}
                             </div>
 
                             {routine.room_no && (
@@ -554,9 +608,22 @@ export function TodayRoutineModal({
                               )}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                              <span className="flex items-center gap-1 font-medium text-slate-700">
-                                <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
-                                {routine.teacher_name}
+                              <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                                {routine.teacher_photo_key ? (
+                                  <img
+                                    src={`/api/files/${routine.teacher_photo_key}`}
+                                    alt={routine.teacher_name}
+                                    className="h-4 w-4 rounded-full object-cover border border-slate-200"
+                                  />
+                                ) : (
+                                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold">
+                                    {routine.teacher_short_name || routine.teacher_name.slice(0, 2)}
+                                  </span>
+                                )}
+                                <span className="font-semibold">{routine.teacher_name}</span>
+                                {routine.teacher_short_name && (
+                                  <span className="text-[10px] text-slate-400 font-mono">({routine.teacher_short_name})</span>
+                                )}
                               </span>
                               {routine.room_no && (
                                 <span className="flex items-center gap-1 text-slate-600 font-mono">

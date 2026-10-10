@@ -311,7 +311,7 @@ export function StudentPromotionModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl">
         {/* Modal Header */}
         <DialogHeader className="p-5 pb-4 bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 text-white shrink-0">
           <div className="flex items-center gap-2.5">

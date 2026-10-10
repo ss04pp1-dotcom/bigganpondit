@@ -31,7 +31,7 @@ export default async function DirectorTeachersPage() {
         `SELECT ts.teacher_id, s.name as subject_name, c.name as class_name
          FROM teacher_subjects ts
          JOIN subjects s ON s.id = ts.subject_id
-         JOIN classes c ON c.id = ts.class_id`
+         JOIN classes c ON c.id = s.class_id`
       )
       .all<any>()
       .catch(() => null)

@@ -48,6 +48,26 @@ export interface ClassRow {
   id: number;
   name: string;
   sort_order: number;
+  student_count?: number;
+  batch_count?: number;
+  subject_count?: number;
+}
+
+export interface BatchRow {
+  id: number;
+  name: string;
+  class_id: number;
+  division: string | null;
+  time_slot: string | null;
+  days: string | null;
+  room_no?: string | null;
+  max_students?: number;
+  is_active: number;
+  created_at?: string;
+  updated_at?: string;
+  class_name?: string;
+  class_sort_order?: number;
+  student_count?: number;
 }
 
 export interface StudentRow {
@@ -55,6 +75,8 @@ export interface StudentRow {
   user_id: number;
   name: string;
   class_id: number;
+  batch_id?: number | null;
+  batch_name?: string | null;
   division: string | null;
   section: string | null;
   roll: number;
@@ -128,6 +150,8 @@ export interface StudentRequestRow {
   teacher_id: number | null;
   name: string;
   class_id: number;
+  batch_id?: number | null;
+  batch_name?: string | null;
   division: string | null;
   section: string | null;
   roll: number;

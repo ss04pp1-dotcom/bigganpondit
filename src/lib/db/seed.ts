@@ -475,9 +475,28 @@ async function ensureRoutines(db: D1Database, seedDemo: boolean) {
   }
 }
 
+// ---------------------------------------------------------------- batches
+async function ensureBatches(db: D1Database) {
+  if ((await count(db, "batches")) > 0) return;
+  const classes = (await db.prepare("SELECT id, name FROM classes ORDER BY sort_order DESC").all<{ id: number; name: string }>().catch(() => null))?.results ?? [];
+  const stmts: import("./types").D1PreparedStatement[] = [];
+  for (const c of classes) {
+    stmts.push(
+      db.prepare(
+        "INSERT INTO batches (name, class_id, time_slot, days, is_active) VALUES (?, ?, ?, ?, 1)"
+      ).bind("সকাল ব্যাচ", c.id, "সকাল ৮:০০ - ৯:৩০", "শনি-সোম-বুধ"),
+      db.prepare(
+        "INSERT INTO batches (name, class_id, time_slot, days, is_active) VALUES (?, ?, ?, ?, 1)"
+      ).bind("সন্ধ্যা ব্যাচ", c.id, "সন্ধ্যা ৫:০০ - ৬:৩০", "রবি-মঙ্গল-বৃহস্পতি")
+    );
+  }
+  if (stmts.length) await db.batch(stmts);
+}
+
 // ---------------------------------------------------------------- entry
 export async function seedDatabase(db: D1Database, env: SeedEnv): Promise<void> {
   await ensureClasses(db);
+  await ensureBatches(db);
   await ensureSubjects(db);
   // Admin FIRST: it is only created on a completely EMPTY users table, so it
   // must run before demo teacher accounts populate the users table.

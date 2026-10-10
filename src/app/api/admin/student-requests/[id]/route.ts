@@ -78,16 +78,18 @@ export async function POST(req: Request, ctx: Ctx) {
     const studentRes = await db
       .prepare(
         `INSERT INTO students (
-          user_id, name, class_id, division, section, roll, photo_key,
+          user_id, name, class_id, batch_id, batch_name, division, section, roll, photo_key,
           father_name, father_occupation, mother_name, mother_occupation,
           guardian_name, guardian_occupation, guardian_relation,
           school_name, phone, address, blood_group, dob, raw_password
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         userId,
         item.name,
         item.class_id,
+        item.batch_id ?? null,
+        item.batch_name ?? null,
         item.division ?? null,
         item.section ?? null,
         item.roll,

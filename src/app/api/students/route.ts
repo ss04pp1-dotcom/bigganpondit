@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   try {
     const { user, db } = await requireApiUser();
     const url = new URL(req.url);
-    const className = url.searchParams.get("class"); // '6'..'10' or null
+    const className = url.searchParams.get("class"); // class name or null
+    const batchIdParam = url.searchParams.get("batch_id");
     const division = url.searchParams.get("division"); // SCIENCE|HUMANITIES|null
     const q = url.searchParams.get("q")?.trim() ?? "";
 
@@ -23,11 +24,15 @@ export async function GET(req: Request) {
       const own = await db
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
+                  st.batch_id, COALESCE(b.name, st.batch_name) as batch_name,
                   st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
                   st.guardian_name, st.guardian_occupation, st.guardian_relation,
                   st.school_name, st.phone, st.address, st.blood_group, st.dob,
                   c.name as class_name, u.username
-           FROM students st JOIN classes c ON c.id = st.class_id JOIN users u ON u.id = st.user_id
+           FROM students st
+           JOIN classes c ON c.id = st.class_id
+           JOIN users u ON u.id = st.user_id
+           LEFT JOIN batches b ON b.id = st.batch_id
            WHERE st.id = ?`
         )
         .bind(user.studentId)
@@ -47,30 +52,35 @@ export async function GET(req: Request) {
       if (allowedClasses.length === 0) {
         return ok({ students: [] });
       }
-      if (className && !allowedClasses.includes(className)) {
+      if (className && className !== "ALL" && !allowedClasses.includes(className)) {
         throw new ApiError(403, MSG.noPermissionView);
       }
       clauses.push(`c.name IN (${allowedClasses.map(() => "?").join(",")})`);
       params.push(...allowedClasses);
     }
 
-    if (className && /^(6|7|8|9|10)$/.test(className)) {
+    if (className && className !== "ALL") {
       clauses.push("c.name = ?");
       params.push(className);
+    }
+    if (batchIdParam && Number(batchIdParam) > 0) {
+      clauses.push("st.batch_id = ?");
+      params.push(Number(batchIdParam));
     }
     if (division === "SCIENCE" || division === "HUMANITIES") {
       clauses.push("st.division = ?");
       params.push(division);
     }
     if (q) {
-      clauses.push("(st.name LIKE ? OR CAST(st.roll AS TEXT) = ? OR u.username LIKE ? OR st.school_name LIKE ? OR st.phone LIKE ?)");
-      params.push(`%${q}%`, q, `%${q}%`, `%${q}%`, `%${q}%`);
+      clauses.push("(st.name LIKE ? OR CAST(st.roll AS TEXT) = ? OR u.username LIKE ? OR st.school_name LIKE ? OR st.phone LIKE ? OR b.name LIKE ?)");
+      params.push(`%${q}%`, q, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     const rows = (
       await db
         .prepare(
           `SELECT st.id, st.name, st.roll, st.division, st.section, st.photo_key,
+                  st.batch_id, COALESCE(b.name, st.batch_name) as batch_name,
                   st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
                   st.guardian_name, st.guardian_occupation, st.guardian_relation,
                   st.school_name, st.phone, st.address, st.blood_group, st.dob,
@@ -79,6 +89,7 @@ export async function GET(req: Request) {
            FROM students st
            JOIN classes c ON c.id = st.class_id
            JOIN users u ON u.id = st.user_id
+           LEFT JOIN batches b ON b.id = st.batch_id
            WHERE ${clauses.join(" AND ")}
            ORDER BY c.sort_order DESC, st.division, st.roll`
         )
@@ -159,6 +170,31 @@ export async function POST(req: Request) {
       .catch(() => null);
     if (dupReqRoll) throw new ApiError(400, "এই রোল নম্বর দিয়ে ইতোমধ্যে একটি অনুরোধ অপেক্ষারত আছে।");
 
+    let resolvedBatchId: number | null = body.batchId ?? null;
+    let resolvedBatchName: string | null = body.batchName?.trim() ?? null;
+
+    if (resolvedBatchId) {
+      const bRow = await db
+        .prepare("SELECT id, name FROM batches WHERE id = ?")
+        .bind(resolvedBatchId)
+        .first<{ id: number; name: string }>()
+        .catch(() => null);
+      if (bRow) {
+        resolvedBatchName = bRow.name;
+      } else {
+        resolvedBatchId = null;
+      }
+    } else if (resolvedBatchName) {
+      const bRow = await db
+        .prepare("SELECT id, name FROM batches WHERE class_id = ? AND name = ?")
+        .bind(classRow.id, resolvedBatchName)
+        .first<{ id: number; name: string }>()
+        .catch(() => null);
+      if (bRow) {
+        resolvedBatchId = bRow.id;
+      }
+    }
+
     const hash = await hashPassword(body.password);
 
     // If teacher submitted: submit as student request pending admin approval
@@ -166,16 +202,18 @@ export async function POST(req: Request) {
       const insRes = await db
         .prepare(
           `INSERT INTO student_requests (
-            teacher_id, name, class_id, division, section, roll, username, password_hash, raw_password,
+            teacher_id, name, class_id, batch_id, batch_name, division, section, roll, username, password_hash, raw_password,
             father_name, father_occupation, mother_name, mother_occupation,
             guardian_name, guardian_occupation, guardian_relation,
             school_name, phone, address, blood_group, dob, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
         )
         .bind(
           user.teacherId ?? null,
           body.name,
           classRow.id,
+          resolvedBatchId,
+          resolvedBatchName,
           body.division ?? null,
           body.section ?? null,
           body.roll,
@@ -218,16 +256,18 @@ export async function POST(req: Request) {
     await db
       .prepare(
         `INSERT INTO students (
-          user_id, name, class_id, division, section, roll,
+          user_id, name, class_id, batch_id, batch_name, division, section, roll,
           father_name, father_occupation, mother_name, mother_occupation,
           guardian_name, guardian_occupation, guardian_relation,
           school_name, phone, address, blood_group, dob, hide_photo_from_students, raw_password
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         userId,
         body.name,
         classRow.id,
+        resolvedBatchId,
+        resolvedBatchName,
         body.division ?? null,
         body.section ?? null,
         body.roll,

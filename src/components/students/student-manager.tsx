@@ -74,6 +74,8 @@ interface Row {
   roll: number;
   division: string | null;
   section: string | null;
+  batch_id?: number | null;
+  batch_name?: string | null;
   photo_key: string | null;
   class_name: string;
   username: string;
@@ -101,6 +103,8 @@ interface RequestRow {
   name: string;
   class_id: number;
   class_name: string;
+  batch_id?: number | null;
+  batch_name?: string | null;
   division: string | null;
   section: string | null;
   roll: number;
@@ -129,6 +133,8 @@ interface FormState {
   id?: number;
   name: string;
   className: string;
+  batchId?: string;
+  batchName?: string;
   division: string;
   section: string;
   roll: string;
@@ -153,6 +159,8 @@ interface FormState {
 const emptyForm: FormState = {
   name: "",
   className: "6",
+  batchId: "",
+  batchName: "",
   division: "SCIENCE",
   section: "",
   roll: "",
@@ -246,6 +254,11 @@ export function StudentManager({
   // Student promotion modal state for Admin
   const [promotionOpen, setPromotionOpen] = useState(false);
 
+  // Dynamic classes and batches loaded from API
+  const [allClasses, setAllClasses] = useState<{ id: number; name: string; sort_order: number }[]>([]);
+  const [allBatches, setAllBatches] = useState<{ id: number; name: string; class_id: number; time_slot?: string | null; days?: string | null }[]>([]);
+  const [batchFilter, setBatchFilter] = useState<string>("ALL");
+
   const { toast } = useToast();
 
   async function handleSendSms(e: React.FormEvent) {
@@ -331,9 +344,32 @@ export function StudentManager({
   useEffect(() => {
     load();
     loadRequests();
+    fetch("/api/classes")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.classes)) setAllClasses(j.classes);
+      })
+      .catch(() => {});
+    fetch("/api/batches")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.batches)) setAllBatches(j.batches);
+      })
+      .catch(() => {});
   }, [load, loadRequests]);
 
-  const visible = useMemo(() => rows.filter((r) => matches(r, filter)), [rows, filter]);
+  const visible = useMemo(() => {
+    return rows.filter((r) => {
+      if (!matches(r, filter)) return false;
+      if (batchFilter !== "ALL") {
+        if (String(r.batch_id || "") !== batchFilter && r.batch_name !== batchFilter) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [rows, filter, batchFilter]);
+
   const groups = useMemo(() => {
     const m = new Map<string, Row[]>();
     for (const r of visible) {
@@ -360,6 +396,8 @@ export function StudentManager({
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
       className: form.className,
+      batchId: form.batchId ? Number(form.batchId) : null,
+      batchName: form.batchName?.trim() || null,
       division: requiresDiv ? form.division : null,
       section: form.section.trim() || null,
       roll: Number(form.roll),
@@ -493,75 +531,75 @@ export function StudentManager({
   return (
     <div className="space-y-4">
       {/* Top Segmented Navigation: Active Students vs Requests */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-        <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 text-[13px] font-semibold">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-3">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 rounded-xl bg-slate-100 p-1 text-[13px] font-semibold w-full sm:w-auto">
           <button
             onClick={() => setMainTab("students")}
             className={cn(
-              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 transition-all",
+              "flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg px-3 py-2 sm:py-1.5 transition-all text-center",
               mainTab === "students"
                 ? "bg-white text-blue-700 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <UserCheck className="h-4 w-4" />
-            <span>সিস্টেমের শিক্ষার্থী</span>
-            <span className="rounded-full bg-slate-200 px-2 py-0.2 text-[11px] font-bold text-slate-700">
+            <UserCheck className="h-4 w-4 shrink-0" />
+            <span className="truncate">সিস্টেমের শিক্ষার্থী</span>
+            <span className="rounded-full bg-slate-200 px-2 py-0.2 text-[11px] font-bold text-slate-700 shrink-0">
               {bn(rows.length)}
             </span>
           </button>
           <button
             onClick={() => setMainTab("requests")}
             className={cn(
-              "flex items-center gap-2 rounded-lg px-3.5 py-1.5 transition-all relative",
+              "flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg px-3 py-2 sm:py-1.5 transition-all relative text-center",
               mainTab === "requests"
                 ? "bg-white text-blue-700 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <Inbox className="h-4 w-4" />
-            <span>{role === "ADMIN" ? "অনুমোদন অনুরোধ" : "আমার পাঠানো অনুরোধ"}</span>
+            <Inbox className="h-4 w-4 shrink-0" />
+            <span className="truncate">{role === "ADMIN" ? "অনুমোদন অনুরোধ" : "আমার অনুরোধ"}</span>
             {pendingCount > 0 && (
-              <span className="rounded-full bg-amber-500 px-2 py-0.2 text-[11px] font-bold text-white animate-pulse">
+              <span className="rounded-full bg-amber-500 px-2 py-0.2 text-[11px] font-bold text-white animate-pulse shrink-0">
                 {bn(pendingCount)}
               </span>
             )}
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {role === "ADMIN" && mainTab === "students" && (
-            <>
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
-                className="h-10 gap-2 border-indigo-300 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 shadow-xs text-xs font-bold"
+                className="h-10 gap-1.5 border-indigo-300 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 shadow-xs text-xs font-bold w-full sm:w-auto"
                 onClick={() => setPromotionOpen(true)}
               >
-                <GraduationCap className="h-4 w-4 text-indigo-600" />
-                শ্রেণি প্রমোশন
+                <GraduationCap className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span className="truncate">শ্রেণি প্রমোশন</span>
               </Button>
 
               <Button
                 variant="outline"
-                className="h-10 gap-2 border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 shadow-xs text-xs font-bold"
+                className="h-10 gap-1.5 border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 shadow-xs text-xs font-bold w-full sm:w-auto"
                 onClick={() => setSmsOpen(true)}
               >
-                <MessageSquare className="h-4 w-4 text-emerald-600" />
-                SMS পাঠান
+                <MessageSquare className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="truncate">SMS পাঠান</span>
               </Button>
-            </>
+            </div>
           )}
 
           {canCreate && mainTab === "students" && (
             <Button
-              className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs text-xs font-bold"
+              className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs text-xs font-bold w-full sm:w-auto"
               onClick={() => {
                 setPendingPhoto(null);
                 setForm({ ...emptyForm });
               }}
             >
-              <UserPlus className="h-4 w-4" />
-              {role === "TEACHER" ? "শিক্ষার্থী যুক্তির আবেদন" : "তথ্য সংযুক্ত করুন"}
+              <UserPlus className="h-4 w-4 shrink-0" />
+              <span>{role === "TEACHER" ? "শিক্ষার্থী যুক্তির আবেদন" : "তথ্য সংযুক্ত করুন"}</span>
             </Button>
           )}
         </div>
@@ -572,16 +610,16 @@ export function StudentManager({
         <div className="space-y-4">
           {/* notice for teacher about approval workflow */}
           {role === "TEACHER" && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3 text-[12px] text-blue-900 flex items-center justify-between gap-2 shadow-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-base">ℹ️</span>
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-3 text-[12px] text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
+              <div className="flex items-start sm:items-center gap-2">
+                <span className="text-base shrink-0">ℹ️</span>
                 <span>
                   <strong>শিক্ষকদের জন্য নির্দেশিকা:</strong> আপনি নতুন শিক্ষার্থী যুক্ত করলে তা সরাসরি তালিকায় আসবে না। তথ্যগুলো প্রশাসনের কাছে অনুমোদনের জন্য যাবে এবং অ্যাডমিন অনুমোদন করলেই কেবল মূল তালিকায় রোল অনুযায়ী প্রদর্শিত হবে।
                 </span>
               </div>
               <button
                 onClick={() => setMainTab("requests")}
-                className="shrink-0 text-blue-700 hover:underline font-bold text-xs"
+                className="shrink-0 text-blue-700 hover:underline font-bold text-xs self-end sm:self-auto"
               >
                 অনুরোধ স্ট্যাটাস দেখুন →
               </button>
@@ -590,22 +628,50 @@ export function StudentManager({
 
           {/* toolbar */}
           <Card>
-            <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center">
+            <CardContent className="flex flex-col gap-2.5 py-3 sm:py-3.5 sm:flex-row sm:items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && load()}
-                  placeholder="নাম বা রোল দিয়ে খুঁজুন…"
-                  className="h-10 pl-9"
+                  placeholder="নাম, রোল, ফোন বা ইউজারনেম দিয়ে খুঁজুন…"
+                  className="h-10 pl-9 pr-8 text-sm"
                 />
+                {q && (
+                  <button
+                    type="button"
+                    onClick={() => setQ("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    title="ক্লিয়ার করুন"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
+
+              {allBatches.length > 0 && (
+                <div className="w-full sm:w-[200px]">
+                  <Select value={batchFilter} onValueChange={setBatchFilter}>
+                    <SelectTrigger className="h-10 text-xs bg-slate-50 border-slate-200">
+                      <SelectValue placeholder="সকল ব্যাচ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">সকল ব্যাচ ({bn(allBatches.length)})</SelectItem>
+                      {allBatches.map((b) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* filter tabs */}
-          <div className="app-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="app-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scroll-smooth">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -639,136 +705,312 @@ export function StudentManager({
                   <section
                     key={key}
                     className={cn(
-                      "print-avoid-break overflow-hidden rounded-xl border border-border border-l-4",
+                      "print-avoid-break overflow-hidden rounded-xl border border-border border-l-4 shadow-2xs",
                       CLASS_STYLE[cls] ?? ""
                     )}
                   >
-                    <header className="flex items-center justify-between bg-white/70 px-4 py-2.5">
-                      <h3 className="text-[14px] font-bold">
+                    <header className="flex items-center justify-between bg-white/80 px-3.5 sm:px-4 py-2.5 border-b border-border/50">
+                      <h3 className="text-[14px] font-bold text-slate-900">
                         {classLabel(cls)}
                         {div ? ` — ${divisionLabel(div)}` : ""}
                       </h3>
-                      <span className="rounded-full bg-white px-2.5 py-0.5 text-[12px] font-medium text-muted-foreground border border-border">
+                      <span className="rounded-full bg-white px-2.5 py-0.5 text-[12px] font-medium text-muted-foreground border border-border shadow-2xs">
                         {bn(list.length)} জন
                       </span>
                     </header>
                     <ul className="divide-y divide-border/70">
                       {list.map((row) => (
-                        <li key={row.id} className="flex items-center gap-3 bg-white/40 px-4 py-3">
-                          {/* SMS selection checkbox (admin only) — previously the
-                              SELECTED scope had NO selection UI, so it always sent
-                              an empty list and could never succeed. */}
-                          {role === "ADMIN" && (
-                            <Checkbox
-                              checked={selectedStudentIds.has(row.id)}
-                              onCheckedChange={(checked) => {
-                                setSelectedStudentIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (checked) next.add(row.id);
-                                  else next.delete(row.id);
-                                  return next;
-                                });
-                              }}
-                              aria-label={`${row.name} নির্বাচন করুন`}
-                              className="shrink-0"
-                            />
-                          )}
-                          <StudentAvatar photoKey={row.photo_key} name={row.name} />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14px] font-semibold">{row.name}</p>
-                            <p className="text-[12px] text-muted-foreground">
-                              রোল {bn(row.roll)}
-                              {row.division ? ` • ${divisionLabel(row.division)}` : ""}
-                              {row.section ? ` • শাখা ${row.section}` : ""} • @{row.username}
-                              {row.phone ? ` • 📞 ${bn(row.phone)}` : ""}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            {row.phone && (
-                              <a
-                                href={`tel:${row.phone}`}
-                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1"
-                                title="সরাসরি ফোন দিন"
-                              >
-                                <Phone className="h-3 w-3" /> কল
-                              </a>
-                            )}
-                            <Button
-                              size="sm"
-                              className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
-                              onClick={() => setViewId(row.id)}
-                            >
-                              ভিউ
-                            </Button>
+                        <li key={row.id} className="transition-colors hover:bg-white/80">
+                          {/* 1. DESKTOP ROW (sm: and up) - 100% UNCHANGED */}
+                          <div className="hidden sm:flex items-center gap-3 bg-white/40 px-4 py-3">
                             {role === "ADMIN" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2.5 rounded text-[11px] font-semibold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center gap-1"
-                                onClick={() => setBioStudent(row)}
-                                title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
-                              >
-                                <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
-                                পাসওয়ার্ড
-                              </Button>
-                            )}
-                            {role === "ADMIN" && (
-                              <Button
-                                size="sm"
-                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
-                                onClick={() => {
-                                  setPendingPhoto(null);
-                                  setForm({
-                                    id: row.id,
-                                    name: row.name,
-                                    className: row.class_name,
-                                    division: row.division ?? "SCIENCE",
-                                    section: row.section ?? "",
-                                    roll: String(row.roll),
-                                    username: row.username,
-                                    password: "",
-                                    photo_key: row.photo_key,
-                                    fatherName: row.father_name ?? "",
-                                    fatherOccupation: row.father_occupation ?? "",
-                                    motherName: row.mother_name ?? "",
-                                    motherOccupation: row.mother_occupation ?? "",
-                                    guardianName: row.guardian_name ?? "",
-                                    guardianOccupation: row.guardian_occupation ?? "",
-                                    guardianRelation: row.guardian_relation ?? "",
-                                    schoolName: row.school_name ?? "",
-                                    phone: row.phone ?? "",
-                                    address: row.address ?? "",
-                                    bloodGroup: row.blood_group ?? "",
-                                    dob: row.dob ?? "",
-                                    hidePhotoFromStudents: !!row.hide_photo_from_students,
+                              <Checkbox
+                                checked={selectedStudentIds.has(row.id)}
+                                onCheckedChange={(checked) => {
+                                  setSelectedStudentIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) next.add(row.id);
+                                    else next.delete(row.id);
+                                    return next;
                                   });
                                 }}
-                              >
-                                সম্পাদনা
-                              </Button>
+                                aria-label={`${row.name} নির্বাচন করুন`}
+                                className="shrink-0"
+                              />
                             )}
-                            {role === "ADMIN" && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button size="sm" variant="destructive" className="h-7 px-2 rounded shadow-xs">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>বাতিল</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
-                                      মুছে ফেলুন
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                            <StudentAvatar photoKey={row.photo_key} name={row.name} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="truncate text-[14px] font-semibold">{row.name}</p>
+                                {row.batch_name && (
+                                  <span className="inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                    ব্যাচ: {row.batch_name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[12px] text-muted-foreground">
+                                রোল {bn(row.roll)}
+                                {row.division ? ` • ${divisionLabel(row.division)}` : ""}
+                                {row.section ? ` • শাখা ${row.section}` : ""} • @{row.username}
+                                {row.phone ? ` • 📞 ${bn(row.phone)}` : ""}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              {row.phone && (
+                                <a
+                                  href={`tel:${row.phone}`}
+                                  className="h-7 px-2.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1"
+                                  title="সরাসরি ফোন দিন"
+                                >
+                                  <Phone className="h-3 w-3" /> কল
+                                </a>
+                              )}
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs"
+                                onClick={() => setViewId(row.id)}
+                              >
+                                ভিউ
+                              </Button>
+                              {role === "ADMIN" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2.5 rounded text-[11px] font-semibold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center gap-1"
+                                  onClick={() => setBioStudent(row)}
+                                  title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
+                                >
+                                  <Fingerprint className="h-3.5 w-3.5 text-indigo-600" />
+                                  পাসওয়ার্ড
+                                </Button>
+                              )}
+                              {role === "ADMIN" && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 rounded text-[11px] font-semibold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs"
+                                  onClick={() => {
+                                    setPendingPhoto(null);
+                                    setForm({
+                                      id: row.id,
+                                      name: row.name,
+                                      className: row.class_name,
+                                      batchId: row.batch_id ? String(row.batch_id) : "",
+                                      batchName: row.batch_name || "",
+                                      division: row.division ?? "SCIENCE",
+                                      section: row.section ?? "",
+                                      roll: String(row.roll),
+                                      username: row.username,
+                                      password: "",
+                                      photo_key: row.photo_key,
+                                      fatherName: row.father_name ?? "",
+                                      fatherOccupation: row.father_occupation ?? "",
+                                      motherName: row.mother_name ?? "",
+                                      motherOccupation: row.mother_occupation ?? "",
+                                      guardianName: row.guardian_name ?? "",
+                                      guardianOccupation: row.guardian_occupation ?? "",
+                                      guardianRelation: row.guardian_relation ?? "",
+                                      schoolName: row.school_name ?? "",
+                                      phone: row.phone ?? "",
+                                      address: row.address ?? "",
+                                      bloodGroup: row.blood_group ?? "",
+                                      dob: row.dob ?? "",
+                                      hidePhotoFromStudents: !!row.hide_photo_from_students,
+                                    });
+                                  }}
+                                >
+                                  সম্পাদনা
+                                </Button>
+                              )}
+                              {role === "ADMIN" && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button size="sm" variant="destructive" className="h-7 px-2 rounded shadow-xs">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>বাতিল</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
+                                        মুছে ফেলুন
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. MOBILE CARD (sm:hidden) — TAILORED FOR PHONES */}
+                          <div className="flex sm:hidden flex-col gap-2.5 p-3.5 bg-white/70">
+                            {/* Card Top: Checkbox, Avatar, Name & Badges, Direct Call */}
+                            <div className="flex items-start gap-2.5">
+                              {role === "ADMIN" && (
+                                <div className="pt-1">
+                                  <Checkbox
+                                    checked={selectedStudentIds.has(row.id)}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedStudentIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (checked) next.add(row.id);
+                                        else next.delete(row.id);
+                                        return next;
+                                      });
+                                    }}
+                                    aria-label={`${row.name} নির্বাচন করুন`}
+                                    className="h-4.5 w-4.5 shrink-0"
+                                  />
+                                </div>
+                              )}
+                              <StudentAvatar photoKey={row.photo_key} name={row.name} size="md" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[14px] font-bold text-slate-900 leading-snug">
+                                      {row.name}
+                                    </p>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                      <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-800">
+                                        রোল {bn(row.roll)}
+                                      </span>
+                                      {row.division && (
+                                        <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200/60">
+                                          {divisionLabel(row.division)}
+                                        </span>
+                                      )}
+                                      {row.section && (
+                                        <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                          শাখা {row.section}
+                                        </span>
+                                      )}
+                                      {row.batch_name && (
+                                        <span className="inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                          ব্যাচ: {row.batch_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {row.phone && (
+                                    <a
+                                      href={`tel:${row.phone}`}
+                                      className="h-7 px-2 rounded-lg text-[11px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1 shrink-0"
+                                      title="সরাসরি কল দিন"
+                                    >
+                                      <Phone className="h-3 w-3" /> কল
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Card Info Strip: Phone & Username */}
+                            <div className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600 border border-slate-100">
+                              <span className="truncate">
+                                {row.phone ? `📞 ${bn(row.phone)}` : "ফোন নম্বর অনুপস্থিত"}
+                              </span>
+                              <span className="font-mono text-slate-500 shrink-0">@{row.username}</span>
+                            </div>
+
+                            {/* Card Actions Footer */}
+                            {role === "ADMIN" ? (
+                              <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-border/40">
+                                <Button
+                                  size="sm"
+                                  className="h-8 rounded-lg text-[11px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1 px-1"
+                                  onClick={() => setViewId(row.id)}
+                                >
+                                  <Eye className="h-3 w-3" /> ভিউ
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center justify-center gap-1 px-1"
+                                  onClick={() => setBioStudent(row)}
+                                  title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
+                                >
+                                  <Fingerprint className="h-3 w-3 text-indigo-600 shrink-0" />
+                                  <span className="truncate">পাসওয়ার্ড</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-8 rounded-lg text-[11px] font-bold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs flex items-center justify-center gap-1 px-1"
+                                  onClick={() => {
+                                    setPendingPhoto(null);
+                                    setForm({
+                                      id: row.id,
+                                      name: row.name,
+                                      className: row.class_name,
+                                      batchId: row.batch_id ? String(row.batch_id) : "",
+                                      batchName: row.batch_name || "",
+                                      division: row.division ?? "SCIENCE",
+                                      section: row.section ?? "",
+                                      roll: String(row.roll),
+                                      username: row.username,
+                                      password: "",
+                                      photo_key: row.photo_key,
+                                      fatherName: row.father_name ?? "",
+                                      fatherOccupation: row.father_occupation ?? "",
+                                      motherName: row.mother_name ?? "",
+                                      motherOccupation: row.mother_occupation ?? "",
+                                      guardianName: row.guardian_name ?? "",
+                                      guardianOccupation: row.guardian_occupation ?? "",
+                                      guardianRelation: row.guardian_relation ?? "",
+                                      schoolName: row.school_name ?? "",
+                                      phone: row.phone ?? "",
+                                      address: row.address ?? "",
+                                      bloodGroup: row.blood_group ?? "",
+                                      dob: row.dob ?? "",
+                                      hidePhotoFromStudents: !!row.hide_photo_from_students,
+                                    });
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">এডিট</span>
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="h-8 rounded-lg text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 px-1"
+                                    >
+                                      <Trash2 className="h-3 w-3 shrink-0" />
+                                      <span className="truncate">মুছুন</span>
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent className="w-[92vw] max-w-md rounded-2xl">
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        '{row.name}' (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>বাতিল</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
+                                        মুছে ফেলুন
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                                <Button
+                                  size="sm"
+                                  className="h-8 w-full rounded-lg text-[12px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1.5"
+                                  onClick={() => setViewId(row.id)}
+                                >
+                                  <Eye className="h-3.5 w-3.5" /> শিক্ষার্থী প্রোফাইল ও ফলাফল দেখুন
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </li>
@@ -779,6 +1021,40 @@ export function StudentManager({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Action Badge for Mobile when Admin selects students for SMS */}
+      {role === "ADMIN" && selectedStudentIds.size > 0 && mainTab === "students" && (
+        <div className="fixed bottom-4 left-3 right-3 z-40 sm:hidden">
+          <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-900/95 p-3 text-white shadow-2xl backdrop-blur-md border border-slate-700 animate-in fade-in slide-in-from-bottom-3 duration-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white shrink-0">
+                {bn(selectedStudentIds.size)}
+              </span>
+              <span className="text-xs font-medium truncate">জন শিক্ষার্থী নির্বাচিত</span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs text-slate-300 hover:text-white hover:bg-slate-800 px-2"
+                onClick={() => setSelectedStudentIds(new Set())}
+              >
+                বাতিল
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-xs px-3"
+                onClick={() => {
+                  setSmsScope("SELECTED");
+                  setSmsOpen(true);
+                }}
+              >
+                <MessageSquare className="h-3.5 w-3.5" /> SMS পাঠান
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -799,13 +1075,13 @@ export function StudentManager({
               </div>
 
               {/* Status Filter */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs app-scroll">
                 {(["ALL", "PENDING", "APPROVED", "REJECTED"] as const).map((st) => (
                   <button
                     key={st}
                     onClick={() => setReqFilter(st)}
                     className={cn(
-                      "rounded px-2.5 py-1 font-medium transition-colors",
+                      "shrink-0 rounded px-2.5 py-1 font-medium transition-colors",
                       reqFilter === st
                         ? "bg-white text-blue-700 font-bold shadow-xs"
                         : "text-slate-600 hover:text-slate-900"
@@ -831,7 +1107,8 @@ export function StudentManager({
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border bg-white shadow-xs">
-              <div className="overflow-x-auto">
+              {/* DESKTOP TABLE (md: and up) - 100% UNCHANGED */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/60 text-left text-[12px] font-semibold text-slate-700">
@@ -860,7 +1137,7 @@ export function StudentManager({
                             </span>
                           )}
                           {req.section && (
-                            <p className="text-[11px] text-slate-400">শাখা: {req.section}</p>
+                            <p className="text-[11px] text-slate-400"> শাখা: {req.section}</p>
                           )}
                         </td>
                         <td className="px-4 py-3 font-mono text-[12px] text-slate-600">
@@ -955,6 +1232,120 @@ export function StudentManager({
                   </tbody>
                 </table>
               </div>
+
+              {/* MOBILE REQUEST CARDS (md:hidden) */}
+              <div className="divide-y divide-border md:hidden">
+                {filteredRequests.map((req) => (
+                  <div key={req.id} className="p-3.5 space-y-2.5 bg-white/70">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-[14px] text-slate-900 leading-snug">{req.name}</p>
+                        <p className="text-[12px] text-slate-500 mt-0.5">
+                          রোল: <span className="font-semibold text-slate-800">{bn(req.roll)}</span>
+                          {req.phone ? ` • 📞 ${bn(req.phone)}` : ""}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {req.status === "PENDING" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
+                            <Clock className="h-3 w-3" /> অপেক্ষারত
+                          </span>
+                        )}
+                        {req.status === "APPROVED" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                            <CheckCircle2 className="h-3 w-3" /> অনুমোদিত
+                          </span>
+                        )}
+                        {req.status === "REJECTED" && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-bold text-rose-800">
+                            <XCircle className="h-3 w-3" /> বাতিলকৃত
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="rounded-md bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 border border-blue-200/60">
+                        {classLabel(req.class_name)}
+                        {req.division ? ` (${divisionLabel(req.division)})` : ""}
+                      </span>
+                      {req.section && (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-600">
+                          শাখা: {req.section}
+                        </span>
+                      )}
+                      <span className="font-mono text-slate-500">@{req.username}</span>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-600 border border-slate-100 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span>
+                          {role === "ADMIN" ? "অনুরোধকারী শিক্ষক: " : "আবেদনের তারিখ: "}
+                          <strong className="text-slate-800">
+                            {role === "ADMIN"
+                              ? `${req.teacher_name ?? "শিক্ষক"} ${req.teacher_short_name ? `(${req.teacher_short_name})` : ""}`
+                              : req.created_at?.slice(0, 16)}
+                          </strong>
+                        </span>
+                        {role === "ADMIN" && (
+                          <span className="text-slate-400 text-[10px]">{req.created_at?.slice(0, 10)}</span>
+                        )}
+                      </div>
+                      {req.reviewer_name && (
+                        <p className="text-[10px] text-slate-500">
+                          অনুমোদন করেছেন: <strong className="text-slate-700">{req.reviewer_name}</strong>
+                        </p>
+                      )}
+                      {req.admin_notes && (
+                        <p className="text-[11px] text-rose-600 border-t border-rose-100 pt-1 font-medium">
+                          বাতিলের নোট: {req.admin_notes}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-slate-700 hover:text-slate-900 border-slate-200 hover:bg-slate-100 text-xs font-semibold px-3 flex-1"
+                        onClick={() => setViewReq(req)}
+                      >
+                        <Eye className="h-3.5 w-3.5 text-blue-600" />
+                        বিবরণ
+                      </Button>
+                      {role === "ADMIN" && req.status === "PENDING" && (
+                        <>
+                          <Button
+                            size="sm"
+                            disabled={approvingId === req.id}
+                            onClick={() => handleApprove(req.id)}
+                            className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 flex-1 shadow-xs"
+                          >
+                            {approvingId === req.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                            অনুমোদন
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={rejectingId === req.id}
+                            onClick={() => {
+                              setRejectModalReq(req);
+                              setRejectNote("");
+                            }}
+                            className="h-8 gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 text-xs font-semibold px-3 flex-1"
+                          >
+                            <X className="h-3.5 w-3.5" /> বাতিল
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -962,7 +1353,7 @@ export function StudentManager({
 
       {/* Rejection Reason Dialog for Admin */}
       <Dialog open={!!rejectModalReq} onOpenChange={(open) => !open && setRejectModalReq(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-rose-600 flex items-center gap-2">
               <AlertCircle className="h-5 w-5" /> আবেদন বাতিলের কারণ
@@ -978,18 +1369,18 @@ export function StudentManager({
                 value={rejectNote}
                 onChange={(e) => setRejectNote(e.target.value)}
                 placeholder="যেমন: তথ্যে ভুল আছে বা রোল নম্বর ইতোমধ্যে বরাদ্দ করা..."
-                className="h-10"
+                className="h-10 text-sm"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setRejectModalReq(null)}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setRejectModalReq(null)} className="h-10 sm:h-9">
                 ফিরে যান
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleRejectConfirm}
                 disabled={rejectingId === rejectModalReq?.id}
-                className="gap-1.5 bg-rose-600 hover:bg-rose-700"
+                className="gap-1.5 bg-rose-600 hover:bg-rose-700 h-10 sm:h-9 font-semibold"
               >
                 {rejectingId === rejectModalReq?.id && <Loader2 className="h-4 w-4 animate-spin" />}
                 বাতিল নিশ্চিত করুন
@@ -1001,7 +1392,7 @@ export function StudentManager({
 
       {/* Request Details Dialog */}
       <Dialog open={!!viewReq} onOpenChange={(open) => !open && setViewReq(null)}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="w-[95vw] sm:max-w-lg max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <StudentAvatar photoKey={viewReq?.photo_key ?? null} name={viewReq?.name ?? ""} size="lg" />
@@ -1017,67 +1408,71 @@ export function StudentManager({
 
           {viewReq && (
             <div className="space-y-3 pt-2 text-[13px]">
-              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-lg bg-muted/40 p-3">
                 <div>
-                  <span className="text-muted-foreground">ইউজারনেম:</span>
+                  <span className="text-muted-foreground text-xs">ইউজারনেম:</span>
                   <p className="font-mono font-medium">@{viewReq.username}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">শাখা:</span>
+                  <span className="text-muted-foreground text-xs">শাখা:</span>
                   <p className="font-medium">{viewReq.section ?? "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">পিতার নাম:</span>
+                  <span className="text-muted-foreground text-xs">ব্যাচ:</span>
+                  <p className="font-medium text-indigo-700">{viewReq.batch_name ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs">পিতার নাম:</span>
                   <p className="font-medium">{viewReq.father_name || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">পিতার পেশা:</span>
+                  <span className="text-muted-foreground text-xs">পিতার পেশা:</span>
                   <p className="font-medium">{viewReq.father_occupation || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">মাতার নাম:</span>
+                  <span className="text-muted-foreground text-xs">মাতার নাম:</span>
                   <p className="font-medium">{viewReq.mother_name || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">মাতার পেশা:</span>
+                  <span className="text-muted-foreground text-xs">মাতার পেশা:</span>
                   <p className="font-medium">{viewReq.mother_occupation || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">অভিভাবকের নাম:</span>
+                  <span className="text-muted-foreground text-xs">অভিভাবকের নাম:</span>
                   <p className="font-medium">{viewReq.guardian_name || viewReq.father_name || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">অভিভাবকের সাথে সম্পর্ক:</span>
+                  <span className="text-muted-foreground text-xs">অভিভাবকের সাথে সম্পর্ক:</span>
                   <p className="font-medium">{viewReq.guardian_relation || (viewReq.father_name ? "পিতা" : "—")}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">অভিভাবকের পেশা:</span>
+                  <span className="text-muted-foreground text-xs">অভিভাবকের পেশা:</span>
                   <p className="font-medium">{viewReq.guardian_occupation || viewReq.father_occupation || "—"}</p>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">অভিভাবকের ফোন:</span>
+                  <span className="text-muted-foreground text-xs">অভিভাবকের ফোন:</span>
                   <p className="font-medium">{viewReq.phone ? bn(viewReq.phone) : "—"}</p>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">রক্তের গ্রুপ:</span>
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground text-xs">রক্তের গ্রুপ:</span>
                   <p className="font-medium">{viewReq.blood_group || "—"}</p>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">প্রতিষ্ঠান / স্কুল:</span>
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground text-xs">প্রতিষ্ঠান / স্কুল:</span>
                   <p className="font-medium">{viewReq.school_name || "—"}</p>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">ঠিকানা:</span>
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground text-xs">ঠিকানা:</span>
                   <p className="font-medium">{viewReq.address || "—"}</p>
                 </div>
-                <div className="col-span-2 border-t border-border/60 pt-2 mt-1">
-                  <span className="text-muted-foreground">অনুরোধকারী শিক্ষক:</span>
+                <div className="sm:col-span-2 border-t border-border/60 pt-2 mt-1">
+                  <span className="text-muted-foreground text-xs">অনুরোধকারী শিক্ষক:</span>
                   <p className="font-medium">{viewReq.teacher_name ?? "শিক্ষক"} {viewReq.teacher_short_name ? `(${viewReq.teacher_short_name})` : ""}</p>
                 </div>
               </div>
 
               {role === "ADMIN" && viewReq.status === "PENDING" && (
-                <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-border">
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -1086,7 +1481,7 @@ export function StudentManager({
                       setRejectModalReq(r);
                       setRejectNote("");
                     }}
-                    className="text-rose-600 border-rose-200 hover:bg-rose-50"
+                    className="text-rose-600 border-rose-200 hover:bg-rose-50 h-10 sm:h-9"
                   >
                     <X className="h-4 w-4 mr-1" /> আবেদন বাতিল
                   </Button>
@@ -1096,7 +1491,7 @@ export function StudentManager({
                       setViewReq(null);
                       await handleApprove(id);
                     }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 sm:h-9 font-semibold"
                   >
                     <Check className="h-4 w-4 mr-1" /> অনুমোদন করুন
                   </Button>
@@ -1142,16 +1537,29 @@ export function StudentManager({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>শ্রেণি</Label>
-                  <Select value={form.className} onValueChange={(v) => setForm({ ...form, className: v })}>
+                  <Select
+                    value={form.className}
+                    onValueChange={(v) => {
+                      // If changed class, reset batch if not in the new class
+                      const newCls = allClasses.find((c) => c.name === v);
+                      const stillValidBatch = allBatches.some((b) => String(b.id) === form.batchId && (!newCls || b.class_id === newCls.id));
+                      setForm({
+                        ...form,
+                        className: v,
+                        batchId: stillValidBatch ? form.batchId : "",
+                        batchName: stillValidBatch ? form.batchName : "",
+                      });
+                    }}
+                  >
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CLASS_NUMBERS.map((c) => (
+                      {(allClasses.length > 0 ? allClasses.map((c) => c.name) : Array.from(CLASS_NUMBERS)).map((c) => (
                         <SelectItem key={c} value={c}>{classLabel(c)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                {(form.className === "9" || form.className === "10") && (
+                {(form.className === "9" || form.className === "10") ? (
                   <div className="space-y-1.5">
                     <Label>বিভাগ</Label>
                     <Select value={form.division} onValueChange={(v) => setForm({ ...form, division: v })}>
@@ -1160,6 +1568,36 @@ export function StudentManager({
                         {DIVISIONS.map((d) => (
                           <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                    <Select
+                      value={form.batchId || "NONE"}
+                      onValueChange={(v) => {
+                        const bObj = allBatches.find((b) => String(b.id) === v);
+                        setForm({
+                          ...form,
+                          batchId: v === "NONE" ? "" : v,
+                          batchName: bObj?.name || "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-11"><SelectValue placeholder="ব্যাচ নির্বাচন করুন" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">কোনো ব্যাচ নেই / সাধারণ</SelectItem>
+                        {allBatches
+                          .filter((b) => {
+                            const curCls = allClasses.find((c) => c.name === form.className);
+                            return !curCls || b.class_id === curCls.id;
+                          })
+                          .map((b) => (
+                            <SelectItem key={b.id} value={String(b.id)}>
+                              {b.name} {b.time_slot ? `(${b.time_slot})` : ""}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1177,6 +1615,37 @@ export function StudentManager({
                     {SECTION_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
                   </datalist>
                 </div>
+                {(form.className === "9" || form.className === "10") && (
+                  <div className="space-y-1.5">
+                    <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                    <Select
+                      value={form.batchId || "NONE"}
+                      onValueChange={(v) => {
+                        const bObj = allBatches.find((b) => String(b.id) === v);
+                        setForm({
+                          ...form,
+                          batchId: v === "NONE" ? "" : v,
+                          batchName: bObj?.name || "",
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-11"><SelectValue placeholder="ব্যাচ নির্বাচন করুন" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">কোনো ব্যাচ নেই / সাধারণ</SelectItem>
+                        {allBatches
+                          .filter((b) => {
+                            const curCls = allClasses.find((c) => c.name === form.className);
+                            return !curCls || b.class_id === curCls.id;
+                          })
+                          .map((b) => (
+                            <SelectItem key={b.id} value={String(b.id)}>
+                              {b.name} {b.time_slot ? `(${b.time_slot})` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label>রোল</Label>
                   <Input
@@ -1427,7 +1896,7 @@ export function StudentManager({
 
       {/* SMS MODAL FOR ADMIN — Point 05 */}
     <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="w-[95vw] sm:max-w-[480px] p-4 sm:p-6 rounded-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
             <MessageSquare className="h-5 w-5 text-emerald-600" />
@@ -1619,7 +2088,7 @@ function StudentViewDialog({
 
   return (
     <Dialog open={studentId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="w-[95vw] sm:max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <StudentAvatar photoKey={student.photo_key} name={student.name} size="lg" />
@@ -1657,64 +2126,68 @@ function StudentViewDialog({
 
         {activeTab === "profile" && (
           <div className="grid gap-2 text-[13px] pt-2">
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/40 p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 rounded-lg bg-muted/40 p-3">
               <div>
-                <span className="text-muted-foreground">ইউজারনেম:</span>
+                <span className="text-muted-foreground text-xs">ইউজারনেম:</span>
                 <p className="font-mono font-medium">@{student.username}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">শাখা:</span>
+                <span className="text-muted-foreground text-xs">শাখা:</span>
                 <p className="font-medium">{student.section ?? "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">পিতার নাম:</span>
+                <span className="text-muted-foreground text-xs">ব্যাচ:</span>
+                <p className="font-medium text-indigo-700">{student.batch_name ?? "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground text-xs">পিতার নাম:</span>
                 <p className="font-medium">{student.father_name || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">পিতার পেশা:</span>
+                <span className="text-muted-foreground text-xs">পিতার পেশা:</span>
                 <p className="font-medium">{student.father_occupation || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">মাতার নাম:</span>
+                <span className="text-muted-foreground text-xs">মাতার নাম:</span>
                 <p className="font-medium">{student.mother_name || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">মাতার পেশা:</span>
+                <span className="text-muted-foreground text-xs">মাতার পেশা:</span>
                 <p className="font-medium">{student.mother_occupation || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">অভিভাবকের নাম:</span>
+                <span className="text-muted-foreground text-xs">অভিভাবকের নাম:</span>
                 <p className="font-medium">{student.guardian_name || student.father_name || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">অভিভাবকের সাথে সম্পর্ক:</span>
+                <span className="text-muted-foreground text-xs">অভিভাবকের সাথে সম্পর্ক:</span>
                 <p className="font-medium">{student.guardian_relation || (student.father_name ? "পিতা" : "—")}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">অভিভাবকের পেশা:</span>
+                <span className="text-muted-foreground text-xs">অভিভাবকের পেশা:</span>
                 <p className="font-medium">{student.guardian_occupation || student.father_occupation || "—"}</p>
               </div>
               <div>
-                <span className="text-muted-foreground">অভিভাবকের ফোন:</span>
+                <span className="text-muted-foreground text-xs">অভিভাবকের ফোন:</span>
                 <p className="font-medium">{student.phone ? bn(student.phone) : "—"}</p>
               </div>
-              <div className="col-span-2">
-                <span className="text-muted-foreground">রক্তের গ্রুপ:</span>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground text-xs">রক্তের গ্রুপ:</span>
                 <p className="font-medium">{student.blood_group || "—"}</p>
               </div>
-              <div className="col-span-2">
-                <span className="text-muted-foreground">প্রতিষ্ঠান / স্কুল:</span>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground text-xs">প্রতিষ্ঠান / স্কুল:</span>
                 <p className="font-medium">{student.school_name || "—"}</p>
               </div>
-              <div className="col-span-2">
-                <span className="text-muted-foreground">ঠিকানা:</span>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground text-xs">ঠিকানা:</span>
                 <p className="font-medium">{student.address || "—"}</p>
               </div>
 
               {/* অ্যাডমিনের জন্য ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখার কার্ড */}
               {role === "ADMIN" && (
-                <div className="col-span-2 mt-2 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-blue-50/60 to-indigo-50/70 p-3.5 shadow-2xs">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="sm:col-span-2 mt-2 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-blue-50/60 to-indigo-50/70 p-3.5 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
                         <Fingerprint className="h-6 w-6" />
@@ -1731,7 +2204,7 @@ function StudentViewDialog({
                     <Button
                       size="sm"
                       onClick={() => onRevealPassword?.(student)}
-                      className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs shrink-0"
+                      className="h-8 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs w-full sm:w-auto shrink-0"
                     >
                       <Fingerprint className="h-3.5 w-3.5" />
                       ফিঙ্গার দিয়ে পাসওয়ার্ড দেখুন
@@ -1756,7 +2229,7 @@ function StudentViewDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="overflow-hidden rounded-lg border border-border">
+            <div className="overflow-x-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/60">

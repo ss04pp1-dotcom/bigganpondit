@@ -49,9 +49,11 @@ export function RoutineViewer({
   role: "TEACHER" | "STUDENT" | "DIRECTOR";
 }) {
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
+  const [teachers, setTeachers] = useState<{ id: number; name: string; short_name: string; photo_key?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<string>("today");
   const [selectedClass, setSelectedClass] = useState<string>("all");
+  const [selectedTeacher, setSelectedTeacher] = useState<string>("all");
   const [userContext, setUserContext] = useState<any>(null);
 
   const now = new Date();
@@ -66,6 +68,7 @@ export function RoutineViewer({
         const json = await res.json();
         if (json.ok) {
           setRoutines(json.routines || []);
+          setTeachers(json.teachers || []);
           setUserContext(json.userContext || null);
           if (json.userContext?.studentClass) {
             setSelectedClass(json.userContext.studentClass);
@@ -86,9 +89,20 @@ export function RoutineViewer({
     return routines.filter((r) => {
       if (activeDayNumber !== null && r.day_of_week !== activeDayNumber) return false;
       if (role === "DIRECTOR" && selectedClass !== "all" && r.class_name !== selectedClass) return false;
+      if (selectedTeacher !== "all") {
+        const tid = parseInt(selectedTeacher, 10);
+        if (!isNaN(tid)) {
+          if (r.teacher_id === tid) return true;
+          const matchTeacher = teachers.find((t) => t.id === tid);
+          if (matchTeacher && (r.teacher_name.includes(matchTeacher.name) || r.teacher_name.includes(matchTeacher.short_name))) {
+            return true;
+          }
+          return false;
+        }
+      }
       return true;
     });
-  }, [routines, activeDayNumber, selectedClass, role]);
+  }, [routines, activeDayNumber, selectedClass, selectedTeacher, role, teachers]);
 
   const getClassStatus = (startTime: string, endTime: string, dayOfWeek: number) => {
     if (dayOfWeek !== todayDayOfWeek) return "OTHER_DAY";
@@ -189,24 +203,43 @@ export function RoutineViewer({
             ))}
           </div>
 
-          {/* Director class selector */}
-          {role === "DIRECTOR" && (
-            <div className="w-[140px]">
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
+          {/* Selectors: Class (for director) & Teacher */}
+          <div className="flex flex-wrap items-center gap-2">
+            {role === "DIRECTOR" && (
+              <div className="w-[130px]">
+                <Select value={selectedClass} onValueChange={setSelectedClass}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="সব শ্রেণী" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">সকল শ্রেণী</SelectItem>
+                    {CLASS_NUMBERS.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {classLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Teacher selector (available in RoutineViewer) */}
+            <div className="w-[145px]">
+              <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="সব শ্রেণী" />
+                  <SelectValue placeholder="সব শিক্ষক" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">সকল শ্রেণী</SelectItem>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {classLabel(c)}
+                  <SelectItem value="all">সকল শিক্ষক</SelectItem>
+                  {teachers.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name} ({t.short_name})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
@@ -300,9 +333,24 @@ export function RoutineViewer({
 
                 {/* Teacher and Room */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                    <GraduationCap className="h-4 w-4 text-slate-400" />
-                    <span>{r.teacher_name}</span>
+                  <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    {r.teacher_photo_key ? (
+                      <img
+                        src={`/api/files/${r.teacher_photo_key}`}
+                        alt={r.teacher_name}
+                        className="h-6 w-6 rounded-full object-cover border border-slate-200"
+                      />
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        {r.teacher_short_name || r.teacher_name.slice(0, 2)}
+                      </span>
+                    )}
+                    <span className="font-semibold text-slate-800">{r.teacher_name}</span>
+                    {r.teacher_short_name && (
+                      <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">
+                        {r.teacher_short_name}
+                      </span>
+                    )}
                   </div>
 
                   {r.room_no && (

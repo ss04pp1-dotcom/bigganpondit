@@ -17,7 +17,9 @@ const dateStr = z
 
 export const studentCreateSchema = z.object({
   name: z.string().trim().min(1, "শিক্ষার্থীর নাম লিখুন।").max(100),
-  className: z.string().regex(/^(6|7|8|9|10)$/, "শ্রেণি নির্বাচন করুন।"),
+  className: z.string().trim().min(1, "শ্রেণি নির্বাচন করুন।").max(50),
+  batchId: z.number().int().positive().nullish(),
+  batchName: z.string().trim().max(100).nullish(),
   division: z.enum(["SCIENCE", "HUMANITIES"]).nullish(),
   section: z.string().trim().max(10).nullish(),
   roll: z.number().int().positive("রোল একটি ধনাত্মক সংখ্যা হতে হবে।"),
@@ -178,6 +180,22 @@ export const settingsUpdateSchema = z.object({
 export const backupActionSchema = z.object({
   action: z.enum(["create", "restore", "delete"]),
   key: z.string().optional(),
+});
+
+export const classCreateSchema = z.object({
+  name: z.string().trim().min(1, "শ্রেণির নাম লিখুন।").max(50),
+  sortOrder: z.number().int().optional(),
+});
+
+export const batchCreateSchema = z.object({
+  name: z.string().trim().min(1, "ব্যাচের নাম লিখুন।").max(100),
+  classId: z.number().int().positive("শ্রেণি নির্বাচন করুন।"),
+  division: z.enum(["SCIENCE", "HUMANITIES"]).nullish(),
+  timeSlot: z.string().trim().max(100).nullish(),
+  days: z.string().trim().max(100).nullish(),
+  roomNo: z.string().trim().max(50).nullish(),
+  maxStudents: z.number().int().nonnegative().optional().default(0),
+  isActive: z.boolean().optional().default(true),
 });
 
 export async function parseJson<S extends z.ZodType>(req: Request, schema: S): Promise<z.infer<S>> {

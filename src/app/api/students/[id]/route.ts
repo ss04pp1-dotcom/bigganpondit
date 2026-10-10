@@ -14,8 +14,11 @@ type Ctx = { params: Promise<{ id: string }> };
 async function loadStudent(db: Awaited<ReturnType<typeof getDb>>, id: number) {
   return await db
     .prepare(
-      `SELECT st.*, c.name as class_name, u.username
-       FROM students st JOIN classes c ON c.id = st.class_id JOIN users u ON u.id = st.user_id
+      `SELECT st.*, c.name as class_name, COALESCE(b.name, st.batch_name) as batch_title, u.username
+       FROM students st
+       JOIN classes c ON c.id = st.class_id
+       JOIN users u ON u.id = st.user_id
+       LEFT JOIN batches b ON b.id = st.batch_id
        WHERE st.id = ?`
     )
     .bind(id)
@@ -113,6 +116,23 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.className !== undefined && targetClassId) { studentCols.push("class_id = ?"); studentVals.push(targetClassId); }
     if (body.division !== undefined) { studentCols.push("division = ?"); studentVals.push(targetDivision); }
     if (body.section !== undefined) { studentCols.push("section = ?"); studentVals.push(body.section ?? null); }
+    if (body.batchId !== undefined) {
+      studentCols.push("batch_id = ?");
+      studentVals.push(body.batchId ?? null);
+      if (body.batchId) {
+        const b = await db.prepare("SELECT name FROM batches WHERE id = ?").bind(body.batchId).first<{ name: string }>().catch(() => null);
+        if (b) {
+          studentCols.push("batch_name = ?");
+          studentVals.push(b.name);
+        }
+      } else {
+        studentCols.push("batch_name = ?");
+        studentVals.push(null);
+      }
+    } else if (body.batchName !== undefined) {
+      studentCols.push("batch_name = ?");
+      studentVals.push(body.batchName ?? null);
+    }
     if (body.roll !== undefined) { studentCols.push("roll = ?"); studentVals.push(body.roll); }
     if (body.fatherName !== undefined) { studentCols.push("father_name = ?"); studentVals.push(body.fatherName ?? null); }
     if (body.fatherOccupation !== undefined) { studentCols.push("father_occupation = ?"); studentVals.push(body.fatherOccupation ?? null); }

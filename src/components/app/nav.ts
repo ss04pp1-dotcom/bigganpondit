@@ -23,6 +23,7 @@ import {
   UserCheck,
   Award,
   CalendarDays,
+  Layers,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -36,6 +37,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   DIRECTOR: [
     { href: "/director/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { href: "/director/teachers", label: "শিক্ষক পরিদর্শক", icon: GraduationCap },
+    { href: "/director/classes", label: "শ্রেণি ও ব্যাচ", icon: Layers },
     { href: "/director/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/director/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/director/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
@@ -63,6 +65,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { href: "/admin/directors", label: "পরিচালক", icon: Building2 },
     { href: "/admin/teachers", label: "শিক্ষক", icon: GraduationCap },
+    { href: "/admin/classes", label: "শ্রেণি ও ব্যাচ", icon: Layers },
     { href: "/admin/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/admin/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/admin/routine", label: "ক্লাস রুটিন", icon: CalendarDays },

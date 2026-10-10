@@ -181,7 +181,7 @@ export function BiometricPasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[430px] p-0 overflow-hidden border-indigo-200 bg-white shadow-2xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-[430px] p-0 overflow-hidden border-indigo-200 bg-white shadow-2xl rounded-2xl">
         {/* হেডার ব্যানার */}
         <div className="relative bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 p-5 text-white">
           <div className="flex items-center gap-3">

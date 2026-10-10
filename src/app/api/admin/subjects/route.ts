@@ -13,8 +13,15 @@ export async function GET(req: Request) {
     const subjects = (
       await db
         .prepare(
-          `SELECT s.id, s.name, s.division, s.is_fourth_subject, c.name as class_name, c.sort_order
-           FROM subjects s JOIN classes c ON c.id = s.class_id
+          `SELECT s.id, s.name, s.division, s.is_fourth_subject, c.name as class_name, c.sort_order,
+                  GROUP_CONCAT(u.name, ', ') as teacher_names,
+                  GROUP_CONCAT(t.short_name, ', ') as teacher_short_names
+           FROM subjects s
+           JOIN classes c ON c.id = s.class_id
+           LEFT JOIN teacher_subjects ts ON ts.subject_id = s.id
+           LEFT JOIN teachers t ON t.id = ts.teacher_id
+           LEFT JOIN users u ON u.id = t.user_id
+           GROUP BY s.id
            ORDER BY c.sort_order DESC, s.name`
         )
         .all<Record<string, unknown>>()

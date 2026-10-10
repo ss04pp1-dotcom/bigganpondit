@@ -16,6 +16,8 @@ export interface RoutineRow {
   subject_name: string;
   teacher_id: number | null;
   teacher_name: string;
+  teacher_photo_key?: string | null;
+  teacher_short_name?: string | null;
   start_time: string;
   end_time: string;
   room_no: string | null;
@@ -84,61 +86,66 @@ export async function GET(req: NextRequest) {
     }
 
     // Build SQL query
-    let sql = `SELECT * FROM routines WHERE is_active = 1`;
+    let sql = `SELECT r.*,
+                      t.photo_key as teacher_photo_key,
+                      t.short_name as teacher_short_name
+               FROM routines r
+               LEFT JOIN teachers t ON (t.id = r.teacher_id OR (r.teacher_id IS NULL AND t.short_name = r.teacher_name))
+               WHERE r.is_active = 1`;
     const params: (string | number)[] = [];
 
     // Filter by day
     if (targetDay !== null) {
-      sql += ` AND day_of_week = ?`;
+      sql += ` AND r.day_of_week = ?`;
       params.push(targetDay);
     }
 
     // Scoping for student
     if (user?.role === "STUDENT" && studentClass) {
-      sql += ` AND class_name = ?`;
+      sql += ` AND r.class_name = ?`;
       params.push(studentClass);
       if (studentDivision) {
-        sql += ` AND (division IS NULL OR division = '' OR division = ?)`;
+        sql += ` AND (r.division IS NULL OR r.division = '' OR r.division = ?)`;
         params.push(studentDivision);
       }
     } else if (classParam && classParam !== "all") {
-      sql += ` AND class_name = ?`;
+      sql += ` AND r.class_name = ?`;
       params.push(classParam);
       if (divisionParam && divisionParam !== "all") {
-        sql += ` AND (division IS NULL OR division = '' OR division = ?)`;
+        sql += ` AND (r.division IS NULL OR r.division = '' OR r.division = ?)`;
         params.push(divisionParam);
       }
     }
 
     // Scoping for teacher
-    if (user?.role === "TEACHER" && (myOnly || !teacherIdParam)) {
+    if (user?.role === "TEACHER" && (myOnly || (teacherIdParam !== "all" && !teacherIdParam))) {
       if (teacherId) {
-        sql += ` AND teacher_id = ?`;
-        params.push(teacherId);
+        sql += ` AND (r.teacher_id = ? OR r.teacher_name LIKE ? OR r.teacher_name LIKE ?)`;
+        params.push(teacherId, `%${user.name}%`, `%${user.name.split(" ")[0]}%`);
       }
     } else if (teacherIdParam && teacherIdParam !== "all") {
       const tid = parseInt(teacherIdParam, 10);
       if (!isNaN(tid)) {
-        sql += ` AND teacher_id = ?`;
+        sql += ` AND r.teacher_id = ?`;
         params.push(tid);
       }
     }
 
-    sql += ` ORDER BY day_of_week ASC, start_time ASC, class_name ASC`;
+    sql += ` ORDER BY r.day_of_week ASC, r.start_time ASC, r.class_name ASC`;
 
     const stmt = db.prepare(sql);
     const rows = params.length > 0 ? (await stmt.bind(...params).all<RoutineRow>()).results : (await stmt.all<RoutineRow>()).results;
 
-    // Fetch teachers list for dropdowns
+    // Fetch teachers list for dropdowns & filters
     const teachersList = (
       await db
         .prepare(
-          `SELECT t.id, u.name, t.short_name
+          `SELECT t.id, t.user_id, u.name, t.short_name, t.photo_key
            FROM teachers t
            JOIN users u ON u.id = t.user_id
            ORDER BY u.name ASC`
         )
-        .all<{ id: number; name: string; short_name: string }>()
+        .all<{ id: number; user_id: number; name: string; short_name: string; photo_key: string | null }>()
         .catch(() => ({ results: [] }))
     ).results;
 
@@ -217,6 +224,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "ক্লাস শেষের সময় আবশ্যক।" }, { status: 400 });
     }
 
+    let finalTeacherId = teacherId ? Number(teacherId) : null;
+    if (!finalTeacherId && teacherName) {
+      const matchT = await db
+        .prepare(
+          "SELECT t.id, u.name FROM teachers t JOIN users u ON u.id = t.user_id WHERE u.name = ? OR t.short_name = ? LIMIT 1"
+        )
+        .bind(teacherName.trim(), teacherName.trim())
+        .first<{ id: number; name: string }>()
+        .catch(() => null);
+      if (matchT) {
+        finalTeacherId = matchT.id;
+      }
+    }
+
     const res = await db
       .prepare(
         `INSERT INTO routines
@@ -230,7 +251,7 @@ export async function POST(req: NextRequest) {
         section || null,
         subjectId ? Number(subjectId) : null,
         subjectName.trim(),
-        teacherId ? Number(teacherId) : null,
+        finalTeacherId,
         teacherName.trim(),
         startTime.trim(),
         endTime.trim(),
@@ -280,6 +301,20 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "আইডি প্রয়োজন।" }, { status: 400 });
     }
 
+    let finalTeacherId = teacherId ? Number(teacherId) : null;
+    if (!finalTeacherId && teacherName) {
+      const matchT = await db
+        .prepare(
+          "SELECT t.id, u.name FROM teachers t JOIN users u ON u.id = t.user_id WHERE u.name = ? OR t.short_name = ? LIMIT 1"
+        )
+        .bind(teacherName.trim(), teacherName.trim())
+        .first<{ id: number; name: string }>()
+        .catch(() => null);
+      if (matchT) {
+        finalTeacherId = matchT.id;
+      }
+    }
+
     await db
       .prepare(
         `UPDATE routines
@@ -296,7 +331,7 @@ export async function PUT(req: NextRequest) {
         section || null,
         subjectId ? Number(subjectId) : null,
         subjectName.trim(),
-        teacherId ? Number(teacherId) : null,
+        finalTeacherId,
         teacherName.trim(),
         startTime.trim(),
         endTime.trim(),

@@ -104,11 +104,18 @@ export function divisionLabel(d: string | null | undefined): string {
 // Class numbers stored as text: '6'..'10'
 export const CLASS_NUMBERS = ["6", "7", "8", "9", "10"] as const;
 const CLASS_NAMES: Record<string, string> = {
+  "1": "প্রথম",
+  "2": "দ্বিতীয়",
+  "3": "তৃতীয়",
+  "4": "চতুর্থ",
+  "5": "পঞ্চম",
   "6": "ষষ্ঠ",
   "7": "সপ্তম",
   "8": "অষ্টম",
   "9": "নবম",
   "10": "দশম",
+  "11": "একাদশ",
+  "12": "দ্বাদশ",
   "ALUMNI": "উত্তীর্ণ / প্রাক্তন",
 };
 export function classNameLabel(n: string): string {
@@ -116,7 +123,9 @@ export function classNameLabel(n: string): string {
 }
 export function classLabel(n: string): string {
   if (n === "ALUMNI") return "উত্তীর্ণ / প্রাক্তন ব্যাচ";
-  return `${CLASS_NAMES[n] ?? n} শ্রেণি`;
+  if (CLASS_NAMES[n]) return `${CLASS_NAMES[n]} শ্রেণি`;
+  if (n.endsWith("শ্রেণি") || n.endsWith("শ্রেণী")) return n;
+  return `${n} শ্রেণি`;
 }
 /** e.g. groupLabel('9','SCIENCE') -> '৯ম বিজ্ঞান' (used by list filters) */
 export function groupLabel(classNum: string, division: string | null): string {

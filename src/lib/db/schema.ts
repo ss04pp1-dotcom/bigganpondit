@@ -32,11 +32,30 @@ CREATE TABLE IF NOT EXISTS classes (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS batches (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  class_id     INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  division     TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+  time_slot    TEXT,
+  days         TEXT,
+  room_no      TEXT,
+  max_students INTEGER DEFAULT 0,
+  is_active    INTEGER NOT NULL DEFAULT 1,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (class_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_batches_class ON batches(class_id);
+
 CREATE TABLE IF NOT EXISTS students (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   name        TEXT NOT NULL,
   class_id    INTEGER NOT NULL REFERENCES classes(id),
+  batch_id    INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+  batch_name  TEXT,
   division    TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
   section     TEXT,
   roll        INTEGER NOT NULL CHECK (roll > 0),
@@ -278,6 +297,8 @@ CREATE TABLE IF NOT EXISTS student_requests (
   teacher_id    INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
   name          TEXT NOT NULL,
   class_id      INTEGER NOT NULL REFERENCES classes(id),
+  batch_id      INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+  batch_name    TEXT,
   division      TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
   section       TEXT,
   roll          INTEGER NOT NULL CHECK (roll > 0),

@@ -92,6 +92,33 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
   // Ensure teacher photo_key column exists in existing databases
   await execSchemaStep(db, "ALTER TABLE teachers ADD COLUMN photo_key TEXT;", "teachers.photo_key");
 
+  // Ensure batches table exists
+  await execSchemaStep(
+    db,
+    `CREATE TABLE IF NOT EXISTS batches (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT NOT NULL,
+      class_id     INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      division     TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+      time_slot    TEXT,
+      days         TEXT,
+      room_no      TEXT,
+      max_students INTEGER DEFAULT 0,
+      is_active    INTEGER NOT NULL DEFAULT 1,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (class_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_batches_class ON batches(class_id);`,
+    "batches table"
+  );
+
+  // Ensure student batch columns exist
+  await execSchemaStep(db, "ALTER TABLE students ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL;", "students.batch_id");
+  await execSchemaStep(db, "ALTER TABLE students ADD COLUMN batch_name TEXT;", "students.batch_name");
+  await execSchemaStep(db, "ALTER TABLE student_requests ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL;", "student_requests.batch_id");
+  await execSchemaStep(db, "ALTER TABLE student_requests ADD COLUMN batch_name TEXT;", "student_requests.batch_name");
+
   // Ensure exams exam_type column exists in existing databases
   await execSchemaStep(db, "ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY';", "exams.exam_type");
 

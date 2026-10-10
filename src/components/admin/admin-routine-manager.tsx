@@ -134,8 +134,14 @@ export function AdminRoutineManager() {
     setFormDivision(r.division || "NONE");
     setFormSection(r.section || "");
     setFormSubjectName(r.subject_name);
-    setFormTeacherId(r.teacher_id ? String(r.teacher_id) : "");
-    setFormTeacherName(r.teacher_name);
+
+    // Auto-match teacher to ensure selection loads properly
+    const matched = r.teacher_id
+      ? teachers.find((t) => t.id === r.teacher_id)
+      : teachers.find((t) => t.name === r.teacher_name || t.short_name === r.teacher_name);
+
+    setFormTeacherId(matched ? String(matched.id) : (r.teacher_id ? String(r.teacher_id) : ""));
+    setFormTeacherName(r.teacher_name || matched?.name || "");
     setFormStartTime(r.start_time);
     setFormEndTime(r.end_time);
     setFormRoomNo(r.room_no || "");
@@ -489,9 +495,24 @@ export function AdminRoutineManager() {
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
+                        <div className="flex items-center gap-2">
+                          {r.teacher_photo_key ? (
+                            <img
+                              src={`/api/files/${r.teacher_photo_key}`}
+                              alt={r.teacher_name}
+                              className="h-5 w-5 rounded-full object-cover border border-slate-200 shadow-2xs"
+                            />
+                          ) : (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-bold">
+                              {r.teacher_short_name || r.teacher_name.slice(0, 2)}
+                            </span>
+                          )}
                           <span className="font-semibold text-slate-800">{r.teacher_name}</span>
+                          {r.teacher_short_name && (
+                            <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1 py-0.5 rounded">
+                              {r.teacher_short_name}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-slate-600 font-mono">
@@ -593,7 +614,20 @@ export function AdminRoutineManager() {
                             )}
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-100">
-                            <span>{r.teacher_name}</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {r.teacher_photo_key ? (
+                                <img
+                                  src={`/api/files/${r.teacher_photo_key}`}
+                                  alt={r.teacher_name}
+                                  className="h-4 w-4 rounded-full object-cover border border-slate-200"
+                                />
+                              ) : (
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold">
+                                  {r.teacher_short_name || r.teacher_name.slice(0, 2)}
+                                </span>
+                              )}
+                              <span className="font-medium truncate">{r.teacher_name}</span>
+                            </div>
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"

@@ -4,7 +4,7 @@
 // On first access the schema is applied and the secure seed runs
 // (idempotent), so both environments converge to the same state.
 
-import { getCloudflareEnv, localEnv, type CloudflareEnv } from "@/lib/cloudflare";
+import { getCloudflareEnv, localEnv, isCloudflareWorkersRuntime, type CloudflareEnv } from "@/lib/cloudflare";
 import { getLocalD1 } from "./local";
 import { SCHEMA_SQL } from "./schema";
 import { seedDatabase } from "./seed";
@@ -18,9 +18,7 @@ const g = globalThis as unknown as {
 /**
  * Run one idempotent schema step. Expected errors on existing databases
  * ("duplicate column name", "already exists", "no such column" for renames)
- * are ignored; ANY other error is logged loudly. Previously every step
- * swallowed ALL errors, so a half-applied schema (read-only DB, quota,
- * drift) was indistinguishable from the expected case.
+ * are ignored; ANY other error is logged loudly.
  */
 async function execSchemaStep(db: D1Database, sql: string, label: string): Promise<void> {
   try {
@@ -37,41 +35,88 @@ async function execSchemaStep(db: D1Database, sql: string, label: string): Promi
  * so concurrent requests always share ONE bootstrap run (no races).
  */
 export function getDb(): Promise<D1Database> {
+  if (g.__academyDb) {
+    return Promise.resolve(g.__academyDb);
+  }
+
   if (!g.__academyInit) {
     g.__academyInit = (async () => {
-      const cf = await getCloudflareEnv();
-      let db: D1Database;
-      if (cf?.DB) {
-        db = cf.DB as unknown as D1Database;
-      } else if (cf) {
-        // We are in the Workers environment but the D1 binding is MISSING.
-        // FAIL FAST: the old code silently substituted a fake stub database
-        // whose run() always returned success:true — the site booted and
-        // rendered normally while every write was discarded (admins saved
-        // settings that never persisted, logins "failed" misleadingly).
-        throw new Error(
-          "D1 ডেটাবেস বাইন্ডিং পাওয়া যায়নি — wrangler.toml-এ d1_databases বাইন্ডিং (DB) যাচাই করুন।"
-        );
-      } else {
-        try {
-          db = await getLocalD1();
-        } catch (err) {
-          throw new Error(`কোনো ডেটাবেস উপলব্ধ নয় (local SQLite চালু করা যায়নি): ${String(err)}`);
-        }
-      }
-      g.__academyDb = db;
       try {
-        await bootstrap(db, cf);
-      } catch (e) {
-        console.error("Database bootstrap warning:", e);
+        const cf = await getCloudflareEnv();
+        let db: D1Database;
+
+        if (cf?.DB) {
+          db = cf.DB as unknown as D1Database;
+        } else if (isCloudflareWorkersRuntime() || cf) {
+          // Running on Cloudflare Workers but DB binding was not found
+          throw new Error(
+            "D1 ডেটাবেস বাইন্ডিং পাওয়া যায়নি — wrangler.toml ফাইলে [[d1_databases]] binding = 'DB' এবং database_id সঠিক আছে কিনা নিশ্চিত করুন।"
+          );
+        } else {
+          try {
+            db = await getLocalD1();
+          } catch (err) {
+            throw new Error(`কোনো ডেটাবেস উপলব্ধ নয় (local SQLite চালু করা যায়নি): ${String(err)}`);
+          }
+        }
+
+        g.__academyDb = db;
+
+        try {
+          await bootstrap(db, cf);
+        } catch (e) {
+          console.error("Database bootstrap warning:", e);
+        }
+
+        return db;
+      } catch (err) {
+        // Clear cached promise on failure so next request can retry and not be permanently poisoned
+        g.__academyInit = undefined;
+        throw err;
       }
-      return db;
     })();
   }
   return g.__academyInit;
 }
 
 async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void> {
+  const isWorkers = !!cf?.DB || isCloudflareWorkersRuntime();
+
+  // FAST PATH: In production on Cloudflare Workers, check if tables already exist.
+  // Avoids spamming 50+ D1 ALTER/CREATE subrequests on cold starts (exceeding Workers limits).
+  if (isWorkers) {
+    const hasUsersTable = await db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users' LIMIT 1")
+      .first<{ name: string }>()
+      .catch(() => null);
+
+    if (hasUsersTable) {
+      // Schema is already applied. Check if initial admin needs creation.
+      const env = cf ?? localEnv();
+      const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;
+      if (adminPasswordEnv) {
+        const hasAdmin = await db
+          .prepare("SELECT id FROM users WHERE role = 'ADMIN' LIMIT 1")
+          .first<{ id: number }>()
+          .catch(() => null);
+
+        if (!hasAdmin) {
+          try {
+            await seedDatabase(db, {
+              adminUsername: String(env.ADMIN_USERNAME ?? "admin"),
+              adminPassword: adminPasswordEnv,
+              seedDemo: false,
+            });
+          } catch (e) {
+            console.warn("Initial admin seed warning:", e);
+          }
+        }
+      }
+      return;
+    }
+  }
+
+  // SLOW/INIT PATH: Apply full schema if tables do not exist
   // 1) apply schema (idempotent, same SQL as db/migrations/0001_init.sql)
   await execSchemaStep(db, SCHEMA_SQL, "schema");
 

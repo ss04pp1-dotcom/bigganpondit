@@ -11,12 +11,8 @@ const nextConfig: NextConfig = {
     // (Cloudflare R2 objects), so the Next Image optimizer is not used.
     unoptimized: true,
   },
-  // Keep runtime packages external so the same code runs on:
-  //  - local dev (bun:sqlite / node:sqlite behind the D1-compatible adapter)
-  //  - Cloudflare Workers (@opennextjs/cloudflare provides real D1/R2 bindings)
-  serverExternalPackages: [
-    "@opennextjs/cloudflare",
-  ],
+  // In OpenNext on Cloudflare Workers, runtime bindings are provided via context globals.
+  serverExternalPackages: [],
   turbopack: {},
   webpack: (config, {dev}) => {
     if (dev && process.env.DISABLE_HMR === 'true') {

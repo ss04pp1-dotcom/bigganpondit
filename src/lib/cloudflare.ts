@@ -13,28 +13,40 @@ export interface CloudflareEnv {
   [key: string]: unknown;
 }
 
+export function isCloudflareWorkersRuntime(): boolean {
+  return (
+    typeof (globalThis as any).WebSocketPair !== "undefined" ||
+    (typeof navigator !== "undefined" && (navigator as any).userAgent === "Cloudflare-Workers") ||
+    !!(globalThis as any)[Symbol.for("__cloudflare-context__")]
+  );
+}
+
 export async function getCloudflareEnv(): Promise<CloudflareEnv | null> {
   try {
-    // 1) Direct global or process.env check (immediate, zero async overhead)
-    const directEnv = (globalThis as any).env || (process as any).env;
+    // 1) Direct OpenNext AsyncLocalStorage accessor (zero async overhead, no hang)
+    const cfContext = (globalThis as any)[Symbol.for("__cloudflare-context__")];
+    if (cfContext?.env) {
+      return cfContext.env as CloudflareEnv;
+    }
+
+    // 2) Direct global or process.env check
+    const directEnv = (globalThis as any).env || (globalThis as any).__env__ || (process as any).env;
     if (directEnv?.DB) return directEnv as CloudflareEnv;
 
-    // 2) @opennextjs/cloudflare context with 800ms race timeout to prevent infinite hang
-    const mod: any = await import("@opennextjs/cloudflare");
-    if (typeof mod?.getCloudflareContext === "function") {
-      const fetchContext = async () => {
+    // 3) Direct getCloudflareContext without race timeout
+    try {
+      const mod: any = await import("@opennextjs/cloudflare").catch(() => null);
+      if (typeof mod?.getCloudflareContext === "function") {
         try {
-          const res = mod.getCloudflareContext({ async: true });
-          return res && typeof res.then === "function" ? await res : res;
+          const syncCtx = mod.getCloudflareContext();
+          if (syncCtx?.env) return syncCtx.env as CloudflareEnv;
         } catch {
-          const res = mod.getCloudflareContext();
-          return res && typeof res.then === "function" ? await res : res;
+          const asyncCtx = await mod.getCloudflareContext({ async: true }).catch(() => null);
+          if (asyncCtx?.env) return asyncCtx.env as CloudflareEnv;
         }
-      };
-
-      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 800));
-      const ctx: any = await Promise.race([fetchContext(), timeout]);
-      if (ctx?.env) return ctx.env as CloudflareEnv;
+      }
+    } catch {
+      // not available or not on edge
     }
   } catch (err) {
     console.error("Failed to get Cloudflare context:", err);

@@ -45,6 +45,48 @@ interface EnrolledStudent {
   username: string;
 }
 
+const BATCH_NAME_PRESETS = [
+  "সকাল ব্যাচ",
+  "দুপুর ব্যাচ",
+  "বিকাল ব্যাচ",
+  "সন্ধ্যা ব্যাচ",
+  "ব্যাচ-১",
+  "ব্যাচ-২",
+  "ব্যাচ-৩",
+  "স্পেশাল ব্যাচ",
+  "বোর্ড ব্যাচ",
+  "মেধা ব্যাচ",
+];
+
+const DAY_PRESETS = [
+  { label: "শনি-সোম-বুধ", value: "শনি-সোম-বুধ" },
+  { label: "রবি-মঙ্গল-বৃহস্পতি", value: "রবি-মঙ্গল-বৃহস্পতি" },
+  { label: "প্রতিদিন (শনি-বৃহঃ)", value: "শনি-রবি-সোম-মঙ্গল-বুধ-বৃহস্পতি" },
+  { label: "শুক্র-শনি", value: "শুক্র-শনি" },
+];
+
+const WEEK_DAYS = ["শনি", "রবি", "সোম", "মঙ্গল", "বুধ", "বৃহস্পতি", "শুক্র"];
+
+const TIME_SLOT_PRESETS = [
+  "সকাল ৮:০০ - ৯:৩০",
+  "সকাল ৯:৩০ - ১১:০০",
+  "সকাল ১০:০০ - ১১:৩০",
+  "দুপুর ১২:০০ - ১:৩০",
+  "বিকাল ৩:০০ - ৪:৩০",
+  "সন্ধ্যা ৫:০০ - ৬:৩০",
+  "সন্ধ্যা ৭:০০ - ৮:৩০",
+];
+
+const CAPACITY_PRESETS = [
+  { label: "১৫ জন", value: "15" },
+  { label: "২০ জন", value: "20" },
+  { label: "২৫ জন", value: "25" },
+  { label: "৩০ জন", value: "30" },
+  { label: "৪০ জন", value: "40" },
+  { label: "৫০ জন", value: "50" },
+  { label: "সীমাহীন (০)", value: "0" },
+];
+
 export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECTOR" }) {
   const isReadOnly = role === "DIRECTOR";
   const { toast } = useToast();
@@ -206,9 +248,17 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
       });
     } else {
       setEditingBatch(null);
+      const targetClassId = prefillClassId
+        ? String(prefillClassId)
+        : batchClassFilter !== "ALL" && batchClassFilter
+        ? batchClassFilter
+        : classes[0]?.id
+        ? String(classes[0].id)
+        : "";
+
       setBatchForm({
         name: "",
-        classId: prefillClassId ? String(prefillClassId) : (classes[0]?.id ? String(classes[0].id) : ""),
+        classId: targetClassId,
         division: "NONE",
         timeSlot: "",
         days: "",
@@ -219,6 +269,20 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
     }
     setBatchModalOpen(true);
   }
+
+  // Batches existing in currently selected class in modal
+  const existingBatchesInSelectedClass = useMemo(() => {
+    if (!batchForm.classId) return [];
+    return batches.filter((b) => String(b.class_id) === String(batchForm.classId));
+  }, [batches, batchForm.classId]);
+
+  const isDuplicateBatchName = useMemo(() => {
+    const trimmed = batchForm.name.trim().toLowerCase();
+    if (!trimmed) return false;
+    return existingBatchesInSelectedClass.some(
+      (b) => b.name.trim().toLowerCase() === trimmed && (!editingBatch || b.id !== editingBatch.id)
+    );
+  }, [existingBatchesInSelectedClass, batchForm.name, editingBatch]);
 
   // Save Batch
   async function handleSaveBatch(e: React.FormEvent) {
@@ -406,7 +470,12 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
               </Button>
             ) : (
               <Button
-                onClick={() => handleOpenBatchModal()}
+                onClick={() =>
+                  handleOpenBatchModal(
+                    undefined,
+                    batchClassFilter !== "ALL" ? Number(batchClassFilter) : undefined
+                  )
+                }
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl h-10 px-4 gap-1.5 w-full sm:w-auto shadow-sm"
               >
                 <Plus className="h-4 w-4" />
@@ -636,7 +705,12 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
               </p>
               {!isReadOnly && (
                 <Button
-                  onClick={() => handleOpenBatchModal()}
+                  onClick={() =>
+                    handleOpenBatchModal(
+                      undefined,
+                      batchClassFilter !== "ALL" ? Number(batchClassFilter) : undefined
+                    )
+                  }
                   className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-xl"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" />
@@ -824,38 +898,26 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
 
       {/* MODAL 2: ADD / EDIT BATCH */}
       <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-lg p-4 sm:p-6 rounded-2xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-xl p-4 sm:p-6 rounded-2xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-indigo-600" />
-              <span>{editingBatch ? "ব্যাচ সম্পাদনা করুন" : "ব্যাচের নাম দিয়ে ব্যাচ যুক্ত করুন"}</span>
+              <span>{editingBatch ? "ব্যাচ তথ্য সম্পাদনা" : "নতুন ব্যাচ তৈরি করুন"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              ব্যাচের নাম, শ্রেণি, সময়সূচী ও অন্যান্য তথ্য পূরণ করুন।
+              ব্যাচের নাম, শ্রেণি, ক্লাস শিডিউল ও সময়সূচী নির্ধারণ করুন।
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveBatch} className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700">
-                ব্যাচের নাম <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={batchForm.name}
-                onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })}
-                placeholder="যেমন: সকাল ব্যাচ, সন্ধ্যা ব্যাচ, ব্যাচ-১, স্পেশাল ব্যাচ ইত্যাদি"
-                className="h-11 rounded-xl font-medium"
-                autoFocus
-              />
-            </div>
-
+            {/* 1. শ্রেণি ও বিভাগ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-700">
                   শ্রেণি <span className="text-red-500">*</span>
                 </Label>
                 <Select
-                  value={batchForm.classId}
+                  value={batchForm.classId || undefined}
                   onValueChange={(v) => setBatchForm({ ...batchForm, classId: v })}
                 >
                   <SelectTrigger className="h-11 rounded-xl">
@@ -880,7 +942,7 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
                   onValueChange={(v) => setBatchForm({ ...batchForm, division: v })}
                 >
                   <SelectTrigger className="h-11 rounded-xl">
-                    <SelectValue />
+                    <SelectValue placeholder="সকল / প্রযোজ্য নয়" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NONE">সকল / প্রযোজ্য নয়</SelectItem>
@@ -894,36 +956,215 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            {/* Existing Batches in Selected Class Preview */}
+            {existingBatchesInSelectedClass.length > 0 && (
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />
+                    এই শ্রেণির বিদ্যমান ব্যাচসমূহ ({bn(existingBatchesInSelectedClass.length)}টি):
+                  </span>
+                  <span className="text-[10px] text-slate-400">ডুপ্লিকেট এড়াতে ভিন্ন নাম দিন</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {existingBatchesInSelectedClass.map((b) => (
+                    <span
+                      key={b.id}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                        b.name.trim().toLowerCase() === batchForm.name.trim().toLowerCase()
+                          ? "bg-amber-100 border-amber-300 text-amber-900 font-semibold"
+                          : "bg-white border-slate-200 text-slate-700 font-medium"
+                      }`}
+                    >
+                      <span>{b.name}</span>
+                      {b.time_slot && (
+                        <span className="text-slate-400 text-[10px]">({b.time_slot})</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2. ব্যাচের নাম with Quick Presets */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-slate-700">
-                  সময়সূচী (টাইম স্লট)
+                  ব্যাচের নাম <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  value={batchForm.timeSlot}
-                  onChange={(e) => setBatchForm({ ...batchForm, timeSlot: e.target.value })}
-                  placeholder="যেমন: সকাল ৮:০০ - ৯:৩০"
-                  className="h-11 rounded-xl"
-                />
+                <span className="text-[11px] text-slate-400">ক্লিক করে কুইক নাম বসান বা লিখুন</span>
+              </div>
+              <Input
+                value={batchForm.name}
+                onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })}
+                placeholder="যেমন: সকাল ব্যাচ, সন্ধ্যা ব্যাচ, ব্যাচ-১, স্পেশাল ব্যাচ ইত্যাদি"
+                className={`h-11 rounded-xl font-medium ${
+                  isDuplicateBatchName ? "border-amber-500 focus-visible:ring-amber-400" : ""
+                }`}
+                autoFocus
+              />
+
+              {/* Quick Batch Name Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] text-slate-400 font-medium mr-0.5">কুইক প্রিসেট:</span>
+                {BATCH_NAME_PRESETS.map((pName) => {
+                  const isSelected = batchForm.name === pName;
+                  const isAlreadyUsed = existingBatchesInSelectedClass.some(
+                    (b) => b.name === pName && (!editingBatch || b.id !== editingBatch.id)
+                  );
+                  return (
+                    <button
+                      key={pName}
+                      type="button"
+                      onClick={() => {
+                        const updates: Partial<typeof batchForm> = { name: pName };
+                        if (!batchForm.timeSlot) {
+                          if (pName.includes("সকাল")) updates.timeSlot = "সকাল ৮:০০ - ৯:৩০";
+                          else if (pName.includes("সন্ধ্যা")) updates.timeSlot = "সন্ধ্যা ৫:০০ - ৬:৩০";
+                          else if (pName.includes("বিকাল")) updates.timeSlot = "বিকাল ৩:০০ - ৪:৩০";
+                          else if (pName.includes("দুপুর")) updates.timeSlot = "দুপুর ১২:০০ - ১:৩০";
+                        }
+                        setBatchForm((prev) => ({ ...prev, ...updates }));
+                      }}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : isAlreadyUsed
+                          ? "bg-amber-50/80 text-amber-700 border-amber-200 line-through opacity-60"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 cursor-pointer"
+                      }`}
+                      title={isAlreadyUsed ? "এই ব্যাচটি ইতোমধ্যে এই শ্রেণিতে রয়েছে" : pName}
+                    >
+                      {pName}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
-                  সপ্তাহের দিনসমূহ
+              {/* Duplicate Warning */}
+              {isDuplicateBatchName && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-800 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">এই নামের ব্যাচ ইতোমধ্যে রয়েছে!</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      নির্বাচিত শ্রেণিতে ইতোমধ্যে &ldquo;{batchForm.name}&rdquo; নামের একটি ব্যাচ বিদ্যমান। অনুগ্রহ করে &ldquo;ব্যাচ-২&rdquo;, &ldquo;স্পেশাল ব্যাচ&rdquo; বা ভিন্ন নাম লিখুন।
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. সময়সূচী (টাইম স্লট) with Quick Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সময়সূচী (টাইম স্লট)</span>
                 </Label>
-                <Input
-                  value={batchForm.days}
-                  onChange={(e) => setBatchForm({ ...batchForm, days: e.target.value })}
-                  placeholder="যেমন: শনি, সোম, বুধ"
-                  className="h-11 rounded-xl"
-                />
+                <span className="text-[11px] text-slate-400">ক্লিক করে প্রিসেট বেছে নিন</span>
+              </div>
+              <Input
+                value={batchForm.timeSlot}
+                onChange={(e) => setBatchForm({ ...batchForm, timeSlot: e.target.value })}
+                placeholder="যেমন: সকাল ৮:০০ - ৯:৩০ বা বিকাল ৪:০০ - ৫:৩০"
+                className="h-11 rounded-xl"
+              />
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {TIME_SLOT_PRESETS.map((slot) => {
+                  const isSelected = batchForm.timeSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, timeSlot: slot }))}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 4. সপ্তাহের দিনসমূহ with Quick Presets & Day Toggles */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সপ্তাহের দিনসমূহ</span>
+                </Label>
+                <span className="text-[11px] text-slate-400">প্রিসেট বা নির্দিষ্ট দিন বেছে নিন</span>
+              </div>
+              <Input
+                value={batchForm.days}
+                onChange={(e) => setBatchForm({ ...batchForm, days: e.target.value })}
+                placeholder="যেমন: শনি, সোম, বুধ"
+                className="h-11 rounded-xl"
+              />
+              {/* Day Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] text-slate-400 font-medium mr-0.5">রুটিন প্যাটার্ন:</span>
+                {DAY_PRESETS.map((dp) => {
+                  const isSelected = batchForm.days === dp.value;
+                  return (
+                    <button
+                      key={dp.label}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, days: dp.value }))}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+                      }`}
+                    >
+                      {dp.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Individual Day Buttons */}
+              <div className="flex flex-wrap items-center gap-1 pt-1">
+                <span className="text-[11px] text-slate-400 font-medium mr-1">নির্দিষ্ট দিন:</span>
+                {WEEK_DAYS.map((d) => {
+                  const isIncluded = (batchForm.days || "").includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        const currentDays = batchForm.days ? batchForm.days.split(/[,、\s-]+/).map(s => s.trim()).filter(Boolean) : [];
+                        let next: string[];
+                        if (currentDays.includes(d)) {
+                          next = currentDays.filter(x => x !== d);
+                        } else {
+                          next = WEEK_DAYS.filter(x => currentDays.includes(x) || x === d);
+                        }
+                        setBatchForm((prev) => ({ ...prev, days: next.join(", ") }));
+                      }}
+                      className={`text-xs px-2 py-0.5 rounded-md border font-medium transition-all cursor-pointer ${
+                        isIncluded
+                          ? "bg-indigo-100 text-indigo-800 border-indigo-300 font-bold"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 5. রুম নম্বর ও আসন সংখ্যা */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
-                  রুম নম্বর (ঐচ্ছিক)
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <DoorOpen className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>রুম নম্বর (ঐচ্ছিক)</span>
                 </Label>
                 <Input
                   value={batchForm.roomNo}
@@ -934,33 +1175,56 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-slate-700">
-                  সর্বোচ্চ আসন সংখ্যা (০ = সীমাহীন)
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সর্বোচ্চ আসন সংখ্যা</span>
                 </Label>
                 <Input
                   type="number"
                   value={batchForm.maxStudents}
                   onChange={(e) => setBatchForm({ ...batchForm, maxStudents: e.target.value })}
-                  placeholder="যেমন: ২৫"
+                  placeholder="যেমন: ২৫ (০ = সীমাহীন)"
                   className="h-11 rounded-xl"
                 />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {CAPACITY_PRESETS.map((cap) => (
+                    <button
+                      key={cap.label}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, maxStudents: cap.value }))}
+                      className={`text-[11px] px-2 py-0.5 rounded-md border cursor-pointer transition-colors ${
+                        batchForm.maxStudents === cap.value
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {cap.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            {/* 6. স্ট্যাটাস */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <label htmlFor="batchActiveToggle" className="text-xs font-bold text-slate-800 cursor-pointer block">
+                  ব্যাচ স্ট্যাটাস (সক্রিয় / চালু)
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {batchForm.isActive ? "এই ব্যাচটিতে বর্তমানে ক্লাস ও কার্যক্রম চালু রয়েছে।" : "ব্যাচটি বর্তমানে বন্ধ / স্থগিত রয়েছে।"}
+                </p>
+              </div>
               <input
                 type="checkbox"
                 id="batchActiveToggle"
                 checked={batchForm.isActive}
                 onChange={(e) => setBatchForm({ ...batchForm, isActive: e.target.checked })}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
-              <label htmlFor="batchActiveToggle" className="text-xs font-medium text-slate-700 cursor-pointer">
-                ব্যাচটি বর্তমানে সক্রিয় রয়েছে
-              </label>
             </div>
 
-            <DialogFooter className="gap-2 pt-2">
+            <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
               <Button
                 type="button"
                 variant="outline"
@@ -975,7 +1239,7 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
                 className="rounded-xl h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
               >
                 {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                <span>{editingBatch ? "আপডেট করুন" : "যুক্ত করুন"}</span>
+                <span>{editingBatch ? "তথ্য আপডেট করুন" : "ব্যাচ তৈরি করুন"}</span>
               </Button>
             </DialogFooter>
           </form>

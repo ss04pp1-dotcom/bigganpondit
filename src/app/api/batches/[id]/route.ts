@@ -52,7 +52,7 @@ export async function GET(req: Request, ctx: Ctx) {
 export async function PATCH(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN", "TEACHER"]);
+    await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, MSG.invalidNumber);
 
@@ -148,7 +148,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(req: Request, ctx: Ctx) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN", "TEACHER"]);
+    await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const id = Number((await ctx.params).id);
     if (!Number.isInteger(id) || id <= 0) throw new ApiError(400, MSG.invalidNumber);
 

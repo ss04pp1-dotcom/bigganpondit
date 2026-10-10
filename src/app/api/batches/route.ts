@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { parseJson, batchCreateSchema } from "@/lib/validation";
+import { classLabel } from "@/lib/constants";
 
 export async function GET(req: Request) {
   try {
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN", "TEACHER"]);
+    await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const db = await getDb();
     const body = await parseJson(req, batchCreateSchema);
 
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
       .first<{ id: number }>()
       .catch(() => null);
     if (dup) {
-      throw new ApiError(400, `'${cls.name}' শ্রেণিতে '${name}' নামের ব্যাচ ইতোমধ্যে রয়েছে।`);
+      throw new ApiError(400, `'${classLabel(cls.name)}'-এ '${name}' নামের ব্যাচ ইতোমধ্যে রয়েছে। অনুগ্রহ করে অন্য নাম নির্বাচন করুন।`);
     }
 
     const res = await db

@@ -1607,7 +1607,17 @@ export function StudentManager({
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                      <a
+                        href="/admin/classes"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-indigo-600 hover:underline font-medium"
+                      >
+                        + নতুন ব্যাচ তৈরি
+                      </a>
+                    </div>
                     <Select
                       value={form.batchId || "NONE"}
                       onValueChange={(v) => {
@@ -1651,7 +1661,17 @@ export function StudentManager({
                 </div>
                 {(form.className === "9" || form.className === "10") && (
                   <div className="space-y-1.5">
-                    <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>ব্যাচ (ঐচ্ছিক)</Label>
+                      <a
+                        href="/admin/classes"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-indigo-600 hover:underline font-medium"
+                      >
+                        + নতুন ব্যাচ তৈরি
+                      </a>
+                    </div>
                     <Select
                       value={form.batchId || "NONE"}
                       onValueChange={(v) => {

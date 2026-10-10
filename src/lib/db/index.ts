@@ -91,6 +91,19 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       .catch(() => null);
 
     if (hasUsersTable) {
+      // Ensure login_attempts table exists in case migration was pending
+      await execSchemaStep(
+        db,
+        `CREATE TABLE IF NOT EXISTS login_attempts (
+          key TEXT PRIMARY KEY,
+          count INTEGER NOT NULL DEFAULT 0,
+          window_start TEXT NOT NULL DEFAULT (datetime('now')),
+          locked_until TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);`,
+        "login_attempts ensure"
+      );
+
       // Schema is already applied. Check if initial admin needs creation.
       const env = cf ?? localEnv();
       const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;

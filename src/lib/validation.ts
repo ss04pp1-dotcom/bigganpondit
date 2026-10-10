@@ -178,8 +178,10 @@ export const settingsUpdateSchema = z.object({
 });
 
 export const backupActionSchema = z.object({
-  action: z.enum(["create", "restore", "delete"]),
+  action: z.enum(["create", "restore", "delete", "restore_upload"]),
   key: z.string().optional(),
+  payload: z.any().optional(),
+  fileName: z.string().optional(),
 });
 
 export const classCreateSchema = z.object({

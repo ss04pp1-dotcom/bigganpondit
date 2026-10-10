@@ -51,6 +51,7 @@ export interface RoutineItem {
   teacher_name: string;
   teacher_photo_key?: string | null;
   teacher_short_name?: string | null;
+  period?: string | null;
   start_time: string;
   end_time: string;
   room_no: string | null;
@@ -464,11 +465,18 @@ export function TodayRoutineModal({
                           )}
 
                           {/* Time Header */}
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                            <Clock className={`h-4 w-4 ${isRunning ? "text-emerald-600" : "text-indigo-600"}`} />
-                            <span className="text-slate-900 text-sm font-mono font-extrabold tracking-tight">
-                              {routine.start_time} – {routine.end_time}
-                            </span>
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600">
+                            <div className="flex items-center gap-2">
+                              <Clock className={`h-4 w-4 ${isRunning ? "text-emerald-600" : "text-indigo-600"}`} />
+                              <span className="text-slate-900 text-sm font-mono font-extrabold tracking-tight">
+                                {routine.start_time} – {routine.end_time}
+                              </span>
+                            </div>
+                            {routine.period && (
+                              <Badge variant="outline" className="text-[11px] font-bold bg-amber-50 text-amber-800 border-amber-200">
+                                {routine.period}
+                              </Badge>
+                            )}
                           </div>
 
                           {/* Subject & Class Info */}
@@ -481,7 +489,7 @@ export function TodayRoutineModal({
                             </div>
 
                             {/* Class and Section (when viewing as teacher/admin/guest) */}
-                            {(!isStudent || userRole === "ADMIN") && (
+                            {(isAdmin || !isStudent) && (
                               <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600 pt-0.5">
                                 <Badge variant="secondary" className="font-bold text-[11px] bg-slate-100 text-slate-800">
                                   শ্রেণী: {classLabel(routine.class_name)}
@@ -635,8 +643,13 @@ export function TodayRoutineModal({
                           </div>
                         </div>
 
-                        <div className="sm:text-right shrink-0">
+                        <div className="sm:text-right shrink-0 flex flex-col sm:items-end gap-1">
                           <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-bold text-slate-900">
+                            {routine.period && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mr-1">
+                                {routine.period}
+                              </span>
+                            )}
                             <Clock className="h-3.5 w-3.5 text-slate-500" />
                             {routine.start_time} – {routine.end_time}
                           </div>

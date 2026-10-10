@@ -275,9 +275,16 @@ export function RoutineViewer({
               >
                 {/* Status indicator */}
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
-                  <Badge variant="secondary" className="text-[11px] font-bold bg-slate-100 text-slate-800">
-                    {getDayNameBn(r.day_of_week)}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="secondary" className="text-[11px] font-bold bg-slate-100 text-slate-800">
+                      {getDayNameBn(r.day_of_week)}
+                    </Badge>
+                    {r.period && (
+                      <Badge variant="outline" className="text-[10px] font-bold bg-amber-50 text-amber-800 border-amber-200">
+                        {r.period}
+                      </Badge>
+                    )}
+                  </div>
 
                   {isRunning && (
                     <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">

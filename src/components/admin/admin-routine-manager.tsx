@@ -57,6 +57,17 @@ const TIME_PRESETS = [
   { start: "04:10 PM", end: "05:10 PM" },
 ];
 
+export const PERIOD_PRESETS = [
+  { id: "1", name: "১ম পিরিয়ড", short: "১ম", start: "09:00 AM", end: "10:00 AM" },
+  { id: "2", name: "২য় পিরিয়ড", short: "২য়", start: "10:00 AM", end: "11:00 AM" },
+  { id: "3", name: "৩য় পিরিয়ড", short: "৩য়", start: "11:05 AM", end: "12:05 PM" },
+  { id: "4", name: "৪র্থ পিরিয়ড", short: "৪র্থ", start: "12:10 PM", end: "01:10 PM" },
+  { id: "5", name: "৫ম পিরিয়ড", short: "৫ম", start: "02:00 PM", end: "03:00 PM" },
+  { id: "6", name: "৬ষ্ঠ পিরিয়ড", short: "৬ষ্ঠ", start: "03:05 PM", end: "04:05 PM" },
+  { id: "7", name: "৭ম পিরিয়ড", short: "৭ম", start: "04:10 PM", end: "05:10 PM" },
+  { id: "8", name: "৮ম পিরিয়ড", short: "৮ম", start: "05:15 PM", end: "06:15 PM" },
+];
+
 export function AdminRoutineManager() {
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
   const [teachers, setTeachers] = useState<{ id: number; name: string; short_name: string }[]>([]);
@@ -68,6 +79,7 @@ export function AdminRoutineManager() {
   const [filterDay, setFilterDay] = useState<string>("all");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterTeacher, setFilterTeacher] = useState<string>("all");
+  const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Modal State
@@ -83,10 +95,20 @@ export function AdminRoutineManager() {
   const [formSubjectName, setFormSubjectName] = useState<string>("");
   const [formTeacherId, setFormTeacherId] = useState<string>("");
   const [formTeacherName, setFormTeacherName] = useState<string>("");
-  const [formStartTime, setFormStartTime] = useState<string>("10:00 AM");
-  const [formEndTime, setFormEndTime] = useState<string>("11:00 AM");
+  const [customTeacherMode, setCustomTeacherMode] = useState<boolean>(false);
+  const [formPeriod, setFormPeriod] = useState<string>("১ম পিরিয়ড");
+  const [formStartTime, setFormStartTime] = useState<string>("09:00 AM");
+  const [formEndTime, setFormEndTime] = useState<string>("10:00 AM");
   const [formRoomNo, setFormRoomNo] = useState<string>("রুম ১০১");
   const [formNote, setFormNote] = useState<string>("");
+
+  // Quick Add Teacher Modal State
+  const [addTeacherModalOpen, setAddTeacherModalOpen] = useState<boolean>(false);
+  const [newTeacherName, setNewTeacherName] = useState<string>("");
+  const [newTeacherShortName, setNewTeacherShortName] = useState<string>("");
+  const [newTeacherUsername, setNewTeacherUsername] = useState<string>("");
+  const [newTeacherPassword, setNewTeacherPassword] = useState<string>("");
+  const [addingTeacher, setAddingTeacher] = useState<boolean>(false);
 
   const { toast } = useToast();
 
@@ -118,10 +140,12 @@ export function AdminRoutineManager() {
     setFormDivision("SCIENCE");
     setFormSection("ক");
     setFormSubjectName("");
+    setFormPeriod("১ম পিরিয়ড");
     setFormTeacherId(teachers[0]?.id ? String(teachers[0].id) : "");
     setFormTeacherName(teachers[0]?.name || "");
-    setFormStartTime("10:00 AM");
-    setFormEndTime("11:00 AM");
+    setCustomTeacherMode(false);
+    setFormStartTime("09:00 AM");
+    setFormEndTime("10:00 AM");
     setFormRoomNo("রুম ১০১");
     setFormNote("");
     setModalOpen(true);
@@ -134,6 +158,7 @@ export function AdminRoutineManager() {
     setFormDivision(r.division || "NONE");
     setFormSection(r.section || "");
     setFormSubjectName(r.subject_name);
+    setFormPeriod(r.period || "১ম পিরিয়ড");
 
     // Auto-match teacher to ensure selection loads properly
     const matched = r.teacher_id
@@ -142,6 +167,11 @@ export function AdminRoutineManager() {
 
     setFormTeacherId(matched ? String(matched.id) : (r.teacher_id ? String(r.teacher_id) : ""));
     setFormTeacherName(r.teacher_name || matched?.name || "");
+    if (!matched && r.teacher_name) {
+      setCustomTeacherMode(true);
+    } else {
+      setCustomTeacherMode(false);
+    }
     setFormStartTime(r.start_time);
     setFormEndTime(r.end_time);
     setFormRoomNo(r.room_no || "");
@@ -154,6 +184,66 @@ export function AdminRoutineManager() {
     const found = teachers.find((t) => String(t.id) === tidStr);
     if (found) {
       setFormTeacherName(found.name);
+    }
+  };
+
+  const handleQuickAddTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeacherName.trim()) {
+      toast({ title: "শিক্ষকের নাম আবশ্যক", variant: "destructive" });
+      return;
+    }
+    if (!newTeacherUsername.trim()) {
+      toast({ title: "ইউজারনেম আবশ্যক", variant: "destructive" });
+      return;
+    }
+    if (!newTeacherPassword.trim()) {
+      toast({ title: "পাসওয়ার্ড আবশ্যক", variant: "destructive" });
+      return;
+    }
+
+    setAddingTeacher(true);
+    try {
+      const res = await fetch("/api/admin/teachers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTeacherName.trim(),
+          shortName: newTeacherShortName.trim() || newTeacherName.trim().slice(0, 3).toUpperCase(),
+          username: newTeacherUsername.trim(),
+          password: newTeacherPassword.trim(),
+          subjectIds: [],
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        toast({ title: "শিক্ষক সফলভাবে যুক্ত করা হয়েছে!" });
+        setAddTeacherModalOpen(false);
+        // Refresh routines & teachers
+        const rRes = await fetch("/api/routines");
+        const rJson = await rRes.json();
+        if (rJson.ok) {
+          setTeachers(rJson.teachers || []);
+          const added = rJson.teachers?.find((t: any) => t.name === newTeacherName.trim());
+          if (added) {
+            setFormTeacherId(String(added.id));
+            setFormTeacherName(added.name);
+          } else {
+            setFormTeacherName(newTeacherName.trim());
+          }
+          setCustomTeacherMode(false);
+        }
+        setNewTeacherName("");
+        setNewTeacherShortName("");
+        setNewTeacherUsername("");
+        setNewTeacherPassword("");
+      } else {
+        toast({ title: json.error || "শিক্ষক যুক্ত করা যায়নি", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "সার্ভার এরর", variant: "destructive" });
+    } finally {
+      setAddingTeacher(false);
     }
   };
 
@@ -183,6 +273,7 @@ export function AdminRoutineManager() {
         subjectName: formSubjectName.trim(),
         teacherId: formTeacherId ? parseInt(formTeacherId, 10) : null,
         teacherName: formTeacherName.trim(),
+        period: formPeriod.trim() || null,
         startTime: formStartTime.trim(),
         endTime: formEndTime.trim(),
         roomNo: formRoomNo.trim() || null,
@@ -232,16 +323,20 @@ export function AdminRoutineManager() {
       if (filterDay !== "all" && String(r.day_of_week) !== filterDay) return false;
       if (filterClass !== "all" && r.class_name !== filterClass) return false;
       if (filterTeacher !== "all" && String(r.teacher_id) !== filterTeacher) return false;
+      if (filterPeriod !== "all") {
+        if (r.period !== filterPeriod && !r.period?.includes(filterPeriod)) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchSub = r.subject_name.toLowerCase().includes(q);
         const matchTea = r.teacher_name.toLowerCase().includes(q);
         const matchRoom = r.room_no?.toLowerCase().includes(q);
-        if (!matchSub && !matchTea && !matchRoom) return false;
+        const matchPeriod = r.period?.toLowerCase().includes(q);
+        if (!matchSub && !matchTea && !matchRoom && !matchPeriod) return false;
       }
       return true;
     });
-  }, [routines, filterDay, filterClass, filterTeacher, searchQuery]);
+  }, [routines, filterDay, filterClass, filterTeacher, filterPeriod, searchQuery]);
 
   const todayDayOfWeek = new Date().getDay();
   const todayClassesCount = routines.filter((r) => r.day_of_week === todayDayOfWeek).length;
@@ -310,7 +405,7 @@ export function AdminRoutineManager() {
       {/* Filters Bar */}
       <Card className="border-slate-200 shadow-2xs">
         <CardContent className="p-4 sm:p-5 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {/* Filter Day */}
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-600 font-semibold">দিন নির্বাচন</Label>
@@ -341,6 +436,24 @@ export function AdminRoutineManager() {
                   {CLASS_NUMBERS.map((c) => (
                     <SelectItem key={c} value={c}>
                       {classLabel(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filter Period */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-slate-600 font-semibold">পিরিয়ড</Label>
+              <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="সব পিরিয়ড" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">সকল পিরিয়ড</SelectItem>
+                  {PERIOD_PRESETS.map((p) => (
+                    <SelectItem key={p.id} value={p.name}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -766,28 +879,137 @@ export function AdminRoutineManager() {
               </div>
             </div>
 
-            {/* Teacher */}
+            {/* Teacher Selection with quick add and custom name support */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700">শিক্ষক *</Label>
-              <Select value={formTeacherId} onValueChange={handleTeacherChange}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="শিক্ষক নির্বাচন করুন" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>
-                      {t.name} ({t.short_name})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700">শিক্ষক *</Label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCustomTeacherMode(!customTeacherMode)}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 hover:underline font-medium cursor-pointer"
+                  >
+                    {customTeacherMode ? "তালিকা থেকে বাছুন" : "কাস্টম নাম লিখুন"}
+                  </button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAddTeacherModalOpen(true)}
+                    className="h-6 px-2 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 gap-1"
+                  >
+                    <Plus className="h-3 w-3" /> শিক্ষক যোগ
+                  </Button>
+                </div>
+              </div>
+
+              {customTeacherMode ? (
+                <Input
+                  placeholder="শিক্ষকের নাম লিখুন (যেমন: মো: আরিফুল ইসলাম)"
+                  value={formTeacherName}
+                  onChange={(e) => setFormTeacherName(e.target.value)}
+                  className="h-9 text-xs"
+                  required
+                />
+              ) : (
+                <Select value={formTeacherId} onValueChange={handleTeacherChange}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="শিক্ষক নির্বাচন করুন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name} ({t.short_name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Period Selection [১ম / ২য় / ৩য় / ৪র্থ / ৫ম / ৬ষ্ঠ / ৭ম / ৮ম] */}
+            <div className="space-y-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                  পিরিয়ড (Period) *
+                </Label>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                  [১ম / ২য় / ৩য় / ৪র্থ ...]
+                </span>
+              </div>
+
+              {/* Quick Period Buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {PERIOD_PRESETS.map((p) => {
+                  const isSelected = formPeriod === p.name || formPeriod === p.short;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setFormPeriod(p.name);
+                        setFormStartTime(p.start);
+                        setFormEndTime(p.end);
+                      }}
+                      className={`text-xs px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 border cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-700 text-white border-emerald-800 shadow-xs"
+                          : "bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 border-slate-200"
+                      }`}
+                    >
+                      <span>{p.short}</span>
+                      <span className="text-[10px] opacity-75 hidden sm:inline">({p.name})</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormPeriod("টিফিন বিরতি");
+                    setFormStartTime("01:10 PM");
+                    setFormEndTime("02:00 PM");
+                  }}
+                  className={`text-xs px-2 py-1 rounded-lg font-medium transition border cursor-pointer ${
+                    formPeriod.includes("টিফিন")
+                      ? "bg-amber-600 text-white border-amber-700"
+                      : "bg-white text-slate-600 hover:bg-amber-50 border-slate-200"
+                  }`}
+                >
+                  টিফিন
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormPeriod("প্র্যাকটিক্যাল");
+                  }}
+                  className={`text-xs px-2 py-1 rounded-lg font-medium transition border cursor-pointer ${
+                    formPeriod.includes("প্র্যাকটিক্যাল")
+                      ? "bg-purple-600 text-white border-purple-700"
+                      : "bg-white text-slate-600 hover:bg-purple-50 border-slate-200"
+                  }`}
+                >
+                  প্র্যাকটিক্যাল
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] text-slate-500 font-medium shrink-0">পিরিয়ড নাম:</span>
+                <Input
+                  value={formPeriod}
+                  onChange={(e) => setFormPeriod(e.target.value)}
+                  placeholder="যেমন: ১ম পিরিয়ড"
+                  className="h-8 text-xs font-semibold bg-white"
+                  required
+                />
+              </div>
             </div>
 
             {/* Start and End Times with presets */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-slate-700">ক্লাসের সময়সূচি *</Label>
-                <span className="text-[11px] text-slate-500">কুইক প্রিসেট চাপুন</span>
+                <span className="text-[11px] text-slate-500">কুইক সময় প্রিসেট</span>
               </div>
               
               <div className="flex flex-wrap gap-1 mb-2">
@@ -799,7 +1021,7 @@ export function AdminRoutineManager() {
                       setFormStartTime(p.start);
                       setFormEndTime(p.end);
                     }}
-                    className="text-[10px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded transition"
+                    className="text-[10px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded transition cursor-pointer"
                   >
                     {p.start}
                   </button>
@@ -865,10 +1087,110 @@ export function AdminRoutineManager() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9"
+                className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 cursor-pointer"
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {editingId ? "আপডেট করুন" : "যুক্ত করুন"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Teacher Modal */}
+      <Dialog open={addTeacherModalOpen} onOpenChange={setAddTeacherModalOpen}>
+        <DialogContent className="max-w-md p-5 sm:p-6 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-emerald-600" />
+              নতুন শিক্ষক যুক্ত করুন
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              রুটিনে ক্লাস এসাইন করার জন্য দ্রুত নতুন শিক্ষক অ্যাকাউন্ট তৈরি করুন।
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleQuickAddTeacher} className="space-y-3.5 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">শিক্ষকের পূর্ণ নাম *</Label>
+              <Input
+                placeholder="যেমন: মো: আরিফুল ইসলাম"
+                value={newTeacherName}
+                onChange={(e) => {
+                  setNewTeacherName(e.target.value);
+                  if (!newTeacherShortName) {
+                    const initials = e.target.value
+                      .trim()
+                      .split(" ")
+                      .map((w) => w[0])
+                      .join("")
+                      .slice(0, 4)
+                      .toUpperCase();
+                    setNewTeacherShortName(initials);
+                  }
+                  if (!newTeacherUsername) {
+                    const translit = e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]/g, "");
+                    setNewTeacherUsername(translit ? `${translit}${Math.floor(10 + Math.random() * 90)}` : "");
+                  }
+                }}
+                className="h-9 text-xs"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">সংক্ষিপ্ত নাম / কোড</Label>
+                <Input
+                  placeholder="যেমন: AI বা ARIF"
+                  value={newTeacherShortName}
+                  onChange={(e) => setNewTeacherShortName(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">ইউজারনেম (লগইন) *</Label>
+                <Input
+                  placeholder="যেমন: ariful10"
+                  value={newTeacherUsername}
+                  onChange={(e) => setNewTeacherUsername(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">পাসওয়ার্ড *</Label>
+              <Input
+                type="password"
+                placeholder="কমপক্ষে ৪ অক্ষরের পাসওয়ার্ড"
+                value={newTeacherPassword}
+                onChange={(e) => setNewTeacherPassword(e.target.value)}
+                className="h-9 text-xs font-mono"
+                required
+              />
+            </div>
+
+            <DialogFooter className="pt-3 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddTeacherModalOpen(false)}
+                className="text-xs h-9"
+              >
+                বাতিল
+              </Button>
+              <Button
+                type="submit"
+                disabled={addingTeacher}
+                className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs h-9 cursor-pointer"
+              >
+                {addingTeacher && <Loader2 className="h-4 w-4 animate-spin" />}
+                সংরক্ষণ করুন
               </Button>
             </DialogFooter>
           </form>

@@ -62,6 +62,8 @@ const TABLES = [
   "settings",
   "webauthn_credentials",
   "student_requests",
+  "batches",
+  "routines",
   // Pending account-recovery / password-change workflow state. Without these,
   // a restore cascade-wipes them via FK and users mid-workflow lose their
   // requests with no error.
@@ -86,6 +88,14 @@ const TABLE_COLUMNS: Record<string, readonly string[]> = {
   users: ["id", "name", "username", "password_hash", "role", "created_at", "updated_at"],
   teachers: ["id", "user_id", "short_name", "photo_key", "signature_key", "created_at", "updated_at"],
   classes: ["id", "name", "sort_order", "created_at", "updated_at"],
+  batches: [
+    "id", "name", "class_id", "division", "time_slot", "days", "max_students", "fee", "note", "is_active", "created_at", "updated_at"
+  ],
+  routines: [
+    "id", "day_of_week", "class_name", "division", "section", "subject_id", "subject_name",
+    "teacher_id", "teacher_name", "period", "start_time", "end_time", "room_no", "note",
+    "is_active", "created_at", "updated_at"
+  ],
   students: [
     "id", "user_id", "name", "class_id", "division", "section", "roll", "photo_key",
     "father_name", "father_occupation", "mother_name", "mother_occupation",
@@ -125,6 +135,7 @@ const TABLE_COLUMNS: Record<string, readonly string[]> = {
 
 const INSERT_ORDER = [
   "classes",
+  "batches",
   "subjects",
   "users",
   "teachers",
@@ -141,15 +152,14 @@ const INSERT_ORDER = [
   "settings",
   "student_requests",
   "webauthn_credentials",
+  "routines",
 ] as const;
 
 // Deleted in this order before restore inserts (FK-safe: children first).
-// NOTE: "subjects" MUST be deleted BEFORE "classes" — subjects.class_id
-// references classes, and with FKs enforced (D1 / local WAL mode) deleting
-// classes first fails with FOREIGN KEY constraint failed mid-restore.
 const DELETE_ORDER = [
   "sessions",
   "login_attempts",
+  "routines",
   "attendance",
   "notebooks",
   "notices",
@@ -161,6 +171,7 @@ const DELETE_ORDER = [
   "students",
   "teachers",
   "subjects",
+  "batches",
   "password_resets",
   "password_change_requests",
   "settings",
@@ -293,6 +304,98 @@ export async function POST(req: Request) {
       return ok({ message: MSG.deleted });
     }
 
+async function performRestore(
+  db: import("@/lib/db/types").D1Database,
+  payload: {
+    version: number;
+    tables: Record<string, Record<string, unknown>[]>;
+  }
+): Promise<{ safetyKey: string }> {
+  // 1) Validate the ENTIRE payload before deleting anything.
+  validateRestorePayload(payload);
+
+  // 2) Automatic pre-restore safety snapshot: if this restore turns out
+  // wrong (or fails midway on a legacy-schema DB), the previous state is
+  // recoverable from this key instead of being gone forever.
+  const safetyKey = await createBackup(db, "pre-restore");
+
+  const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+  for (const t of DELETE_ORDER) {
+    if (t === "settings") {
+      // SECURITY: live API keys are NOT part of the backup (scrubbed at
+      // creation) — do not delete them during restore either.
+      const secretKeys = Array.from(SECRET_SETTING_KEYS);
+      stmts.push(
+        db.prepare(`DELETE FROM settings WHERE key NOT IN (${secretKeys.map(() => "?").join(",")})`).bind(...secretKeys)
+      );
+      continue;
+    }
+    stmts.push(db.prepare(`DELETE FROM ${t}`));
+  }
+  for (const t of INSERT_ORDER) {
+    const rows = payload.tables[t];
+    if (!Array.isArray(rows)) continue;
+    const allowedCols = TABLE_COLUMNS[t];
+    if (!allowedCols) continue;
+    for (const r of rows) {
+      const cols = Object.keys(r).filter((col) => allowedCols.includes(col));
+      if (!cols.includes("id")) continue;
+      stmts.push(
+        db.prepare(
+          `INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`
+        ).bind(...cols.map((c) => (r[c] === undefined ? null : r[c])))
+      );
+    }
+  }
+
+  // Keep the acting admin logged in across the restore (everyone else is
+  // logged out because their user rows are replaced). Only re-insert the
+  // current session when its user still exists in the restored snapshot.
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (token) {
+    const cur = await db
+      .prepare("SELECT id, user_id, token_hash, expires_at, created_at, updated_at FROM sessions WHERE token_hash = ?")
+      .bind(hashSessionToken(token))
+      .first<{ id: string; user_id: number; token_hash: string; expires_at: string; created_at: string; updated_at: string }>(undefined as never)
+      .catch(() => null);
+    const restoredUserIds = new Set((payload.tables.users ?? []).map((u) => Number(u.id)));
+    if (cur && restoredUserIds.has(cur.user_id)) {
+      stmts.push(
+        db.prepare(
+          "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+        ).bind(cur.id, cur.user_id, cur.token_hash, cur.expires_at, cur.created_at, cur.updated_at)
+      );
+    }
+  }
+
+  // Preserve the CURRENT backup registry: the snapshot was taken before
+  // this backup was registered, so restoring it would otherwise drop the
+  // restored-from key from the list (orphaning the R2 object).
+  const currentRegistry = await getSetting(SETTING_BACKUP_REGISTRY, "[]");
+  const restoredRegistry = (payload.tables.settings ?? []).find((s) => s.key === SETTING_BACKUP_REGISTRY);
+  if (currentRegistry !== "[]" && restoredRegistry && restoredRegistry.value !== currentRegistry) {
+    stmts.push(db.prepare("UPDATE settings SET value = ?, updated_at = datetime('now') WHERE key = ?").bind(currentRegistry, SETTING_BACKUP_REGISTRY));
+  }
+
+  // Cloudflare D1 max batch size is 100 statements. Chunk to safe slices of 80:
+  const CHUNK_SIZE = 80;
+  try {
+    for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
+      const chunk = stmts.slice(i, i + CHUNK_SIZE);
+      await db.batch(chunk);
+    }
+  } catch (err) {
+    console.error("[backup] restore failed mid-way:", err);
+    throw new ApiError(
+      500,
+      `রিস্টোর মাঝপথে ব্যর্থ হয়েছে — ডেটাবেস আংশিক অবস্থায় থাকতে পারে। রিকভারির জন্য pre-restore ব্যাকআপ: ${safetyKey}`
+    );
+  }
+
+  return { safetyKey };
+}
+
     if (body.action === "restore") {
       if (!body.key?.startsWith("academy/backups/")) throw new ApiError(400, "ভুল ব্যাকআপ কী।");
       const obj = await bucket.get(body.key);
@@ -310,91 +413,39 @@ export async function POST(req: Request) {
         throw new ApiError(400, "ব্যাকআপ ফাইলটি সঠিক নয়।");
       }
 
-      // 1) Validate the ENTIRE payload before deleting anything.
-      validateRestorePayload(payload);
-
-      // 2) Automatic pre-restore safety snapshot: if this restore turns out
-      // wrong (or fails midway on a legacy-schema DB), the previous state is
-      // recoverable from this key instead of being gone forever.
-      const safetyKey = await createBackup(db, "pre-restore");
-
-      const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
-      for (const t of DELETE_ORDER) {
-        if (t === "settings") {
-          // SECURITY: live API keys are NOT part of the backup (scrubbed at
-          // creation) — do not delete them during restore either.
-          const secretKeys = Array.from(SECRET_SETTING_KEYS);
-          stmts.push(
-            db.prepare(`DELETE FROM settings WHERE key NOT IN (${secretKeys.map(() => "?").join(",")})`).bind(...secretKeys)
-          );
-          continue;
-        }
-        stmts.push(db.prepare(`DELETE FROM ${t}`));
-      }
-      for (const t of INSERT_ORDER) {
-        const rows = payload.tables[t];
-        if (!Array.isArray(rows)) continue;
-        const allowedCols = TABLE_COLUMNS[t];
-        for (const r of rows) {
-          const cols = Object.keys(r).filter((col) => allowedCols.includes(col));
-          if (!cols.includes("id")) continue;
-          stmts.push(
-            db.prepare(
-              `INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`
-            ).bind(...cols.map((c) => (r[c] === undefined ? null : r[c])))
-          );
-        }
-      }
-
-      // Keep the acting admin logged in across the restore (everyone else is
-      // logged out because their user rows are replaced). Only re-insert the
-      // current session when its user still exists in the restored snapshot.
-      const acting = await requireApiUser(["ADMIN"]);
-      const jar = await cookies();
-      const token = jar.get(SESSION_COOKIE)?.value;
-      if (token) {
-        const cur = await db
-          .prepare("SELECT id, user_id, token_hash, expires_at, created_at, updated_at FROM sessions WHERE token_hash = ?")
-          .bind(hashSessionToken(token))
-          .first<{ id: string; user_id: number; token_hash: string; expires_at: string; created_at: string; updated_at: string }>(undefined as never)
-          .catch(() => null);
-        const restoredUserIds = new Set((payload.tables.users ?? []).map((u) => Number(u.id)));
-        if (cur && restoredUserIds.has(cur.user_id)) {
-          stmts.push(
-            db.prepare(
-              "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-            ).bind(cur.id, cur.user_id, cur.token_hash, cur.expires_at, cur.created_at, cur.updated_at)
-          );
-        }
-      }
-      void acting;
-
-      // Preserve the CURRENT backup registry: the snapshot was taken before
-      // this backup was registered, so restoring it would otherwise drop the
-      // restored-from key from the list (orphaning the R2 object).
-      const currentRegistry = await getSetting(SETTING_BACKUP_REGISTRY, "[]");
-      const restoredRegistry = (payload.tables.settings ?? []).find((s) => s.key === SETTING_BACKUP_REGISTRY);
-      if (currentRegistry !== "[]" && restoredRegistry && restoredRegistry.value !== currentRegistry) {
-        stmts.push(db.prepare("UPDATE settings SET value = ?, updated_at = datetime('now') WHERE key = ?").bind(currentRegistry, SETTING_BACKUP_REGISTRY));
-      }
-      // Cloudflare D1 max batch size is 100 statements. Chunk to safe slices of 80:
-      const CHUNK_SIZE = 80;
-      try {
-        for (let i = 0; i < stmts.length; i += CHUNK_SIZE) {
-          const chunk = stmts.slice(i, i + CHUNK_SIZE);
-          await db.batch(chunk);
-        }
-      } catch (err) {
-        // The pre-validation above makes this rare (legacy role-CHECK schemas,
-        // unexpected constraint drift). Report loudly with the recovery key.
-        console.error("[backup] restore failed mid-way:", err);
-        throw new ApiError(
-          500,
-          `রিস্টোর মাঝপথে ব্যর্থ হয়েছে — ডেটাবেস আংশিক অবস্থায় থাকতে পারে। রিকভারির জন্য pre-restore ব্যাকআপ: ${safetyKey}`
-        );
-      }
+      const { safetyKey } = await performRestore(db, payload);
       return ok({
         message: "ব্যাকআপ রিস্টোর করা হয়েছে। অন্য সব ব্যবহারকারীকে আবার লগইন করতে হবে।",
+        safetyBackupKey: safetyKey,
+      });
+    }
+
+    if (body.action === "restore_upload") {
+      let payload = body.payload;
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch {
+          throw new ApiError(400, "আপলোডকৃত ফাইলটি সঠিক JSON ফরম্যাটে নেই।");
+        }
+      }
+      if (!payload || payload.version !== 1 || !payload.tables || typeof payload.tables !== "object") {
+        throw new ApiError(400, "ফাইলটি বৈধ বিজ্ঞান পণ্ডিত ব্যাকআপ ফাইল নয় (version 1 এবং tables অনুপস্থিত)।");
+      }
+
+      // Persist the uploaded JSON into the bucket & registry for future reference
+      const cleanFileName = (body.fileName || "uploaded-backup.json").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const key = `academy/backups/mobile-import-${backupStamp()}-${cleanFileName}`;
+      const bytes = new TextEncoder().encode(JSON.stringify(payload));
+      await bucket.put(key, bytes).catch(() => {});
+      const items = await readRegistry();
+      items.unshift({ key, size: bytes.length, createdAt: new Date().toISOString() });
+      await writeRegistry(items).catch(() => {});
+
+      const { safetyKey } = await performRestore(db, payload);
+      return ok({
+        message: "মোবাইল/ডিভাইস ফাইল থেকে ডেটাবেস সফলভাবে রিস্টোর করা হয়েছে!",
+        uploadedKey: key,
         safetyBackupKey: safetyKey,
       });
     }

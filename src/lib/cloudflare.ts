@@ -35,7 +35,15 @@ export async function getCloudflareEnv(): Promise<CloudflareEnv | null> {
 
     // 3) Direct getCloudflareContext without race timeout
     try {
-      const mod: any = await import("@opennextjs/cloudflare").catch(() => null);
+      const dynamicImport = (name: string): Promise<any> => {
+        try {
+          const fn = new Function("n", "return import(n)");
+          return fn(name);
+        } catch {
+          return Promise.reject(new Error("Dynamic import unsupported"));
+        }
+      };
+      const mod: any = await dynamicImport("@opennextjs/cloudflare").catch(() => null);
       if (typeof mod?.getCloudflareContext === "function") {
         try {
           const syncCtx = mod.getCloudflareContext();

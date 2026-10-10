@@ -551,6 +551,7 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         subject_name TEXT NOT NULL,
         teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
         teacher_name TEXT NOT NULL,
+        period       TEXT,
         start_time   TEXT NOT NULL,
         end_time     TEXT NOT NULL,
         room_no      TEXT,
@@ -564,6 +565,7 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     `,
     "routines"
   );
+  await execSchemaStep(db, `ALTER TABLE routines ADD COLUMN period TEXT;`, "routines.period");
 
   try {
     // 2) seed (idempotent); initial admin comes from environment variables.

@@ -18,6 +18,7 @@ export interface RoutineRow {
   teacher_name: string;
   teacher_photo_key?: string | null;
   teacher_short_name?: string | null;
+  period?: string | null;
   start_time: string;
   end_time: string;
   room_no: string | null;
@@ -198,6 +199,7 @@ export async function POST(req: NextRequest) {
       subjectName,
       teacherId = null,
       teacherName,
+      period = null,
       startTime,
       endTime,
       roomNo = null,
@@ -240,9 +242,9 @@ export async function POST(req: NextRequest) {
 
     const res = await db
       .prepare(
-        `INSERT INTO routines
-         (day_of_week, class_name, division, section, subject_id, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO routines 
+         (day_of_week, class_name, division, section, subject_id, subject_name, teacher_id, teacher_name, period, start_time, end_time, room_no, note, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         Number(dayOfWeek),
@@ -253,6 +255,7 @@ export async function POST(req: NextRequest) {
         subjectName.trim(),
         finalTeacherId,
         teacherName.trim(),
+        period ? String(period).trim() : null,
         startTime.trim(),
         endTime.trim(),
         roomNo?.trim() || null,
@@ -290,6 +293,7 @@ export async function PUT(req: NextRequest) {
       subjectName,
       teacherId = null,
       teacherName,
+      period = null,
       startTime,
       endTime,
       roomNo = null,
@@ -320,7 +324,7 @@ export async function PUT(req: NextRequest) {
         `UPDATE routines
          SET day_of_week = ?, class_name = ?, division = ?, section = ?,
              subject_id = ?, subject_name = ?, teacher_id = ?, teacher_name = ?,
-             start_time = ?, end_time = ?, room_no = ?, note = ?, is_active = ?,
+             period = ?, start_time = ?, end_time = ?, room_no = ?, note = ?, is_active = ?,
              updated_at = datetime('now')
          WHERE id = ?`
       )
@@ -333,6 +337,7 @@ export async function PUT(req: NextRequest) {
         subjectName.trim(),
         finalTeacherId,
         teacherName.trim(),
+        period ? String(period).trim() : null,
         startTime.trim(),
         endTime.trim(),
         roomNo?.trim() || null,

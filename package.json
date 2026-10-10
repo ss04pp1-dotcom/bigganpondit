@@ -8,9 +8,10 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "eslint .",
-    "build:cf": "bunx @opennextjs/cloudflare build",
+    "postinstall": "node ./scripts/patch-opennext.mjs",
+    "build:cf": "node ./scripts/patch-opennext.mjs && bunx @opennextjs/cloudflare build && node ./scripts/patch-worker.mjs",
     "preview:cf": "bunx @opennextjs/cloudflare preview",
-    "deploy:cf": "bunx @opennextjs/cloudflare build && bunx wrangler deploy"
+    "deploy:cf": "node ./scripts/patch-opennext.mjs && bunx @opennextjs/cloudflare build && node ./scripts/patch-worker.mjs && bunx wrangler deploy"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

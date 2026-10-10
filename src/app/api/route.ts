@@ -49,6 +49,10 @@ export async function GET() {
       studentQueryError = String((err as Error)?.message ?? err);
     }
 
+    // Check columns on students table
+    const studentCols = (await db.prepare("PRAGMA table_info(students)").all<{ name: string }>()).results.map(c => c.name);
+    const studentRequestCols = (await db.prepare("PRAGMA table_info(student_requests)").all<{ name: string }>()).results.map(c => c.name);
+
     return ok({
       status: "running",
       app: APP_TITLE,
@@ -58,6 +62,8 @@ export async function GET() {
         userCount,
         studentCount,
         classCount,
+        studentCols,
+        studentRequestCols,
         studentQueryOk,
         studentQueryError,
         studentsSample,

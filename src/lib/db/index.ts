@@ -109,6 +109,93 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         .run()
         .catch(() => null);
 
+      // Ensure batches table exists
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            division TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+            time_slot TEXT,
+            days TEXT,
+            max_students INTEGER,
+            fee REAL,
+            note TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE (class_id, name)
+          )`
+        )
+        .run()
+        .catch(() => null);
+
+      await db
+        .prepare(`CREATE INDEX IF NOT EXISTS idx_batches_class ON batches(class_id)`)
+        .run()
+        .catch(() => null);
+
+      // Ensure student batch and extended profile columns exist
+      const studentColsToAdd = [
+        "batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL",
+        "batch_name TEXT",
+        "hide_photo_from_students INTEGER NOT NULL DEFAULT 0",
+        "raw_password TEXT",
+        "father_occupation TEXT",
+        "mother_occupation TEXT",
+        "guardian_name TEXT",
+        "guardian_occupation TEXT",
+        "guardian_relation TEXT",
+      ];
+      for (const colDef of studentColsToAdd) {
+        await db.prepare(`ALTER TABLE students ADD COLUMN ${colDef}`).run().catch(() => null);
+      }
+
+      const reqColsToAdd = [
+        "batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL",
+        "batch_name TEXT",
+        "raw_password TEXT",
+        "father_occupation TEXT",
+        "mother_occupation TEXT",
+        "guardian_name TEXT",
+        "guardian_occupation TEXT",
+        "guardian_relation TEXT",
+      ];
+      for (const colDef of reqColsToAdd) {
+        await db.prepare(`ALTER TABLE student_requests ADD COLUMN ${colDef}`).run().catch(() => null);
+      }
+
+      // Ensure routines table exists
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS routines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+            class_name TEXT NOT NULL,
+            division TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+            section TEXT,
+            subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+            subject_name TEXT NOT NULL,
+            teacher_id INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+            teacher_name TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            room_no TEXT,
+            note TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_routines_day_class ON routines(day_of_week, class_name)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_routines_teacher ON routines(teacher_id)`).run().catch(() => null);
+      await db.prepare("ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY'").run().catch(() => null);
+      await db.prepare("ALTER TABLE directors ADD COLUMN updated_at TEXT").run().catch(() => null);
+
       // Schema is already applied. Check if initial admin needs creation.
       const env = cf ?? localEnv();
       const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;

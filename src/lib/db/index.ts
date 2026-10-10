@@ -97,11 +97,15 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         `CREATE TABLE IF NOT EXISTS login_attempts (
           key TEXT PRIMARY KEY,
           count INTEGER NOT NULL DEFAULT 0,
-          window_start TEXT NOT NULL DEFAULT (datetime('now')),
+          window_start TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           locked_until TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);`,
-        "login_attempts ensure"
+        );`,
+        "login_attempts ensure table"
+      );
+      await execSchemaStep(
+        db,
+        `CREATE INDEX IF NOT EXISTS idx_login_attempts_window ON login_attempts(window_start);`,
+        "login_attempts ensure index"
       );
 
       // Schema is already applied. Check if initial admin needs creation.

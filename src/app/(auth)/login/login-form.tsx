@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { fromBase64Url, toBase64Url } from "@/lib/auth/webauthn";
+import { TodayRoutineModal } from "@/components/app/today-routine-modal";
 
 export function LoginForm({
   academyName,
@@ -262,7 +263,12 @@ export function LoginForm({
       </section>
 
       {/* Right Login Card Side */}
-      <section className="flex flex-1 items-center justify-center p-4 sm:p-8 md:p-12 bg-[#f4f7fc]">
+      <section className="flex flex-1 flex-col items-center justify-center p-4 sm:p-8 md:p-12 bg-[#f4f7fc]">
+        {/* Quick Today's Routine Button for Visitors/Students */}
+        <div className="mb-4">
+          <TodayRoutineModal triggerButtonOnly />
+        </div>
+
         <div className="w-full max-w-[390px] rounded-xl border border-[#d8e2ee] bg-white p-7 sm:p-8 shadow-[0_12px_40px_rgba(11,35,68,0.12)]">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3.5 flex h-16 w-16 items-center justify-center rounded-full bg-[#edf4ff] text-[#0d6efd] border border-[#d0e2fc] shadow-sm">
@@ -497,6 +503,9 @@ export function LoginForm({
           </Dialog>
         </div>
       </section>
+
+      {/* Auto-popup Today's Routine Modal for Visitors / Students */}
+      <TodayRoutineModal />
     </div>
   );
 }

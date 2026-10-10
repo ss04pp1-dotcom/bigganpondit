@@ -1,0 +1,14 @@
+import { requirePageUser } from "@/lib/auth/guards";
+import { RoutineViewer } from "@/components/app/routine-viewer";
+
+export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "ক্লাস রুটিন — বিজ্ঞান পণ্ডিত একাডেমি",
+  description: "শিক্ষকের সাপ্তাহিক ও দৈনিক ক্লাস পাঠদান সূচি।",
+};
+
+export default async function TeacherRoutinePage() {
+  await requirePageUser(["TEACHER"]);
+  return <RoutineViewer role="TEACHER" />;
+}

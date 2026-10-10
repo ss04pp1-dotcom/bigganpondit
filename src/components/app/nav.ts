@@ -22,6 +22,7 @@ import {
   BookMarked,
   UserCheck,
   Award,
+  CalendarDays,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -37,6 +38,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/director/teachers", label: "শিক্ষক পরিদর্শক", icon: GraduationCap },
     { href: "/director/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/director/attendance", label: "হাজিরা শিট", icon: CheckSquare },
+    { href: "/director/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/director/results", label: "ফলাফল ও মার্কশিট", icon: Search },
     { href: "/director/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
     { href: "/director/notebooks", label: "প্রকাশনী", icon: BookMarked },
@@ -46,6 +48,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/teacher/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { href: "/teacher/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/teacher/attendance", label: "হাজিরা শিট", icon: CheckSquare },
+    { href: "/teacher/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/teacher/marks", label: "নম্বর দিন", icon: ClipboardEdit },
     { href: "/teacher/results", label: "ফলাফল অনুসন্ধান", icon: Search },
     { href: "/teacher/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
@@ -62,6 +65,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/teachers", label: "শিক্ষক", icon: GraduationCap },
     { href: "/admin/students", label: "শিক্ষার্থী", icon: Users },
     { href: "/admin/attendance", label: "হাজিরা শিট", icon: CheckSquare },
+    { href: "/admin/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/admin/subjects", label: "বিষয়", icon: BookOpen },
     { href: "/admin/marks", label: "নম্বর এন্ট্রি", icon: ClipboardEdit },
     { href: "/admin/results", label: "ফলাফল ও মার্কশিট", icon: Search },
@@ -74,6 +78,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   STUDENT: [
     { href: "/student/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { href: "/student/profile", label: "আমার প্রোফাইল", icon: User },
+    { href: "/student/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/student/results", label: "ফলাফল", icon: Search },
     { href: "/student/monthly-result", label: "মাসিক ফলাফল", icon: FileText },
     { href: "/student/annual-result", label: "বার্ষিক ফলাফল", icon: CalendarRange },

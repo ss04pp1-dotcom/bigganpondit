@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE } from "./nav";
 import { ROLE_LABELS, type Role, bn, APP_TITLE } from "@/lib/constants";
 import { NoticeTicker } from "./notice-ticker";
+import { TodayRoutineModal } from "./today-routine-modal";
 
 export interface ShellUser {
   name: string;
@@ -295,7 +296,10 @@ export function AppShell({
               <p className="hidden text-[12px] text-muted-foreground sm:block">{dateBn}</p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              {/* Daily Class Routine Button */}
+              <TodayRoutineModal triggerButtonOnly />
+
               <div className="flex items-center gap-2 rounded-full border border-[#d8e3f0] bg-white px-2.5 py-1 shadow-xs">
                 {user.photoUrl ? (
                   <img
@@ -476,6 +480,9 @@ export function AppShell({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Auto-popup Today's Routine Modal for Logged-in Users */}
+      <TodayRoutineModal />
     </div>
   );
 }

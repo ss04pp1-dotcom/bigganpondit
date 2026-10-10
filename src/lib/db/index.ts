@@ -360,6 +360,34 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
 
   await execSchemaStep(db, `ALTER TABLE directors ADD COLUMN updated_at TEXT;`, "directors.updated_at");
 
+  // Routines table (Weekly & Daily Class Routine Schedule)
+  await execSchemaStep(
+    db,
+    `
+      CREATE TABLE IF NOT EXISTS routines (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_of_week  INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+        class_name   TEXT NOT NULL,
+        division     TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+        section      TEXT,
+        subject_id   INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+        subject_name TEXT NOT NULL,
+        teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+        teacher_name TEXT NOT NULL,
+        start_time   TEXT NOT NULL,
+        end_time     TEXT NOT NULL,
+        room_no      TEXT,
+        note         TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_routines_day_class ON routines(day_of_week, class_name);
+      CREATE INDEX IF NOT EXISTS idx_routines_teacher ON routines(teacher_id);
+    `,
+    "routines"
+  );
+
   try {
     // 2) seed (idempotent); initial admin comes from environment variables.
     // Demo teachers/students/exams are opt-in via SEED_DEMO_DATA=1 (local dev

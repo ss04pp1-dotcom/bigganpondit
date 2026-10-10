@@ -399,6 +399,82 @@ async function ensureDemoData(db: D1Database, seedDemo: boolean) {
     .catch(() => null);
 }
 
+// ---------------------------------------------------------------- routines
+async function ensureRoutines(db: D1Database, seedDemo: boolean) {
+  const existing = await count(db, "routines");
+  if (existing > 0) return;
+  if (!seedDemo) return;
+
+  const tRI = await db
+    .prepare("SELECT t.id, u.name FROM teachers t JOIN users u ON u.id = t.user_id WHERE t.short_name = 'RI'")
+    .first<{ id: number; name: string }>()
+    .catch(() => null);
+  const tMH = await db
+    .prepare("SELECT t.id, u.name FROM teachers t JOIN users u ON u.id = t.user_id WHERE t.short_name = 'MH'")
+    .first<{ id: number; name: string }>()
+    .catch(() => null);
+
+  const nameRI = tRI?.name || "রাকিবুল ইসলাম";
+  const nameMH = tMH?.name || "মেহেদী হাসান";
+  const idRI = tRI?.id ?? 1;
+  const idMH = tMH?.id ?? 2;
+
+  // Days: 6 (শনিবার), 0 (রবিবার), 1 (সোমবার), 2 (মঙ্গলবার), 3 (বুধবার), 4 (বৃহস্পতিবার)
+  const days = [6, 0, 1, 2, 3, 4];
+  const stmts: import("./types").D1PreparedStatement[] = [];
+
+  for (const day of days) {
+    // Class 10 (Science)
+    stmts.push(
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', 'পদার্থবিজ্ঞান', ?, ?, '10:00 AM', '11:00 AM', 'বিজ্ঞান ল্যাব', 'অধ্যায় ভিত্তিক তত্ত্ব ও প্রয়োগ')`)
+        .bind(day, idMH, nameMH),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', 'রসায়ন', ?, ?, '11:05 AM', '12:05 PM', 'রুম ১০১', 'মডেল টেস্ট প্রস্তুতি')`)
+        .bind(day, idRI, nameRI),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', 'উচ্চতর গণিত', ?, ?, '02:00 PM', '03:00 PM', 'রুম ১০১', 'সমস্যা সমাধান ক্লাস')`)
+        .bind(day, idMH, nameMH),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', 'জীববিজ্ঞান', ?, ?, '03:05 PM', '04:05 PM', 'রুম ১০২', 'চিত্রাঙ্কন ও আলোচনা')`)
+        .bind(day, idRI, nameRI),
+
+      // Class 9 (Science)
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '9', 'SCIENCE', 'ক', 'রসায়ন', ?, ?, '10:00 AM', '11:00 AM', 'রুম ১০২', 'রাসায়নিক বন্ধন ও বিক্রিয়া')`)
+        .bind(day, idRI, nameRI),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '9', 'SCIENCE', 'ক', 'সাধারণ গণিত', ?, ?, '11:05 AM', '12:05 PM', 'রুম ১০৩', 'বীজগণিত অনুশীলন')`)
+        .bind(day, idMH, nameMH),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '9', 'SCIENCE', 'ক', 'পদার্থবিজ্ঞান', ?, ?, '02:00 PM', '03:00 PM', 'বিজ্ঞান ল্যাব', 'গতি ও বলের সূত্রাবলী')`)
+        .bind(day, idMH, nameMH),
+
+      // Class 8
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '8', NULL, 'ক', 'গণিত', ?, ?, '09:00 AM', '10:00 AM', 'রুম ২০২', 'জ্যামিতি ও পাটিগণিত')`)
+        .bind(day, idRI, nameRI),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '8', NULL, 'ক', 'ইংরেজি ১ম পত্র', ?, ?, '10:05 AM', '11:05 AM', 'রুম ২০২', 'সিন প্যাসেজ ও গ্রামার')`)
+        .bind(day, idMH, nameMH),
+
+      // Class 7
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '7', NULL, 'ক', 'বিজ্ঞান', ?, ?, '11:15 AM', '12:15 PM', 'রুম ২০৩', 'অধ্যায় ৪ — শ্বসনতন্ত্র')`)
+        .bind(day, idRI, nameRI),
+
+      // Class 6
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '6', NULL, 'ক', 'বিজ্ঞান', ?, ?, '09:00 AM', '10:00 AM', 'রুম ২০৪', 'ভগ্নাংশ ও মৌলিক সংখ্যা')`)
+        .bind(day, idRI, nameRI)
+    );
+  }
+
+  for (let i = 0; i < stmts.length; i += 50) {
+    await db.batch(stmts.slice(i, i + 50));
+  }
+}
+
 // ---------------------------------------------------------------- entry
 export async function seedDatabase(db: D1Database, env: SeedEnv): Promise<void> {
   await ensureClasses(db);
@@ -409,4 +485,5 @@ export async function seedDatabase(db: D1Database, env: SeedEnv): Promise<void> 
   await ensureTeachers(db, env.seedDemo);
   await ensureSettings(db);
   await ensureDemoData(db, env.seedDemo);
+  await ensureRoutines(db, env.seedDemo);
 }

@@ -257,3 +257,26 @@ export const R2_PREFIX = {
   students: "academy/students",
   backups: "academy/backups",
 };
+
+export interface DayOption {
+  id: number;
+  name: string;
+  short: string;
+  isWeekend?: boolean;
+}
+
+export const DAYS_OF_WEEK: DayOption[] = [
+  { id: 6, name: "শনিবার", short: "শনি", isWeekend: false },
+  { id: 0, name: "রবিবার", short: "রবি", isWeekend: false },
+  { id: 1, name: "সোমবার", short: "সোম", isWeekend: false },
+  { id: 2, name: "মঙ্গলবার", short: "মঙ্গল", isWeekend: false },
+  { id: 3, name: "বুধবার", short: "বুধ", isWeekend: false },
+  { id: 4, name: "বৃহস্পতিবার", short: "বৃহস্পতি", isWeekend: false },
+  { id: 5, name: "শুক্রবার", short: "শুক্র", isWeekend: true },
+];
+
+export function getDayNameBn(dayNum: number): string {
+  const d = DAYS_OF_WEEK.find((item) => item.id === dayNum);
+  return d ? d.name : "শনিবার";
+}
+

@@ -259,6 +259,39 @@ export function StudentManager({
   const [allBatches, setAllBatches] = useState<{ id: number; name: string; class_id: number; time_slot?: string | null; days?: string | null }[]>([]);
   const [batchFilter, setBatchFilter] = useState<string>("ALL");
 
+  // Guardian selection: "FATHER" | "MOTHER" | "OTHER"
+  const [guardianType, setGuardianType] = useState<"FATHER" | "MOTHER" | "OTHER">("FATHER");
+
+  const handleGuardianTypeChange = (type: "FATHER" | "MOTHER" | "OTHER") => {
+    setGuardianType(type);
+    setForm((prev) => {
+      if (!prev) return null;
+      if (type === "FATHER") {
+        return {
+          ...prev,
+          guardianName: prev.fatherName?.trim() || "",
+          guardianRelation: "পিতা",
+          guardianOccupation: prev.fatherOccupation?.trim() || "",
+        };
+      } else if (type === "MOTHER") {
+        return {
+          ...prev,
+          guardianName: prev.motherName?.trim() || "",
+          guardianRelation: "মাতা",
+          guardianOccupation: prev.motherOccupation?.trim() || "",
+        };
+      } else {
+        const wasFatherOrMother = prev.guardianRelation === "পিতা" || prev.guardianRelation === "মাতা";
+        return {
+          ...prev,
+          guardianName: wasFatherOrMother ? "" : (prev.guardianName ?? ""),
+          guardianRelation: wasFatherOrMother ? "" : (prev.guardianRelation ?? ""),
+          guardianOccupation: wasFatherOrMother ? "" : (prev.guardianOccupation ?? ""),
+        };
+      }
+    });
+  };
+
   const { toast } = useToast();
 
   async function handleSendSms(e: React.FormEvent) {
@@ -595,6 +628,7 @@ export function StudentManager({
               className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 shadow-xs text-xs font-bold w-full sm:w-auto"
               onClick={() => {
                 setPendingPhoto(null);
+                setGuardianType("FATHER");
                 setForm({ ...emptyForm });
               }}
             >
@@ -1684,7 +1718,18 @@ export function StudentManager({
                   <Label>পিতার নাম (ঐচ্ছিক)</Label>
                   <Input
                     value={form.fatherName ?? ""}
-                    onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((prev) => {
+                        if (!prev) return null;
+                        const next = { ...prev, fatherName: val };
+                        if (guardianType === "FATHER") {
+                          next.guardianName = val;
+                          next.guardianRelation = "পিতা";
+                        }
+                        return next;
+                      });
+                    }}
                     className="h-10"
                     placeholder="পিতার নাম"
                   />
@@ -1693,7 +1738,17 @@ export function StudentManager({
                   <Label>পিতার পেশা (ঐচ্ছিক)</Label>
                   <Input
                     value={form.fatherOccupation ?? ""}
-                    onChange={(e) => setForm({ ...form, fatherOccupation: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((prev) => {
+                        if (!prev) return null;
+                        const next = { ...prev, fatherOccupation: val };
+                        if (guardianType === "FATHER") {
+                          next.guardianOccupation = val;
+                        }
+                        return next;
+                      });
+                    }}
                     className="h-10"
                     placeholder="যেমন: কৃষক, শিক্ষক, ব্যবসায়ী, চাকরিজীবী"
                   />
@@ -1704,7 +1759,18 @@ export function StudentManager({
                   <Label>মাতার নাম (ঐচ্ছিক)</Label>
                   <Input
                     value={form.motherName ?? ""}
-                    onChange={(e) => setForm({ ...form, motherName: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((prev) => {
+                        if (!prev) return null;
+                        const next = { ...prev, motherName: val };
+                        if (guardianType === "MOTHER") {
+                          next.guardianName = val;
+                          next.guardianRelation = "মাতা";
+                        }
+                        return next;
+                      });
+                    }}
                     className="h-10"
                     placeholder="মাতার নাম"
                   />
@@ -1713,28 +1779,139 @@ export function StudentManager({
                   <Label>মাতার পেশা (ঐচ্ছিক)</Label>
                   <Input
                     value={form.motherOccupation ?? ""}
-                    onChange={(e) => setForm({ ...form, motherOccupation: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm((prev) => {
+                        if (!prev) return null;
+                        const next = { ...prev, motherOccupation: val };
+                        if (guardianType === "MOTHER") {
+                          next.guardianOccupation = val;
+                        }
+                        return next;
+                      });
+                    }}
                     className="h-10"
                     placeholder="যেমন: গৃহিণী, শিক্ষিকা, চাকরিজীবী"
                   />
                 </div>
               </div>
+
+              {/* অভিভাবক নির্বাচন [বাবা / মা / অন্য কেউ] */}
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-900/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                    <UserCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    অভিভাবক নির্বাচন [বাবা / মা / অন্য কেউ]
+                  </Label>
+                  <div className="grid grid-cols-3 gap-1 sm:flex sm:items-center">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={guardianType === "FATHER" ? "default" : "outline"}
+                      className={cn(
+                        "h-8 text-xs px-2.5 rounded-md transition-all",
+                        guardianType === "FATHER"
+                          ? "bg-blue-600 text-white hover:bg-blue-700 shadow-xs font-bold"
+                          : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                      onClick={() => handleGuardianTypeChange("FATHER")}
+                    >
+                      বাবা
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={guardianType === "MOTHER" ? "default" : "outline"}
+                      className={cn(
+                        "h-8 text-xs px-2.5 rounded-md transition-all",
+                        guardianType === "MOTHER"
+                          ? "bg-purple-600 text-white hover:bg-purple-700 shadow-xs font-bold"
+                          : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                      onClick={() => handleGuardianTypeChange("MOTHER")}
+                    >
+                      মা
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={guardianType === "OTHER" ? "default" : "outline"}
+                      className={cn(
+                        "h-8 text-xs px-2.5 rounded-md transition-all",
+                        guardianType === "OTHER"
+                          ? "bg-slate-900 text-white hover:bg-slate-800 shadow-xs font-bold dark:bg-slate-100 dark:text-slate-900"
+                          : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                      onClick={() => handleGuardianTypeChange("OTHER")}
+                    >
+                      অন্য কেউ
+                    </Button>
+                  </div>
+                </div>
+
+                <Select
+                  value={guardianType}
+                  onValueChange={(v: "FATHER" | "MOTHER" | "OTHER") => handleGuardianTypeChange(v)}
+                >
+                  <SelectTrigger className="h-10 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700">
+                    <SelectValue placeholder="অভিভাবক নির্বাচন করুন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FATHER">বাবা (পিতা) — পিতার নাম ও পেশা অটোমেটিক বসবে</SelectItem>
+                    <SelectItem value="MOTHER">মা (মাতা) — মাতার নাম ও পেশা অটোমেটিক বসবে</SelectItem>
+                    <SelectItem value="OTHER">অন্য কেউ — নিজে ইনপুট দিন</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {guardianType === "FATHER" && (
+                  <p className="text-[12px] text-emerald-700 dark:text-emerald-400 font-medium">
+                    ✓ অভিভাবক হিসেবে <b>বাবা (পিতা)</b> সিলেক্ট করা হয়েছে। পিতার নাম ও পেশা অটোমেটিক বসেছে।
+                  </p>
+                )}
+                {guardianType === "MOTHER" && (
+                  <p className="text-[12px] text-purple-700 dark:text-purple-400 font-medium">
+                    ✓ অভিভাবক হিসেবে <b>মা (মাতা)</b> সিলেক্ট করা হয়েছে। মাতার নাম ও পেশা অটোমেটিক বসেছে।
+                  </p>
+                )}
+                {guardianType === "OTHER" && (
+                  <p className="text-[12px] text-blue-700 dark:text-blue-400 font-medium">
+                    ℹ️ অভিভাবক হিসেবে <b>অন্য কেউ</b> সিলেক্ট করা হয়েছে। নিচের ঘরে অভিভাবকের নাম, সম্পর্ক ও পেশা ইনপুট দিন।
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>অভিভাবকের নাম (ঐচ্ছিক)</Label>
+                  <Label>
+                    অভিভাবকের নাম {guardianType !== "OTHER" && <span className="text-[11px] text-blue-600 font-normal">(অটোমেটিক)</span>}
+                  </Label>
                   <Input
                     value={form.guardianName ?? ""}
-                    onChange={(e) => setForm({ ...form, guardianName: e.target.value })}
-                    className="h-10"
-                    placeholder="পিতা/মাতা ছাড়া অন্য হলে"
+                    onChange={(e) => {
+                      setForm({ ...form, guardianName: e.target.value });
+                      if (guardianType !== "OTHER") setGuardianType("OTHER");
+                    }}
+                    className={cn(
+                      "h-10",
+                      guardianType !== "OTHER" && "bg-slate-100/70 dark:bg-slate-900/60 font-medium text-slate-800 dark:text-slate-200"
+                    )}
+                    placeholder="পিতা/মাতা ছাড়া অন্য হলে নাম লিখুন"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>অভিভাবকের সাথে সম্পর্ক</Label>
+                  <Label>
+                    অভিভাবকের সাথে সম্পর্ক {guardianType !== "OTHER" && <span className="text-[11px] text-blue-600 font-normal">(অটোমেটিক)</span>}
+                  </Label>
                   <Input
                     value={form.guardianRelation ?? ""}
-                    onChange={(e) => setForm({ ...form, guardianRelation: e.target.value })}
-                    className="h-10"
+                    onChange={(e) => {
+                      setForm({ ...form, guardianRelation: e.target.value });
+                      if (guardianType !== "OTHER") setGuardianType("OTHER");
+                    }}
+                    className={cn(
+                      "h-10",
+                      guardianType !== "OTHER" && "bg-slate-100/70 dark:bg-slate-900/60 font-medium text-slate-800 dark:text-slate-200"
+                    )}
                     placeholder="যেমন: পিতা / মাতা / বড় ভাই / চাচা"
                     list="guardian-relations-list"
                   />
@@ -1751,11 +1928,19 @@ export function StudentManager({
                   </datalist>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>অভিভাবকের পেশা</Label>
+                  <Label>
+                    অভিভাবকের পেশা {guardianType !== "OTHER" && <span className="text-[11px] text-blue-600 font-normal">(অটোমেটিক)</span>}
+                  </Label>
                   <Input
                     value={form.guardianOccupation ?? ""}
-                    onChange={(e) => setForm({ ...form, guardianOccupation: e.target.value })}
-                    className="h-10"
+                    onChange={(e) => {
+                      setForm({ ...form, guardianOccupation: e.target.value });
+                      if (guardianType !== "OTHER") setGuardianType("OTHER");
+                    }}
+                    className={cn(
+                      "h-10",
+                      guardianType !== "OTHER" && "bg-slate-100/70 dark:bg-slate-900/60 font-medium text-slate-800 dark:text-slate-200"
+                    )}
                     placeholder="যেমন: ব্যবসায়ী / চাকরিজীবী"
                   />
                 </div>

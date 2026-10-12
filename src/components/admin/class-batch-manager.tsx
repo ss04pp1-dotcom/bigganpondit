@@ -1,0 +1,1940 @@
+"use client";
+
+// Class & Batch Manager — শ্রেণি ও ব্যাচ ব্যবস্থাপনা
+// UI text is Bengali; allows creating/editing classes and creating batches by batch name.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Layers,
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  BookOpen,
+  CalendarDays,
+  Clock,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  Loader2,
+  DoorOpen,
+  UserCheck,
+  UserPlus,
+  Check,
+  Filter,
+  Power,
+  PowerOff,
+  Ban,
+} from "lucide-react";
+import { StudentAvatar } from "@/components/app/student-avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { classLabel, divisionLabel, bn, DIVISIONS } from "@/lib/constants";
+import type { ClassRow, BatchRow } from "@/lib/db/types";
+
+interface EnrolledStudent {
+  id: number;
+  name: string;
+  roll: number;
+  division: string | null;
+  section: string | null;
+  phone: string | null;
+  photo_key: string | null;
+  guardian_name: string | null;
+  username: string;
+  batch_id?: number | null;
+  batch_name?: string | null;
+}
+
+const BATCH_NAME_PRESETS = [
+  "সকাল ব্যাচ",
+  "দুপুর ব্যাচ",
+  "বিকাল ব্যাচ",
+  "সন্ধ্যা ব্যাচ",
+  "ব্যাচ-১",
+  "ব্যাচ-২",
+  "ব্যাচ-৩",
+  "স্পেশাল ব্যাচ",
+  "বোর্ড ব্যাচ",
+  "মেধা ব্যাচ",
+];
+
+const DAY_PRESETS = [
+  { label: "শনি-সোম-বুধ", value: "শনি-সোম-বুধ" },
+  { label: "রবি-মঙ্গল-বৃহস্পতি", value: "রবি-মঙ্গল-বৃহস্পতি" },
+  { label: "প্রতিদিন (শনি-বৃহঃ)", value: "শনি-রবি-সোম-মঙ্গল-বুধ-বৃহস্পতি" },
+  { label: "শুক্র-শনি", value: "শুক্র-শনি" },
+];
+
+const WEEK_DAYS = ["শনি", "রবি", "সোম", "মঙ্গল", "বুধ", "বৃহস্পতি", "শুক্র"];
+
+const TIME_SLOT_PRESETS = [
+  "সকাল ৮:০০ - ৯:৩০",
+  "সকাল ৯:৩০ - ১১:০০",
+  "সকাল ১০:০০ - ১১:৩০",
+  "দুপুর ১২:০০ - ১:৩০",
+  "বিকাল ৩:০০ - ৪:৩০",
+  "সন্ধ্যা ৫:০০ - ৬:৩০",
+  "সন্ধ্যা ৭:০০ - ৮:৩০",
+];
+
+const CAPACITY_PRESETS = [
+  { label: "১৫ জন", value: "15" },
+  { label: "২০ জন", value: "20" },
+  { label: "২৫ জন", value: "25" },
+  { label: "৩০ জন", value: "30" },
+  { label: "৪০ জন", value: "40" },
+  { label: "৫০ জন", value: "50" },
+  { label: "সীমাহীন (০)", value: "0" },
+];
+
+export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECTOR" }) {
+  const isReadOnly = role === "DIRECTOR";
+  const { toast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<"CLASSES" | "BATCHES">("CLASSES");
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [batches, setBatches] = useState<BatchRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filter state for batches
+  const [batchClassFilter, setBatchClassFilter] = useState<string>("ALL");
+  const [batchSearch, setBatchSearch] = useState<string>("");
+
+  // Modals state
+  const [classModalOpen, setClassModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
+  const [classNameInput, setClassNameInput] = useState("");
+  const [classSortOrderInput, setClassSortOrderInput] = useState<number | string>("");
+  const [classIsActiveInput, setClassIsActiveInput] = useState<boolean>(true);
+
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<BatchRow | null>(null);
+  const [batchForm, setBatchForm] = useState({
+    name: "",
+    classId: "",
+    division: "NONE",
+    timeSlot: "",
+    days: "",
+    roomNo: "",
+    maxStudents: "0",
+    isActive: true,
+  });
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "CLASS" | "BATCH";
+    id: number;
+    name: string;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Enrolled students viewer modal
+  const [viewingBatch, setViewingBatch] = useState<BatchRow | null>(null);
+  const [enrolledStudents, setEnrolledStudents] = useState<EnrolledStudent[]>([]);
+  const [loadingEnrolled, setLoadingEnrolled] = useState(false);
+
+  // Assign students to batch modal
+  const [assigningBatch, setAssigningBatch] = useState<BatchRow | null>(null);
+  const [assignStudents, setAssignStudents] = useState<EnrolledStudent[]>([]);
+  const [selectedAssignIds, setSelectedAssignIds] = useState<Set<number>>(new Set());
+  const [loadingAssign, setLoadingAssign] = useState(false);
+  const [savingAssign, setSavingAssign] = useState(false);
+  const [assignSearch, setAssignSearch] = useState("");
+  const [assignFilter, setAssignFilter] = useState<"ALL" | "SELECTED" | "OTHER_BATCH" | "NO_BATCH">("ALL");
+
+  // Load Classes and Batches
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [clsRes, bRes] = await Promise.all([
+        fetch("/api/classes").then((r) => r.json()).catch(() => null),
+        fetch("/api/batches").then((r) => r.json()).catch(() => null),
+      ]);
+
+      if (clsRes?.ok && Array.isArray(clsRes.classes)) {
+        setClasses(clsRes.classes);
+      }
+      if (bRes?.ok && Array.isArray(bRes.batches)) {
+        setBatches(bRes.batches);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Overall Statistics
+  const totalStudents = useMemo(() => {
+    return classes.reduce((sum, c) => sum + (c.student_count || 0), 0);
+  }, [classes]);
+
+  const totalBatches = batches.length;
+
+  // Filtered Batches
+  const filteredBatches = useMemo(() => {
+    return batches.filter((b) => {
+      if (batchClassFilter !== "ALL" && String(b.class_id) !== batchClassFilter) {
+        return false;
+      }
+      if (batchSearch.trim()) {
+        const q = batchSearch.toLowerCase().trim();
+        const matchesName = b.name.toLowerCase().includes(q);
+        const matchesClass = (b.class_name || "").toLowerCase().includes(q);
+        const matchesTime = (b.time_slot || "").toLowerCase().includes(q);
+        const matchesDays = (b.days || "").toLowerCase().includes(q);
+        if (!matchesName && !matchesClass && !matchesTime && !matchesDays) return false;
+      }
+      return true;
+    });
+  }, [batches, batchClassFilter, batchSearch]);
+
+  // Handle Open Class Modal
+  function handleOpenClassModal(cls?: ClassRow) {
+    if (cls) {
+      setEditingClass(cls);
+      setClassNameInput(cls.name);
+      setClassSortOrderInput(cls.sort_order);
+      setClassIsActiveInput(cls.is_active !== 0);
+    } else {
+      setEditingClass(null);
+      setClassNameInput("");
+      const nextSort = classes.length > 0 ? Math.max(...classes.map((c) => c.sort_order)) + 1 : 1;
+      setClassSortOrderInput(nextSort);
+      setClassIsActiveInput(true);
+    }
+    setClassModalOpen(true);
+  }
+
+  // Save Class
+  async function handleSaveClass(e: React.FormEvent) {
+    e.preventDefault();
+    const name = classNameInput.trim();
+    if (!name) {
+      toast({ title: "শ্রেণির নাম লিখুন।", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const sortOrder = Number(classSortOrderInput) || 0;
+      const url = editingClass ? `/api/classes/${editingClass.id}` : "/api/classes";
+      const method = editingClass ? "PATCH" : "POST";
+
+      const payload: { name: string; sortOrder: number; is_active?: number } = {
+        name,
+        sortOrder,
+      };
+      if (editingClass) {
+        payload.is_active = classIsActiveInput ? 1 : 0;
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "সংরক্ষণ করা যায়নি।", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: data.message || "শ্রেণি সফলভাবে সংরক্ষিত হয়েছে।" });
+      setClassModalOpen(false);
+      await loadData();
+    } catch {
+      toast({ title: "সার্ভার এরর, আবার চেষ্টা করুন।", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Handle Toggle Class Active / Inactive
+  async function handleToggleClassActive(cls: ClassRow) {
+    if (isReadOnly) return;
+    const currentActive = cls.is_active ?? 1;
+    const nextActive = currentActive === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/classes/${cls.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: nextActive }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? "ব্যর্থ হয়েছে");
+      }
+      toast({
+        title:
+          nextActive === 1
+            ? `'${cls.name}' শ্রেণি সফলভাবে সক্রিয় করা হয়েছে।`
+            : `'${cls.name}' শ্রেণি নিষ্ক্রিয় করা হয়েছে (সকল কার্যক্রম বন্ধ)।`,
+      });
+      await loadData();
+    } catch (e: any) {
+      toast({
+        title: e.message || "শ্রেণির স্থিতি পরিবর্তন করা যায়নি।",
+        variant: "destructive",
+      });
+    }
+  }
+
+  // Handle Open Batch Modal
+  function handleOpenBatchModal(b?: BatchRow, prefillClassId?: number) {
+    if (b) {
+      setEditingBatch(b);
+      setBatchForm({
+        name: b.name,
+        classId: String(b.class_id),
+        division: b.division || "NONE",
+        timeSlot: b.time_slot || "",
+        days: b.days || "",
+        roomNo: b.room_no || "",
+        maxStudents: String(b.max_students || 0),
+        isActive: b.is_active === 1,
+      });
+    } else {
+      setEditingBatch(null);
+      const targetClassId = prefillClassId
+        ? String(prefillClassId)
+        : batchClassFilter !== "ALL" && batchClassFilter
+        ? batchClassFilter
+        : classes[0]?.id
+        ? String(classes[0].id)
+        : "";
+
+      setBatchForm({
+        name: "",
+        classId: targetClassId,
+        division: "NONE",
+        timeSlot: "",
+        days: "",
+        roomNo: "",
+        maxStudents: "0",
+        isActive: true,
+      });
+    }
+    setBatchModalOpen(true);
+  }
+
+  // Batches existing in currently selected class in modal
+  const existingBatchesInSelectedClass = useMemo(() => {
+    if (!batchForm.classId) return [];
+    return batches.filter((b) => String(b.class_id) === String(batchForm.classId));
+  }, [batches, batchForm.classId]);
+
+  const isDuplicateBatchName = useMemo(() => {
+    const trimmed = batchForm.name.trim().toLowerCase();
+    if (!trimmed) return false;
+    return existingBatchesInSelectedClass.some(
+      (b) => b.name.trim().toLowerCase() === trimmed && (!editingBatch || b.id !== editingBatch.id)
+    );
+  }, [existingBatchesInSelectedClass, batchForm.name, editingBatch]);
+
+  // Save Batch
+  async function handleSaveBatch(e: React.FormEvent) {
+    e.preventDefault();
+    const name = batchForm.name.trim();
+    if (!name) {
+      toast({ title: "ব্যাচের নাম লিখুন।", variant: "destructive" });
+      return;
+    }
+    const classIdNum = Number(batchForm.classId);
+    if (!classIdNum || classIdNum <= 0) {
+      toast({ title: "শ্রেণি নির্বাচন করুন।", variant: "destructive" });
+      return;
+    }
+
+    const targetClass = classes.find((c) => c.id === classIdNum);
+    if (!editingBatch && targetClass?.is_active === 0) {
+      toast({
+        title: `'${targetClass.name}' শ্রেণিটি নিষ্ক্রিয় রয়েছে — নতুন ব্যাচ তৈরি করা যাবে না।`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const url = editingBatch ? `/api/batches/${editingBatch.id}` : "/api/batches";
+      const method = editingBatch ? "PATCH" : "POST";
+
+      const payload = {
+        name,
+        classId: classIdNum,
+        division: batchForm.division === "NONE" ? null : batchForm.division,
+        timeSlot: batchForm.timeSlot.trim() || null,
+        days: batchForm.days.trim() || null,
+        roomNo: batchForm.roomNo.trim() || null,
+        maxStudents: Number(batchForm.maxStudents) || 0,
+        isActive: batchForm.isActive,
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "সংরক্ষণ করা যায়নি।", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: data.message || "ব্যাচ সফলভাবে সংরক্ষিত হয়েছে।" });
+      setBatchModalOpen(false);
+      await loadData();
+    } catch {
+      toast({ title: "সার্ভার এরর, আবার চেষ্টা করুন।", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Handle Delete Confirmed
+  async function handleExecuteDelete() {
+    if (!deleteConfirm) return;
+    setSubmitting(true);
+    try {
+      const url =
+        deleteConfirm.type === "CLASS"
+          ? `/api/classes/${deleteConfirm.id}`
+          : `/api/batches/${deleteConfirm.id}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "মুছে ফেলা যায়নি।", variant: "destructive" });
+        return;
+      }
+
+      toast({ title: data.message || "সফলভাবে মুছে ফেলা হয়েছে।" });
+      setDeleteConfirm(null);
+      await loadData();
+    } catch {
+      toast({ title: "সার্ভার এরর, আবার চেষ্টা করুন।", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Load students for a batch viewer modal
+  async function handleViewBatchStudents(b: BatchRow) {
+    setViewingBatch(b);
+    setLoadingEnrolled(true);
+    try {
+      const res = await fetch(`/api/batches/${b.id}`);
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.students)) {
+        setEnrolledStudents(json.students);
+      } else {
+        setEnrolledStudents([]);
+      }
+    } catch {
+      setEnrolledStudents([]);
+    } finally {
+      setLoadingEnrolled(false);
+    }
+  }
+
+  // Open student assignment modal for a batch
+  async function handleOpenAssignStudents(b: BatchRow) {
+    setAssigningBatch(b);
+    setLoadingAssign(true);
+    setAssignSearch("");
+    setAssignFilter("ALL");
+    try {
+      const res = await fetch(`/api/batches/${b.id}/students`);
+      const json = await res.json();
+      if (json.ok && Array.isArray(json.students)) {
+        setAssignStudents(json.students);
+        const initialSelected = new Set<number>();
+        json.students.forEach((st: EnrolledStudent) => {
+          if (st.batch_id === b.id) {
+            initialSelected.add(st.id);
+          }
+        });
+        setSelectedAssignIds(initialSelected);
+      } else {
+        setAssignStudents([]);
+        setSelectedAssignIds(new Set());
+      }
+    } catch {
+      toast({ title: "শিক্ষার্থীদের তালিকা লোড করা যায়নি।", variant: "destructive" });
+      setAssignStudents([]);
+      setSelectedAssignIds(new Set());
+    } finally {
+      setLoadingAssign(false);
+    }
+  }
+
+  function handleToggleStudent(id: number) {
+    setSelectedAssignIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function handleSelectAllFiltered(list: EnrolledStudent[]) {
+    setSelectedAssignIds((prev) => {
+      const next = new Set(prev);
+      list.forEach((s) => next.add(s.id));
+      return next;
+    });
+  }
+
+  function handleDeselectAllFiltered(list: EnrolledStudent[]) {
+    setSelectedAssignIds((prev) => {
+      const next = new Set(prev);
+      list.forEach((s) => next.delete(s.id));
+      return next;
+    });
+  }
+
+  async function handleSaveAssignStudents() {
+    if (!assigningBatch) return;
+    if (isAssigningClassInactive) {
+      toast({
+        title: "শ্রেণিটি নিষ্ক্রিয় থাকায় শিক্ষার্থী যুক্ত বা পরিবর্তন করা সম্ভব নয়।",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSavingAssign(true);
+    try {
+      const res = await fetch(`/api/batches/${assigningBatch.id}/students`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentIds: Array.from(selectedAssignIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast({ title: data.error || "শিক্ষার্থীদের ব্যাচে যুক্ত করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      toast({
+        title: data.message || `সফলভাবে ${bn(selectedAssignIds.size)} জন শিক্ষার্থীকে ব্যাচে অন্তর্ভুক্ত করা হয়েছে।`,
+      });
+      setAssigningBatch(null);
+      await loadData();
+    } catch {
+      toast({ title: "সার্ভার এরর, আবার চেষ্টা করুন।", variant: "destructive" });
+    } finally {
+      setSavingAssign(false);
+    }
+  }
+
+  // Filtered students for assign modal
+  const filteredAssignStudents = useMemo(() => {
+    return assignStudents.filter((st) => {
+      if (assignFilter === "SELECTED" && !selectedAssignIds.has(st.id)) return false;
+      if (assignFilter === "OTHER_BATCH" && (st.batch_id === assigningBatch?.id || !st.batch_id)) return false;
+      if (assignFilter === "NO_BATCH" && st.batch_id) return false;
+
+      if (assignSearch.trim()) {
+        const q = assignSearch.trim().toLowerCase();
+        const matchesName = st.name.toLowerCase().includes(q);
+        const matchesRoll = String(st.roll).includes(q);
+        const matchesPhone = (st.phone || "").includes(q);
+        const matchesBatch = (st.batch_name || "").toLowerCase().includes(q);
+        return matchesName || matchesRoll || matchesPhone || matchesBatch;
+      }
+      return true;
+    });
+  }, [assignStudents, assignFilter, assignSearch, selectedAssignIds, assigningBatch]);
+
+  const assigningBatchParentClass = useMemo(() => {
+    if (!assigningBatch) return null;
+    return classes.find((c) => c.id === assigningBatch.class_id) || null;
+  }, [assigningBatch, classes]);
+
+  const isAssigningClassInactive = assigningBatchParentClass?.is_active === 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Overview Stats Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="border-border/60 shadow-sm bg-white overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500" />
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-500">মোট শ্রেণি</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{bn(classes.length)} টি</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">অ্যাকাডেমির সকল সচল শ্রেণি</p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <Layers className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 shadow-sm bg-white overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-500">মোট ব্যাচ</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{bn(totalBatches)} টি</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">বিভিন্ন শিফট ও সময়সূচী</p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <CalendarDays className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 shadow-sm bg-white overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500" />
+          <CardContent className="p-4 sm:p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-500">মোট শিক্ষার্থী</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{bn(totalStudents)} জন</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">শ্রেণিসমূহে নিবন্ধিত</p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+              <Users className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Segmented Tab Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveTab("CLASSES")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
+              activeTab === "CLASSES"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            <span>শ্রেণি ব্যবস্থাপনা ({bn(classes.length)})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("BATCHES")}
+            className={`flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
+              activeTab === "BATCHES"
+                ? "bg-white text-blue-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <CalendarDays className="h-4 w-4" />
+            <span>ব্যাচ ব্যবস্থাপনা ({bn(batches.length)})</span>
+          </button>
+        </div>
+
+        {!isReadOnly && (
+          <div className="flex items-center gap-2">
+            {activeTab === "CLASSES" ? (
+              <Button
+                onClick={() => handleOpenClassModal()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl h-10 px-4 gap-1.5 w-full sm:w-auto shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                <span>নতুন শ্রেণি যুক্ত করুন</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={() =>
+                  handleOpenBatchModal(
+                    undefined,
+                    batchClassFilter !== "ALL" ? Number(batchClassFilter) : undefined
+                  )
+                }
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl h-10 px-4 gap-1.5 w-full sm:w-auto shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                <span>নতুন ব্যাচ যুক্ত করুন</span>
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-sm text-slate-500">তথ্য লোড হচ্ছে...</p>
+        </div>
+      ) : activeTab === "CLASSES" ? (
+        /* TAB 1: CLASSES MANAGEMENT */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">সকল শ্রেণির তালিকা</h2>
+              <p className="text-xs text-slate-500">এখানে অ্যাকাডেমির প্রতিটি শ্রেণি দেখতে, নতুন শ্রেণি যোগ বা এডিট করতে পারবেন।</p>
+            </div>
+          </div>
+
+          {classes.length === 0 ? (
+            <Card className="border-dashed p-8 text-center bg-slate-50/50">
+              <p className="text-slate-500 text-sm">কোনো শ্রেণি পাওয়া যায়নি।</p>
+              {!isReadOnly && (
+                <Button
+                  onClick={() => handleOpenClassModal()}
+                  variant="outline"
+                  className="mt-3 text-xs"
+                >
+                  প্রথম শ্রেণি যুক্ত করুন
+                </Button>
+              )}
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {classes.map((cls) => {
+                const classBatches = batches.filter((b) => b.class_id === cls.id);
+                return (
+                  <Card
+                    key={cls.id}
+                    className="border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow bg-white rounded-2xl overflow-hidden flex flex-col justify-between"
+                  >
+                    <div className="p-4 sm:p-5 space-y-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`h-11 w-11 rounded-xl border flex items-center justify-center font-bold text-base transition-colors ${
+                              cls.is_active === 0
+                                ? "bg-slate-100 border-slate-200 text-slate-500"
+                                : "bg-blue-50 border-blue-100 text-blue-700"
+                            }`}
+                          >
+                            {cls.name}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-slate-900 text-base">
+                                {classLabel(cls.name)}
+                              </h3>
+                              {cls.is_active === 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-rose-50 text-rose-700 border-rose-300 text-[10px] py-0 px-1.5 font-bold gap-1"
+                                >
+                                  <Ban className="h-2.5 w-2.5" />
+                                  <span>নিষ্ক্রিয়</span>
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] py-0 px-1.5 font-bold gap-1"
+                                >
+                                  <CheckCircle2 className="h-2.5 w-2.5" />
+                                  <span>সক্রিয়</span>
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              ক্রম নম্বর: {bn(cls.sort_order)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-1.5">
+                            {/* Activate / Deactivate Toggle Button */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleToggleClassActive(cls)}
+                              className={`h-8 px-2.5 text-xs font-semibold rounded-lg gap-1.5 transition-all shadow-2xs ${
+                                cls.is_active === 0
+                                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                  : "border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                              }`}
+                              title={cls.is_active === 0 ? "শ্রেণিটি সক্রিয় করতে ক্লিক করুন" : "শ্রেণিটি নিষ্ক্রিয় করতে ক্লিক করুন"}
+                            >
+                              {cls.is_active === 0 ? (
+                                <>
+                                  <Power className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>সক্রিয় করুন</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PowerOff className="h-3.5 w-3.5 text-rose-600" />
+                                  <span>নিষ্ক্রিয় করুন</span>
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleOpenClassModal(cls)}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 rounded-lg"
+                              title="এডিট"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: "CLASS",
+                                  id: cls.id,
+                                  name: classLabel(cls.name),
+                                })
+                              }
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 rounded-lg"
+                              title="মুছে ফেলুন"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Inactive Class Alert Banner */}
+                      {cls.is_active === 0 && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-2.5 text-rose-800 text-[11px] leading-relaxed flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+                          <div>
+                            <p className="font-bold text-rose-900">এই শ্রেণিটি বর্তমানে নিষ্ক্রিয়</p>
+                            <p className="text-rose-700 text-[10.5px]">
+                              শ্রেণি নিষ্ক্রিয় থাকায় হাজিরা গ্রহণ, পরীক্ষার নম্বর এন্ট্রি, ব্যাচে ভর্তি ও অন্যান্য সকল শিক্ষা কার্যক্রম বন্ধ থাকবে।
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Stat chips */}
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <p className="text-[10px] text-slate-400 font-medium">শিক্ষার্থী</p>
+                          <p className="text-sm font-bold text-slate-800 mt-0.5">
+                            {bn(cls.student_count || 0)}
+                          </p>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <p className="text-[10px] text-slate-400 font-medium">ব্যাচ</p>
+                          <p className="text-sm font-bold text-indigo-700 mt-0.5">
+                            {bn(classBatches.length)}
+                          </p>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl">
+                          <p className="text-[10px] text-slate-400 font-medium">বিষয়</p>
+                          <p className="text-sm font-bold text-slate-800 mt-0.5">
+                            {bn(cls.subject_count || 0)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Batches Preview */}
+                      <div className="pt-1">
+                        <p className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center justify-between">
+                          <span>সংযুক্ত ব্যাচসমূহ:</span>
+                          <span className="text-[11px] text-slate-400 font-normal">
+                            {classBatches.length > 0 ? `${bn(classBatches.length)} টি ব্যাচ` : "কোনো ব্যাচ নেই"}
+                          </span>
+                        </p>
+                        {classBatches.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {classBatches.slice(0, 3).map((b) => (
+                              <Badge
+                                key={b.id}
+                                variant="outline"
+                                className="bg-indigo-50/70 border-indigo-200 text-indigo-700 text-[11px] font-normal py-0.5 px-2"
+                              >
+                                {b.name}
+                              </Badge>
+                            ))}
+                            {classBatches.length > 3 && (
+                              <Badge
+                                variant="outline"
+                                className="bg-slate-100 text-slate-600 text-[11px] py-0.5 px-2"
+                              >
+                                +{bn(classBatches.length - 3)} টি
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic">
+                            এই শ্রেণিতে এখনও কোনো ব্যাচ তৈরি করা হয়নি।
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setBatchClassFilter(String(cls.id));
+                          setActiveTab("BATCHES");
+                        }}
+                        className="text-xs h-8 text-slate-700 bg-white hover:bg-slate-50 rounded-lg flex-1"
+                      >
+                        ব্যাচসমূহ দেখুন
+                      </Button>
+                      {!isReadOnly && (
+                        <Button
+                          size="sm"
+                          disabled={cls.is_active === 0}
+                          onClick={() => handleOpenBatchModal(undefined, cls.id)}
+                          className={`text-xs h-8 text-white rounded-lg px-2.5 gap-1 ${
+                            cls.is_active === 0
+                              ? "bg-slate-300 text-slate-500 cursor-not-allowed hover:bg-slate-300"
+                              : "bg-indigo-600 hover:bg-indigo-700"
+                          }`}
+                          title={cls.is_active === 0 ? "নিষ্ক্রিয় শ্রেণিতে নতুন ব্যাচ যোগ করা যাবে না" : "ব্যাচ যোগ"}
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>ব্যাচ যোগ</span>
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* TAB 2: BATCHES MANAGEMENT */
+        <div className="space-y-4">
+          {/* Filters Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-border shadow-sm">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  value={batchSearch}
+                  onChange={(e) => setBatchSearch(e.target.value)}
+                  placeholder="ব্যাচের নাম, সময় বা দিন দিয়ে খুঁজুন..."
+                  className="pl-9 h-10 text-xs sm:text-sm bg-slate-50/50 rounded-xl"
+                />
+              </div>
+
+              <div className="w-full sm:w-[220px]">
+                <Select value={batchClassFilter} onValueChange={setBatchClassFilter}>
+                  <SelectTrigger className="h-10 text-xs sm:text-sm rounded-xl bg-slate-50/50">
+                    <SelectValue placeholder="শ্রেণি নির্বাচন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">সকল শ্রেণি</SelectItem>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {classLabel(c.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 whitespace-nowrap self-end sm:self-center">
+              মোট: <span className="font-semibold text-slate-800">{bn(filteredBatches.length)}</span> টি ব্যাচ
+            </p>
+          </div>
+
+          {filteredBatches.length === 0 ? (
+            <Card className="border-dashed p-10 text-center bg-slate-50/50">
+              <CalendarDays className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-600 font-medium text-sm">কোনো ব্যাচ পাওয়া যায়নি।</p>
+              <p className="text-slate-400 text-xs mt-1">
+                {batchSearch || batchClassFilter !== "ALL"
+                  ? "ফিল্টার পরিবর্তন করে পুনরায় চেষ্টা করুন।"
+                  : "নতুন ব্যাচ তৈরি করতে উপরের বাটনে ক্লিক করুন।"}
+              </p>
+              {!isReadOnly && (
+                <Button
+                  onClick={() =>
+                    handleOpenBatchModal(
+                      undefined,
+                      batchClassFilter !== "ALL" ? Number(batchClassFilter) : undefined
+                    )
+                  }
+                  className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-xl"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  নতুন ব্যাচ তৈরি করুন
+                </Button>
+              )}
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredBatches.map((b) => (
+                <Card
+                  key={b.id}
+                  className="border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow bg-white rounded-2xl overflow-hidden flex flex-col justify-between"
+                >
+                  <div className="p-4 sm:p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-bold text-slate-900 text-base">
+                            {b.name}
+                          </h3>
+                          {b.is_active === 1 ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-normal py-0">
+                              সক্রিয়
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] font-normal py-0">
+                              নিষ্ক্রিয়
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-blue-600 mt-1 flex items-center gap-1">
+                          <span>{classLabel(b.class_name || "")}</span>
+                          {b.division && <span>• {b.division === "SCIENCE" ? "বিজ্ঞান" : "মানবিক"}</span>}
+                        </p>
+                      </div>
+
+                      {!isReadOnly && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenBatchModal(b)}
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 rounded-lg"
+                            title="এডিট"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setDeleteConfirm({
+                                type: "BATCH",
+                                id: b.id,
+                                name: `${b.name} (${classLabel(b.class_name || "")})`,
+                              })
+                            }
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 rounded-lg"
+                            title="মুছে ফেলুন"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Schedule & Room info */}
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span className="font-medium text-slate-700 truncate">
+                          {b.time_slot || "সময়সূচী নির্ধারিত নয়"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span className="text-slate-600 truncate">{b.days || "প্রতিদিন / সাধারণ"}</span>
+                      </div>
+                      {b.room_no && (
+                        <div className="flex items-center gap-2">
+                          <DoorOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="text-slate-600">রুম নম্বর: {b.room_no}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Capacity badge */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1 text-xs">
+                        <Users className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-slate-500">ভর্তি শিক্ষার্থী:</span>
+                        <span className="font-bold text-slate-800">{bn(b.student_count || 0)} জন</span>
+                      </div>
+                      {b.max_students && b.max_students > 0 ? (
+                        <span className="text-[11px] text-slate-400">
+                          আসন: {bn(b.student_count || 0)} / {bn(b.max_students)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex flex-col gap-2">
+                    {!isReadOnly && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleOpenAssignStudents(b)}
+                        className="text-xs h-8.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg w-full gap-1.5 font-medium shadow-xs"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>শিক্ষার্থী যুক্ত করুন</span>
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewBatchStudents(b)}
+                      className="text-xs h-8 text-indigo-700 border-indigo-200 bg-white hover:bg-indigo-50/70 rounded-lg w-full gap-1.5"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>শিক্ষার্থীদের তালিকা দেখুন ({bn(b.student_count || 0)})</span>
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL 1: ADD / EDIT CLASS */}
+      <Dialog open={classModalOpen} onOpenChange={setClassModalOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-md p-4 sm:p-6 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Layers className="h-5 w-5 text-blue-600" />
+              <span>{editingClass ? "শ্রেণি সম্পাদনা করুন" : "নতুন শ্রেণি যুক্ত করুন"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              শ্রেণির নাম (যেমন ৬ষ্ঠ, ৭ম, ৮ম, ৯ম, ১০ম, একাদশ, দ্বাদশ বা সংখ্যা ৬, ৭, ৮ ইত্যাদি) এবং সাজানোর ক্রম নির্ধারণ করুন।
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveClass} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">
+                শ্রেণির নাম <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                value={classNameInput}
+                onChange={(e) => setClassNameInput(e.target.value)}
+                placeholder="যেমন: ৬ষ্ঠ, ৭ম, ১০ম, একাদশ, দ্বাদশ ইত্যাদি"
+                className="h-11 rounded-xl"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700">
+                সাজানোর ক্রম / Sort Order
+              </Label>
+              <Input
+                type="number"
+                value={classSortOrderInput}
+                onChange={(e) => setClassSortOrderInput(e.target.value)}
+                placeholder="সংখ্যা (যেমন: ৬, ৭, ৮, ৯, ১০, ১১, ১২)"
+                className="h-11 rounded-xl"
+              />
+              <p className="text-[11px] text-slate-400">
+                বড় সংখ্যার শ্রেণিগুলো তালিকার উপরে প্রদর্শিত হবে।
+              </p>
+            </div>
+
+            {/* শ্রেণি সক্রিয় / নিষ্ক্রিয় বাটন */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <label htmlFor="classActiveToggle" className="text-xs font-bold text-slate-800 cursor-pointer block">
+                  শ্রেণি স্ট্যাটাস (সক্রিয় / চালু)
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {classIsActiveInput
+                    ? "এই শ্রেণিটিতে পরীক্ষা, হাজিরা, নম্বর এন্ট্রি ও সকল কার্যক্রম সচল থাকবে।"
+                    : "শ্রেণিটি নিষ্ক্রিয় রাখলে সকল কার্যক্রম বন্ধ থাকবে।"}
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                id="classActiveToggle"
+                checked={classIsActiveInput}
+                onChange={(e) => setClassIsActiveInput(e.target.checked)}
+                className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setClassModalOpen(false)}
+                className="rounded-xl h-10 text-xs"
+              >
+                বাতিল
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl h-10 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+              >
+                {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>{editingClass ? "আপডেট করুন" : "যুক্ত করুন"}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: ADD / EDIT BATCH */}
+      <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
+        <DialogContent className="w-[95vw] sm:max-w-xl p-4 sm:p-6 rounded-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-indigo-600" />
+              <span>{editingBatch ? "ব্যাচ তথ্য সম্পাদনা" : "নতুন ব্যাচ তৈরি করুন"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              ব্যাচের নাম, শ্রেণি, ক্লাস শিডিউল ও সময়সূচী নির্ধারণ করুন।
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveBatch} className="space-y-4 py-2">
+            {/* 1. শ্রেণি ও বিভাগ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">
+                  শ্রেণি <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={batchForm.classId || undefined}
+                  onValueChange={(v) => setBatchForm({ ...batchForm, classId: v })}
+                >
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue placeholder="শ্রেণি নির্বাচন করুন" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)} disabled={c.is_active === 0}>
+                        {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয় - কার্যক্রম বন্ধ)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700">
+                  বিভাগ (অপশনাল)
+                </Label>
+                <Select
+                  value={batchForm.division}
+                  onValueChange={(v) => setBatchForm({ ...batchForm, division: v })}
+                >
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue placeholder="সকল / প্রযোজ্য নয়" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">সকল / প্রযোজ্য নয়</SelectItem>
+                    {DIVISIONS.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>
+                        {d.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Existing Batches in Selected Class Preview */}
+            {existingBatchesInSelectedClass.length > 0 && (
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />
+                    এই শ্রেণির বিদ্যমান ব্যাচসমূহ ({bn(existingBatchesInSelectedClass.length)}টি):
+                  </span>
+                  <span className="text-[10px] text-slate-400">ডুপ্লিকেট এড়াতে ভিন্ন নাম দিন</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {existingBatchesInSelectedClass.map((b) => (
+                    <span
+                      key={b.id}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                        b.name.trim().toLowerCase() === batchForm.name.trim().toLowerCase()
+                          ? "bg-amber-100 border-amber-300 text-amber-900 font-semibold"
+                          : "bg-white border-slate-200 text-slate-700 font-medium"
+                      }`}
+                    >
+                      <span>{b.name}</span>
+                      {b.time_slot && (
+                        <span className="text-slate-400 text-[10px]">({b.time_slot})</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2. ব্যাচের নাম with Quick Presets */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700">
+                  ব্যাচের নাম <span className="text-red-500">*</span>
+                </Label>
+                <span className="text-[11px] text-slate-400">ক্লিক করে কুইক নাম বসান বা লিখুন</span>
+              </div>
+              <Input
+                value={batchForm.name}
+                onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })}
+                placeholder="যেমন: সকাল ব্যাচ, সন্ধ্যা ব্যাচ, ব্যাচ-১, স্পেশাল ব্যাচ ইত্যাদি"
+                className={`h-11 rounded-xl font-medium ${
+                  isDuplicateBatchName ? "border-amber-500 focus-visible:ring-amber-400" : ""
+                }`}
+                autoFocus
+              />
+
+              {/* Quick Batch Name Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] text-slate-400 font-medium mr-0.5">কুইক প্রিসেট:</span>
+                {BATCH_NAME_PRESETS.map((pName) => {
+                  const isSelected = batchForm.name === pName;
+                  const isAlreadyUsed = existingBatchesInSelectedClass.some(
+                    (b) => b.name === pName && (!editingBatch || b.id !== editingBatch.id)
+                  );
+                  return (
+                    <button
+                      key={pName}
+                      type="button"
+                      onClick={() => {
+                        const updates: Partial<typeof batchForm> = { name: pName };
+                        if (!batchForm.timeSlot) {
+                          if (pName.includes("সকাল")) updates.timeSlot = "সকাল ৮:০০ - ৯:৩০";
+                          else if (pName.includes("সন্ধ্যা")) updates.timeSlot = "সন্ধ্যা ৫:০০ - ৬:৩০";
+                          else if (pName.includes("বিকাল")) updates.timeSlot = "বিকাল ৩:০০ - ৪:৩০";
+                          else if (pName.includes("দুপুর")) updates.timeSlot = "দুপুর ১২:০০ - ১:৩০";
+                        }
+                        setBatchForm((prev) => ({ ...prev, ...updates }));
+                      }}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : isAlreadyUsed
+                          ? "bg-amber-50/80 text-amber-700 border-amber-200 line-through opacity-60"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 cursor-pointer"
+                      }`}
+                      title={isAlreadyUsed ? "এই ব্যাচটি ইতোমধ্যে এই শ্রেণিতে রয়েছে" : pName}
+                    >
+                      {pName}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Duplicate Warning */}
+              {isDuplicateBatchName && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-800 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">এই নামের ব্যাচ ইতোমধ্যে রয়েছে!</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      নির্বাচিত শ্রেণিতে ইতোমধ্যে &ldquo;{batchForm.name}&rdquo; নামের একটি ব্যাচ বিদ্যমান। অনুগ্রহ করে &ldquo;ব্যাচ-২&rdquo;, &ldquo;স্পেশাল ব্যাচ&rdquo; বা ভিন্ন নাম লিখুন।
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. সময়সূচী (টাইম স্লট) with Quick Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সময়সূচী (টাইম স্লট) (অপশনাল)</span>
+                </Label>
+                <span className="text-[11px] text-slate-400">ক্লিক করে প্রিসেট বেছে নিন</span>
+              </div>
+              <Input
+                value={batchForm.timeSlot}
+                onChange={(e) => setBatchForm({ ...batchForm, timeSlot: e.target.value })}
+                placeholder="যেমন: সকাল ৮:০০ - ৯:৩০ বা বিকাল ৪:০০ - ৫:৩০"
+                className="h-11 rounded-xl"
+              />
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {TIME_SLOT_PRESETS.map((slot) => {
+                  const isSelected = batchForm.timeSlot === slot;
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, timeSlot: slot }))}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. সপ্তাহের দিনসমূহ with Quick Presets & Day Toggles */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সপ্তাহের দিনসমূহ (অপশনাল)</span>
+                </Label>
+                <span className="text-[11px] text-slate-400">প্রিসেট বা নির্দিষ্ট দিন বেছে নিন</span>
+              </div>
+              <Input
+                value={batchForm.days}
+                onChange={(e) => setBatchForm({ ...batchForm, days: e.target.value })}
+                placeholder="যেমন: শনি, সোম, বুধ"
+                className="h-11 rounded-xl"
+              />
+              {/* Day Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] text-slate-400 font-medium mr-0.5">রুটিন প্যাটার্ন:</span>
+                {DAY_PRESETS.map((dp) => {
+                  const isSelected = batchForm.days === dp.value;
+                  return (
+                    <button
+                      key={dp.label}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, days: dp.value }))}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700"
+                      }`}
+                    >
+                      {dp.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Individual Day Buttons */}
+              <div className="flex flex-wrap items-center gap-1 pt-1">
+                <span className="text-[11px] text-slate-400 font-medium mr-1">নির্দিষ্ট দিন:</span>
+                {WEEK_DAYS.map((d) => {
+                  const isIncluded = (batchForm.days || "").includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        const currentDays = batchForm.days ? batchForm.days.split(/[,、\s-]+/).map(s => s.trim()).filter(Boolean) : [];
+                        let next: string[];
+                        if (currentDays.includes(d)) {
+                          next = currentDays.filter(x => x !== d);
+                        } else {
+                          next = WEEK_DAYS.filter(x => currentDays.includes(x) || x === d);
+                        }
+                        setBatchForm((prev) => ({ ...prev, days: next.join(", ") }));
+                      }}
+                      className={`text-xs px-2 py-0.5 rounded-md border font-medium transition-all cursor-pointer ${
+                        isIncluded
+                          ? "bg-indigo-100 text-indigo-800 border-indigo-300 font-bold"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 5. রুম নম্বর ও আসন সংখ্যা */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <DoorOpen className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>রুম নম্বর (অপশনাল)</span>
+                </Label>
+                <Input
+                  value={batchForm.roomNo}
+                  onChange={(e) => setBatchForm({ ...batchForm, roomNo: e.target.value })}
+                  placeholder="যেমন: ১০২ বা ল্যাব-১"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>সর্বোচ্চ আসন সংখ্যা (অপশনাল)</span>
+                </Label>
+                <Input
+                  type="number"
+                  value={batchForm.maxStudents}
+                  onChange={(e) => setBatchForm({ ...batchForm, maxStudents: e.target.value })}
+                  placeholder="যেমন: ২৫ (০ = সীমাহীন)"
+                  className="h-11 rounded-xl"
+                />
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {CAPACITY_PRESETS.map((cap) => (
+                    <button
+                      key={cap.label}
+                      type="button"
+                      onClick={() => setBatchForm((prev) => ({ ...prev, maxStudents: cap.value }))}
+                      className={`text-[11px] px-2 py-0.5 rounded-md border cursor-pointer transition-colors ${
+                        batchForm.maxStudents === cap.value
+                          ? "bg-indigo-600 text-white border-indigo-600 font-semibold"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {cap.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 6. স্ট্যাটাস */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <label htmlFor="batchActiveToggle" className="text-xs font-bold text-slate-800 cursor-pointer block">
+                  ব্যাচ স্ট্যাটাস (সক্রিয় / চালু)
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {batchForm.isActive ? "এই ব্যাচটিতে বর্তমানে ক্লাস ও কার্যক্রম চালু রয়েছে।" : "ব্যাচটি বর্তমানে বন্ধ / স্থগিত রয়েছে।"}
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                id="batchActiveToggle"
+                checked={batchForm.isActive}
+                onChange={(e) => setBatchForm({ ...batchForm, isActive: e.target.checked })}
+                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-3 border-t border-slate-100">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBatchModalOpen(false)}
+                className="rounded-xl h-10 text-xs"
+              >
+                বাতিল
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+              >
+                {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>{editingBatch ? "তথ্য আপডেট করুন" : "ব্যাচ তৈরি করুন"}</span>
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 3: VIEW ENROLLED STUDENTS IN BATCH */}
+      <Dialog open={!!viewingBatch} onOpenChange={(open) => !open && setViewingBatch(null)}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl p-4 sm:p-6 rounded-2xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-indigo-600" />
+              <div>
+                <DialogTitle className="text-lg font-bold">
+                  {viewingBatch?.name} — শিক্ষার্থীদের তালিকা
+                </DialogTitle>
+                <p className="text-xs text-slate-500">
+                  {classLabel(viewingBatch?.class_name || "")} • {bn(enrolledStudents.length)} জন নিবন্ধিত
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-2">
+            {loadingEnrolled ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <p className="text-xs text-slate-400">শিক্ষার্থীদের তথ্য লোড হচ্ছে...</p>
+              </div>
+            ) : enrolledStudents.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 text-xs bg-slate-50 rounded-xl">
+                এই ব্যাচে এখনো কোনো শিক্ষার্থীকে যুক্ত করা হয়নি।
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto app-scroll">
+                {enrolledStudents.map((st) => (
+                  <div key={st.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <StudentAvatar
+                        photoKey={st.photo_key}
+                        name={st.name}
+                        roll={st.roll}
+                        size="sm"
+                        className="h-8.5 w-8.5 rounded-xl shrink-0"
+                      />
+                      <div>
+                        <p className="text-xs sm:text-sm font-semibold text-slate-800">{st.name}</p>
+                        <p className="text-[11px] text-slate-400">
+                          রোল: {bn(st.roll)} {st.section ? `• শাখা ${st.section}` : ""} {st.phone ? `• ${st.phone}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    {st.guardian_name && (
+                      <p className="text-[11px] text-slate-500 hidden sm:block">
+                        অভিভাবক: {st.guardian_name}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-row items-center justify-between sm:justify-between gap-2">
+            {!isReadOnly && viewingBatch && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  const b = viewingBatch;
+                  setViewingBatch(null);
+                  handleOpenAssignStudents(b);
+                }}
+                className="text-xs h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5 font-medium shadow-xs"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>শিক্ষার্থী যোগ বা পরিবর্তন করুন</span>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => setViewingBatch(null)}
+              className="rounded-xl h-9 text-xs"
+            >
+              বন্ধ করুন
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 4: ASSIGN STUDENTS TO BATCH */}
+      <Dialog open={!!assigningBatch} onOpenChange={(open) => !open && setAssigningBatch(null)}>
+        <DialogContent className="w-[95vw] sm:max-w-3xl p-4 sm:p-6 rounded-2xl max-h-[92vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 pb-2 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                  <UserPlus className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span>ব্যাচে শিক্ষার্থী যুক্ত করুন</span>
+                    <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-700 text-xs font-semibold py-0.5">
+                      {assigningBatch?.name}
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                    শ্রেণি: {classLabel(assigningBatch?.class_name || "")}
+                    {assigningBatch?.division ? ` • বিভাগ: ${divisionLabel(assigningBatch.division)}` : ""}
+                    {assigningBatch?.time_slot ? ` • ${assigningBatch.time_slot}` : ""}
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-3 gap-2 pt-3">
+              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                <p className="text-[10px] text-slate-400 font-medium">শ্রেণির শিক্ষার্থী</p>
+                <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                  {bn(assignStudents.length)} জন
+                </p>
+              </div>
+              <div className="bg-indigo-50/70 border border-indigo-100 p-2 rounded-xl text-center">
+                <p className="text-[10px] text-indigo-600 font-medium">বর্তমানে নির্বাচিত</p>
+                <p className="text-xs sm:text-sm font-bold text-indigo-700 mt-0.5">
+                  {bn(selectedAssignIds.size)} জন
+                </p>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                <p className="text-[10px] text-slate-400 font-medium">ব্যাচ আসন সীমা</p>
+                <p className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">
+                  {assigningBatch?.max_students && assigningBatch.max_students > 0
+                    ? `${bn(assigningBatch.max_students)} জন`
+                    : "সীমাহীন"}
+                </p>
+              </div>
+            </div>
+
+            {/* Over capacity warning if exceeds max_students */}
+            {assigningBatch?.max_students &&
+              assigningBatch.max_students > 0 &&
+              selectedAssignIds.size > assigningBatch.max_students && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2 text-xs text-amber-800 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>
+                    সতর্কতা: নির্বাচিত শিক্ষার্থীর সংখ্যা ({bn(selectedAssignIds.size)}) আসন সংখ্যার ({bn(assigningBatch.max_students)}) চেয়ে বেশি।
+                  </span>
+                </div>
+              )}
+
+            {/* Inactive Class Warning */}
+            {isAssigningClassInactive && (
+              <div className="mt-2 bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-xs text-rose-800 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                <span className="font-semibold">
+                  সতর্কতা: এই শ্রেণিটি বর্তমানে নিষ্ক্রিয় রয়েছে — নিষ্ক্রিয় শ্রেণির ব্যাচে শিক্ষার্থী যুক্ত বা পরিবর্তন করা যাবে না।
+                </span>
+              </div>
+            )}
+          </DialogHeader>
+
+          {/* Search & Filter & Bulk Action Controls */}
+          <div className="shrink-0 space-y-2 py-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  placeholder="নাম, রোল, ফোন বা বর্তমান ব্যাচ দিয়ে খুঁজুন..."
+                  className="pl-8.5 h-9 text-xs bg-slate-50 rounded-xl"
+                />
+              </div>
+
+              {/* Bulk Toggle Buttons */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSelectAllFiltered(filteredAssignStudents)}
+                  disabled={filteredAssignStudents.length === 0}
+                  className="h-9 text-xs rounded-xl px-2.5 gap-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>সবাইকে নির্বাচন ({bn(filteredAssignStudents.length)})</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDeselectAllFiltered(filteredAssignStudents)}
+                  disabled={selectedAssignIds.size === 0}
+                  className="h-9 text-xs rounded-xl px-2.5 text-slate-600 hover:bg-slate-100"
+                >
+                  বাতিল
+                </Button>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[11px] text-slate-400 mr-1 flex items-center gap-1">
+                <Filter className="h-3 w-3" /> ফিল্টার:
+              </span>
+              <button
+                type="button"
+                onClick={() => setAssignFilter("ALL")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  assignFilter === "ALL"
+                    ? "bg-indigo-600 text-white font-semibold"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                সকল ({bn(assignStudents.length)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignFilter("SELECTED")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  assignFilter === "SELECTED"
+                    ? "bg-indigo-600 text-white font-semibold"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                নির্বাচিত ({bn(selectedAssignIds.size)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignFilter("NO_BATCH")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  assignFilter === "NO_BATCH"
+                    ? "bg-indigo-600 text-white font-semibold"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                ব্যাচহীন ({bn(assignStudents.filter((s) => !s.batch_id).length)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignFilter("OTHER_BATCH")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  assignFilter === "OTHER_BATCH"
+                    ? "bg-indigo-600 text-white font-semibold"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                অন্য ব্যাচে ({bn(assignStudents.filter((s) => s.batch_id && s.batch_id !== assigningBatch?.id).length)})
+              </button>
+            </div>
+          </div>
+
+          {/* Students Selectable List */}
+          <div className="flex-1 overflow-y-auto min-h-[220px] max-h-[46vh] border border-slate-100 rounded-xl p-2 bg-slate-50/50 app-scroll">
+            {loadingAssign ? (
+              <div className="py-14 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <p className="text-xs text-slate-400">শ্রেণির শিক্ষার্থীদের তালিকা লোড হচ্ছে...</p>
+              </div>
+            ) : assignStudents.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                এই শ্রেণিতে এখনও কোনো শিক্ষার্থী ভর্তি নেই। শিক্ষার্থী ব্যবস্থাপনায় শিক্ষার্থী যোগ করুন।
+              </div>
+            ) : filteredAssignStudents.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                কোনো শিক্ষার্থী ফিল্টারের সাথে মেলেনি।
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {filteredAssignStudents.map((st) => {
+                  const isChecked = selectedAssignIds.has(st.id);
+                  const isCurrentInThisBatch = st.batch_id === assigningBatch?.id;
+                  const isInAnotherBatch = st.batch_id && !isCurrentInThisBatch;
+
+                  return (
+                    <div
+                      key={st.id}
+                      onClick={() => handleToggleStudent(st.id)}
+                      className={`p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isChecked
+                          ? "bg-indigo-50/90 border-indigo-300 shadow-xs"
+                          : "bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleStudent(st.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4.5 w-4.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                        />
+
+                        <StudentAvatar
+                          photoKey={st.photo_key}
+                          name={st.name}
+                          roll={st.roll}
+                          size="sm"
+                          className="h-9 w-9 rounded-xl shrink-0 border border-slate-200"
+                        />
+
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-slate-900 truncate">
+                            {st.name}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 mt-0.5">
+                            <span>রোল: {bn(st.roll)}</span>
+                            {st.division && <span>• {divisionLabel(st.division)}</span>}
+                            {st.section && <span>• শাখা {st.section}</span>}
+                            {st.phone && <span className="hidden sm:inline">• {st.phone}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {isChecked ? (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[11px] font-semibold py-0.5 px-2 gap-1 border-transparent shadow-xs">
+                            <Check className="h-3 w-3" />
+                            <span>নির্বাচিত</span>
+                          </Badge>
+                        ) : isInAnotherBatch ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-50 text-amber-800 border-amber-200 text-[10px] py-0.5 px-2"
+                            title={`বর্তমান ব্যাচ: ${st.batch_name}`}
+                          >
+                            বর্তমান: {st.batch_name}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] py-0.5 px-2"
+                          >
+                            কোনো ব্যাচ নেই
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="shrink-0 pt-3 border-t border-slate-100 flex-row items-center justify-between sm:justify-between gap-2">
+            <div className="text-xs text-slate-600 font-medium">
+              নির্বাচিত: <span className="font-bold text-indigo-700">{bn(selectedAssignIds.size)}</span> জন
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAssigningBatch(null)}
+                className="rounded-xl h-10 text-xs"
+              >
+                বাতিল
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveAssignStudents}
+                disabled={savingAssign || isAssigningClassInactive}
+                className={`rounded-xl h-10 text-xs gap-1.5 shadow-xs font-semibold ${
+                  isAssigningClassInactive
+                    ? "bg-slate-300 text-slate-500 cursor-not-allowed hover:bg-slate-300"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                }`}
+              >
+                {savingAssign && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <span>
+                  {isAssigningClassInactive
+                    ? "শ্রেণি নিষ্ক্রিয় (সংরক্ষণ বন্ধ)"
+                    : `সংরক্ষণ করুন (${bn(selectedAssignIds.size)} জন)`}
+                </span>
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CONFIRM DELETE DIALOG */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md p-4 sm:p-6 rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-slate-900">
+              আপনি কি নিশ্চিত?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500">
+              {deleteConfirm?.type === "CLASS"
+                ? `আপনি '${deleteConfirm?.name}' শ্রেণি মুছে ফেলতে যাচ্ছেন। যদি এই শ্রেণিতে কোনো শিক্ষার্থী থাকে তবে প্রথমে তাদের স্থানান্তর করতে হবে।`
+                : `আপনি '${deleteConfirm?.name}' ব্যাচটি মুছে ফেলতে যাচ্ছেন। এর ফলে ব্যাচের শিক্ষার্থীরা ব্যাচহীন অবস্থায় থাকবে।`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 pt-2">
+            <AlertDialogCancel
+              disabled={submitting}
+              className="rounded-xl h-10 text-xs"
+            >
+              বাতিল
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExecuteDelete}
+              disabled={submitting}
+              className="rounded-xl h-10 text-xs bg-red-600 hover:bg-red-700 text-white"
+            >
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "হ্যাঁ, মুছে ফেলুন"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Bigganpondit Academy",
+  "description": "বিজ্ঞান পণ্ডিত একাডেমি — নম্বর সংগ্রহক, শিক্ষার্থী ও ফলাফল ব্যবস্থাপনা সফটওয়্যার",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

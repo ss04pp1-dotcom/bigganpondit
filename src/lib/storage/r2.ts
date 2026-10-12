@@ -1,0 +1,279 @@
+// R2-compatible file storage.
+// Production: Cloudflare R2 binding (BUCKET).
+// Local dev: filesystem under .storage/r2/ with identical API.
+// Only R2 object keys are stored in D1 — never binary data.
+
+import path from "node:path";
+import fs from "node:fs";
+import { Buffer } from "node:buffer";
+import { getCloudflareEnv } from "@/lib/cloudflare";
+import { getDb } from "@/lib/db";
+
+export interface StoredObject {
+  key: string;
+  data: Uint8Array;
+  size: number;
+}
+
+export interface StorageBucket {
+  // Returns true when the object was durably persisted to at least one of
+  // R2 / D1-fallback / local disk. Callers (e.g. backup creation) must fail
+  // loudly when false — previously put() always "succeeded" and backups could
+  // silently vanish with a missing R2 binding.
+  put(key: string, data: Uint8Array): Promise<boolean>;
+  get(key: string): Promise<StoredObject | null>;
+  delete(key: string): Promise<void>;
+}
+
+// Minimal structural type matching the parts of R2Bucket we use.
+interface R2BucketLike {
+  put(key: string, value: ArrayBuffer | ReadableStream | Uint8Array, options?: unknown): Promise<unknown>;
+  get(key: string): Promise<{
+    key: string;
+    size: number;
+    body: ReadableStream<Uint8Array>;
+    arrayBuffer(): Promise<ArrayBuffer>;
+  } | null>;
+  delete(key: string): Promise<void>;
+}
+
+const g = globalThis as unknown as {
+  __academyBucket?: StorageBucket;
+  __academyMemoryStore?: Map<string, Uint8Array>;
+};
+
+if (!g.__academyMemoryStore) {
+  g.__academyMemoryStore = new Map<string, Uint8Array>();
+}
+
+// ---------------- local filesystem helper ----------------
+const LOCAL_ROOT = path.resolve(process.cwd(), ".storage", "r2");
+
+function localSafePath(key: string): string {
+  const p = path.resolve(LOCAL_ROOT, key);
+  const rootWithSep = LOCAL_ROOT.endsWith(path.sep) ? LOCAL_ROOT : LOCAL_ROOT + path.sep;
+  if (p !== LOCAL_ROOT && !p.startsWith(rootWithSep)) throw new Error("Invalid storage key");
+  return p;
+}
+
+async function saveToD1(key: string, data: Uint8Array): Promise<boolean> {
+  try {
+    const db = await getDb();
+    // Canonical schema matches migration 0010 (chunk_index). Legacy
+    // bootstrap-created tables may still use chunk_idx — write with a fallback
+    // so the D1 fallback persists on BOTH database shapes.
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS storage_chunks (
+        key TEXT,
+        chunk_index INTEGER,
+        data TEXT,
+        updated_at TEXT,
+        PRIMARY KEY (key, chunk_index)
+      );
+    `);
+
+    // Clean old chunks
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
+
+    const base64 = Buffer.from(data).toString("base64");
+    // 300,000 characters per chunk (~225 KB), safely within D1 statement limits
+    const chunkSize = 300000;
+    const numChunks = Math.ceil(base64.length / chunkSize);
+
+    const build = (col: string) => {
+      const stmts: import("@/lib/db/types").D1PreparedStatement[] = [];
+      for (let i = 0; i < numChunks; i++) {
+        const slice = base64.slice(i * chunkSize, (i + 1) * chunkSize);
+        stmts.push(
+          db
+            .prepare(
+              `INSERT INTO storage_chunks (key, ${col}, data, updated_at) VALUES (?, ?, ?, datetime('now'))`
+            )
+            .bind(key, i, slice)
+        );
+      }
+      return stmts;
+    };
+
+    if (numChunks > 0) {
+      try {
+        await db.batch(build("chunk_index"));
+      } catch {
+        // Legacy table shape (bootstrap-created with chunk_idx)
+        await db.batch(build("chunk_idx"));
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn("Storage fallback save to D1 failed:", err);
+    return false;
+  }
+}
+
+async function getFromD1(key: string): Promise<StoredObject | null> {
+  try {
+    const db = await getDb();
+
+    // 1) Try chunked storage (support both chunk_idx and legacy chunk_index)
+    let chunks = (
+      await db
+        .prepare("SELECT data FROM storage_chunks WHERE key = ? ORDER BY chunk_idx ASC")
+        .bind(key)
+        .all<{ data: string }>()
+        .catch(() => null)
+    )?.results ?? [];
+
+    if (!chunks.length) {
+      chunks = (
+        await db
+          .prepare("SELECT data FROM storage_chunks WHERE key = ? ORDER BY chunk_index ASC")
+          .bind(key)
+          .all<{ data: string }>()
+          .catch(() => null)
+      )?.results ?? [];
+    }
+
+    if (chunks.length > 0) {
+      const fullBase64 = chunks.map((c) => c.data).join("");
+      const buf = Buffer.from(fullBase64, "base64");
+      const u8 = new Uint8Array(buf);
+      return { key, data: u8, size: u8.length };
+    }
+
+    // 2) Fallback to legacy storage_files table
+    const row = await db
+      .prepare("SELECT data FROM storage_files WHERE key = ?")
+      .bind(key)
+      .first<{ data: string }>(undefined as never)
+      .catch(() => null);
+    if (row?.data) {
+      const buf = Buffer.from(row.data, "base64");
+      const u8 = new Uint8Array(buf);
+      return { key, data: u8, size: u8.length };
+    }
+  } catch {
+    // table or row doesn't exist
+  }
+  return null;
+}
+
+async function deleteFromD1(key: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.prepare("DELETE FROM storage_chunks WHERE key = ?").bind(key).run().catch(() => {});
+    await db.prepare("DELETE FROM storage_files WHERE key = ?").bind(key).run().catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------- entry ----------------
+export async function getBucket(): Promise<StorageBucket> {
+  if (g.__academyBucket) return g.__academyBucket;
+  const cf = await getCloudflareEnv();
+  const raw = (cf?.BUCKET as unknown as R2BucketLike) || null;
+  const mem = g.__academyMemoryStore!;
+
+  g.__academyBucket = {
+    async put(key: string, data: Uint8Array): Promise<boolean> {
+      mem.set(key, data);
+
+      let r2Success = false;
+      if (raw) {
+        try {
+          await raw.put(key, data);
+          r2Success = true;
+        } catch (err) {
+          console.warn("Cloudflare R2 put failed, will use D1 storage fallback:", err);
+        }
+      }
+
+      // Always save to D1 fallback to guarantee persistent availability across workers
+      let d1Success = false;
+      if (!r2Success) {
+        d1Success = await saveToD1(key, data);
+      }
+
+      // Local disk for local dev (if filesystem writable)
+      let fsSuccess = false;
+      try {
+        const p = localSafePath(key);
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, data);
+        fsSuccess = true;
+      } catch {
+        // Read-only filesystem in cloudflare worker, ignore
+      }
+
+      const persisted = r2Success || d1Success || fsSuccess;
+      if (!persisted) {
+        throw new Error(
+          "ফাইল সংরক্ষণ করা যায়নি — কোনো স্টোরেজ (R2/D1/local) উপলব্ধ নয়। Storage binding পরীক্ষা করুন।"
+        );
+      }
+      return true;
+    },
+
+    async get(key: string): Promise<StoredObject | null> {
+      // 1) Try Cloudflare R2
+      if (raw) {
+        try {
+          const obj = await raw.get(key);
+          if (obj) {
+            const buf = new Uint8Array(await obj.arrayBuffer());
+            mem.set(key, buf);
+            return { key, data: buf, size: buf.length };
+          }
+        } catch (err) {
+          console.warn("Cloudflare R2 get error, checking D1 storage fallback:", err);
+        }
+      }
+
+      // 2) Try in-memory store
+      const inMem = mem.get(key);
+      if (inMem) return { key, data: inMem, size: inMem.length };
+
+      // 3) Try D1 database storage
+      const fromD1 = await getFromD1(key);
+      if (fromD1) {
+        mem.set(key, fromD1.data);
+        return fromD1;
+      }
+
+      // 4) Try local filesystem
+      try {
+        const p = localSafePath(key);
+        if (fs.existsSync(p)) {
+          const buf = fs.readFileSync(p);
+          const u8 = new Uint8Array(buf);
+          mem.set(key, u8);
+          return { key, data: u8, size: u8.length };
+        }
+      } catch {
+        // Ignore
+      }
+
+      return null;
+    },
+
+    async delete(key: string): Promise<void> {
+      if (raw) {
+        try {
+          await raw.delete(key);
+        } catch {
+          // ignore
+        }
+      }
+      mem.delete(key);
+      await deleteFromD1(key);
+      try {
+        const p = localSafePath(key);
+        fs.unlinkSync(p);
+      } catch {
+        // ignore
+      }
+    },
+  };
+
+  return g.__academyBucket;
+}

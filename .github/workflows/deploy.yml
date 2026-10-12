@@ -1,0 +1,65 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloudflare Workers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Next.js with OpenNext for Cloudflare
+        run: |
+          node ./scripts/patch-opennext.mjs
+          bun run build:cf
+          node ./scripts/patch-worker.mjs
+        env:
+          NODE_ENV: production
+
+      - name: Apply Remote D1 Database Migrations
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler d1 migrations apply academy-marks --remote || true
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bunx wrangler deploy
+
+      - name: Live Diagnostics and Error Capture
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "Starting tail stream..."
+          bunx wrangler tail academy-marks-system --format=pretty &
+          TAIL_PID=$!
+          sleep 5
+          echo "Invoking Worker routes..."
+          curl -i -s https://academy-marks-system.salman61902.workers.dev/ || true
+          curl -i -s https://academy-marks-system.salman61902.workers.dev/login || true
+          curl -i -s https://academy-marks-system.salman61902.workers.dev/api || true
+          sleep 6
+          kill $TAIL_PID 2>/dev/null || true

@@ -1,0 +1,800 @@
+// Report data assembly — every report/dashboard/portal view is built here
+// on top of the shared result engine (never duplicated formulas).
+
+import type { D1Database } from "@/lib/db/types";
+import { SETTING_DIRECTOR_SIGNATURE } from "@/lib/constants";
+import {
+  aggregate,
+  buildAnnualResult,
+  buildMonthlyResult,
+  calculateRanking,
+  computeFinalGpa,
+  decorateExamRow,
+  type ExamRowForDisplay,
+  type SearchResultRow,
+} from "./engine";
+
+export interface StudentInfo {
+  studentId: number;
+  name: string;
+  roll: number;
+  className: string; // '6'..'10'
+  division: string | null;
+  section: string | null;
+  photoKey: string | null;
+}
+
+export async function getStudentInfo(db: D1Database, studentId: number, year?: number): Promise<StudentInfo | null> {
+  const row = await db
+    .prepare(
+      `SELECT st.id as student_id, st.name, st.roll, st.division, st.section, st.photo_key, c.name as class_name
+       FROM students st JOIN classes c ON c.id = st.class_id WHERE st.id = ?`
+    )
+    .bind(studentId)
+    .first<StudentInfo & { student_id: number; class_name: string; photo_key: string | null }>(undefined as never)
+    .catch(() => null);
+  if (!row) return null;
+
+  let className = row.class_name;
+  let division = row.division;
+
+  if (year) {
+    const historical = await db
+      .prepare(
+        `SELECT c.name as class_name, e.division
+         FROM marks m JOIN exams e ON e.id = m.exam_id JOIN classes c ON c.id = e.class_id
+         WHERE m.student_id = ? AND e.year = ? LIMIT 1`
+      )
+      .bind(studentId, year)
+      .first<{ class_name: string; division: string | null }>(undefined as never)
+      .catch(() => null);
+    if (historical?.class_name) {
+      className = historical.class_name;
+      if (historical.division) division = historical.division;
+    }
+  }
+
+  return {
+    studentId: row.student_id,
+    name: row.name,
+    roll: row.roll,
+    className,
+    division,
+    section: row.section,
+    photoKey: row.photo_key,
+  };
+}
+
+// ------------------------------------------------------------------
+// Search result — exam rows of one student (filters: subject, month, year)
+// ------------------------------------------------------------------
+export async function getStudentExamRows(
+  db: D1Database,
+  opts: {
+    studentId: number;
+    subjectIds?: number[] | null; // null = all
+    month?: number | null; // null = all months
+    year: number;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
+    publishedOnly?: boolean;
+  }
+): Promise<SearchResultRow[]> {
+  const { studentId, subjectIds, month, year, mode, publishedOnly = true } = opts;
+  const clauses = ["m.student_id = ?", "e.year = ?"];
+  const params: unknown[] = [studentId, year];
+  if (publishedOnly) {
+    clauses.push("COALESCE(e.is_published, 0) = 1");
+  }
+  if (month != null) {
+    clauses.push("e.month = ?");
+    params.push(month);
+  }
+  if (mode === "MODEL") {
+    clauses.push("(COALESCE(e.exam_type, '') = 'MODEL' OR e.title LIKE '%মডেল টেস্ট%' OR e.title LIKE '%Model%')");
+  } else if (mode === "MONTHLY") {
+    clauses.push("(COALESCE(e.exam_type, 'MONTHLY') != 'MODEL' AND e.title NOT LIKE '%মডেল টেস্ট%' AND e.title NOT LIKE '%Model%')");
+  }
+  if (subjectIds !== null && subjectIds !== undefined) {
+    if (subjectIds.length === 0) return [];
+    clauses.push(`e.subject_id IN (${subjectIds.map(() => "?").join(",")})`);
+    params.push(...subjectIds);
+  }
+  const rows = (
+    await db
+      .prepare(
+        `SELECT m.id as mark_id, m.attendance, m.obtained_marks,
+                e.id as exam_id, e.subject_id, e.month, e.year, e.exam_date, e.title, e.total_marks,
+                e.class_id, e.division,
+                s.name as subject_name, s.is_fourth_subject, c.name as class_name
+         FROM marks m
+         JOIN exams e ON e.id = m.exam_id
+         JOIN subjects s ON s.id = e.subject_id
+         JOIN classes c ON c.id = e.class_id
+         WHERE ${clauses.join(" AND ")}
+         ORDER BY e.exam_date, e.id`
+      )
+      .bind(...params)
+      .all<Record<string, unknown>>()
+  ).results as unknown as {
+    exam_id: number;
+    subject_id: number;
+    subject_name: string;
+    is_fourth_subject: number;
+    class_name: string;
+    division: string | null;
+    month: number;
+    year: number;
+    exam_date: string;
+    title: string;
+    total_marks: number;
+    mark_id: number;
+    attendance: "PRESENT" | "ABSENT";
+    obtained_marks: number;
+  }[];
+
+  if (!rows.length) return [];
+
+  // highest mark per exam — fetch all marks of these exams in one query
+  const examIds = [...new Set(rows.map((r) => Number(r.exam_id)))];
+  const ph = examIds.map(() => "?").join(",");
+  const allMarks = (
+    await db
+      .prepare(`SELECT exam_id, obtained_marks, attendance FROM marks WHERE exam_id IN (${ph})`)
+      .bind(...examIds)
+      .all<{ exam_id: number; obtained_marks: number; attendance: string }>()
+  ).results;
+  const highestByExam = new Map<number, number>();
+  for (const m of allMarks) {
+    highestByExam.set(m.exam_id, Math.max(highestByExam.get(m.exam_id) ?? 0, m.obtained_marks));
+  }
+
+  return rows.map((r) => {
+    const base: ExamRowForDisplay = {
+      examId: Number(r.exam_id),
+      subjectId: Number(r.subject_id),
+      subjectName: r.subject_name,
+      subjectIsFourth: Number(r.is_fourth_subject) === 1,
+      className: r.class_name,
+      division: (r.division as string | null) ?? null,
+      month: Number(r.month),
+      year: Number(r.year),
+      examDate: r.exam_date,
+      title: r.title,
+      total: Number(r.total_marks),
+      markId: Number(r.mark_id),
+      attendance: r.attendance as "PRESENT" | "ABSENT",
+      obtained: Number(r.obtained_marks),
+    };
+    const highest = highestByExam.get(base.examId) ?? base.obtained;
+    return decorateExamRow(base, [{ obtained: highest }]);
+  });
+}
+
+// ------------------------------------------------------------------
+// Monthly class data — the workhorse for monthly reports, merit lists
+// and student positions.
+// ------------------------------------------------------------------
+export interface MonthlyClassData {
+  students: StudentInfo[];
+  byStudent: Map<number, Map<number, { name: string; isFourth: boolean; exams: { total: number; obtained: number }[] }>>;
+  classHighest: Map<number, number>; // subjectId -> highest aggregated obtained
+  subjectNames: Map<number, { name: string; isFourth: boolean }>;
+}
+
+export async function getMonthlyClassData(
+  db: D1Database,
+  opts: {
+    classId: number;
+    division: string | null;
+    month: number;
+    year: number;
+    subjectIds?: number[] | null;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
+    publishedOnly?: boolean;
+  }
+): Promise<MonthlyClassData> {
+  const { classId, division, month, year, subjectIds, mode, publishedOnly = true } = opts;
+
+  const students = (
+    await db
+      .prepare(
+        `SELECT st.id as student_id, st.name, st.roll, st.division, st.section, st.photo_key, c.name as class_name
+         FROM students st JOIN classes c ON c.id = st.class_id
+         WHERE st.class_id = ? AND COALESCE(st.division, '') = COALESCE(?, '')
+         ORDER BY st.roll`
+      )
+      .bind(classId, division)
+      .all<StudentInfo & { student_id: number; class_name: string; photo_key: string | null }>()
+  ).results;
+
+  const clauses = ["e.class_id = ?", "COALESCE(e.division, '') = COALESCE(?, '')", "e.month = ?", "e.year = ?"];
+  const params: unknown[] = [classId, division, month, year];
+  if (publishedOnly) {
+    clauses.push("COALESCE(e.is_published, 0) = 1");
+  }
+  if (mode === "MODEL") {
+    clauses.push("(COALESCE(e.exam_type, '') = 'MODEL' OR e.title LIKE '%মডেল টেস্ট%' OR e.title LIKE '%Model%')");
+  } else if (mode === "MONTHLY") {
+    clauses.push("(COALESCE(e.exam_type, 'MONTHLY') != 'MODEL' AND e.title NOT LIKE '%মডেল টেস্ট%' AND e.title NOT LIKE '%Model%')");
+  }
+  if (subjectIds !== null && subjectIds !== undefined) {
+    if (subjectIds.length === 0) {
+      return { students: [], byStudent: new Map(), classHighest: new Map(), subjectNames: new Map() };
+    }
+    clauses.push(`e.subject_id IN (${subjectIds.map(() => "?").join(",")})`);
+    params.push(...subjectIds);
+  }
+  const marks = (
+    await db
+      .prepare(
+        `SELECT m.student_id, m.obtained_marks, e.subject_id, e.total_marks, s.name as subject_name, s.is_fourth_subject
+         FROM marks m
+         JOIN exams e ON e.id = m.exam_id
+         JOIN subjects s ON s.id = e.subject_id
+         WHERE ${clauses.join(" AND ")}`
+      )
+      .bind(...params)
+      .all<{
+        student_id: number;
+        obtained_marks: number;
+        subject_id: number;
+        total_marks: number;
+        subject_name: string;
+        is_fourth_subject: number;
+      }>()
+  ).results;
+
+  const byStudent = new Map<number, Map<number, { name: string; isFourth: boolean; exams: { total: number; obtained: number }[] }>>();
+  const subjectNames = new Map<number, { name: string; isFourth: boolean }>();
+  const aggByStudentSubject = new Map<string, number>(); // `${studentId}:${subjectId}` -> obtained sum
+
+  for (const m of marks) {
+    if (!byStudent.has(m.student_id)) byStudent.set(m.student_id, new Map());
+    const sm = byStudent.get(m.student_id)!;
+    if (!sm.has(m.subject_id)) {
+      sm.set(m.subject_id, { name: m.subject_name, isFourth: Number(m.is_fourth_subject) === 1, exams: [] });
+    }
+    sm.get(m.subject_id)!.exams.push({ total: m.total_marks, obtained: m.obtained_marks });
+    if (!subjectNames.has(m.subject_id)) {
+      subjectNames.set(m.subject_id, { name: m.subject_name, isFourth: Number(m.is_fourth_subject) === 1 });
+    }
+    const key = `${m.student_id}:${m.subject_id}`;
+    aggByStudentSubject.set(key, (aggByStudentSubject.get(key) ?? 0) + m.obtained_marks);
+  }
+
+  // class highest per subject (max aggregated obtained)
+  const classHighest = new Map<number, number>();
+  for (const [key, obtained] of aggByStudentSubject) {
+    const sid = Number(key.split(":")[1]);
+    classHighest.set(sid, Math.max(classHighest.get(sid) ?? 0, obtained));
+  }
+
+  return {
+    students: students.map((s) => ({
+      studentId: s.student_id,
+      name: s.name,
+      roll: s.roll,
+      className: s.class_name,
+      division: s.division,
+      section: s.section,
+      photoKey: s.photo_key,
+    })),
+    byStudent,
+    classHighest,
+    subjectNames,
+  };
+}
+
+// ------------------------------------------------------------------
+// Monthly report for one student (aggregation + position)
+// ------------------------------------------------------------------
+export interface MonthlyReport {
+  student: StudentInfo;
+  month: number;
+  year: number;
+  subjects: ReturnType<typeof buildMonthlyResult>["subjects"];
+  overall: ReturnType<typeof buildMonthlyResult>["overall"];
+  examRowsBySubject: Map<number, SearchResultRow[]>;
+  position?: number;
+  cohortSize: number;
+}
+
+export async function buildMonthlyReport(
+  db: D1Database,
+  opts: {
+    studentId: number;
+    month: number;
+    year: number;
+    subjectIds?: number[] | null;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
+    publishedOnly?: boolean;
+  }
+): Promise<MonthlyReport | null> {
+  const student = await getStudentInfo(db, opts.studentId, opts.year);
+  if (!student) return null;
+  const classId = (
+    await db.prepare("SELECT id FROM classes WHERE name = ?").bind(student.className).first<{ id: number }>(undefined as never).catch(() => null)
+  )?.id;
+  if (!classId) return null;
+
+  const data = await getMonthlyClassData(db, {
+    classId,
+    division: student.division,
+    month: opts.month,
+    year: opts.year,
+    subjectIds: opts.subjectIds ?? null,
+    mode: opts.mode,
+    publishedOnly: opts.publishedOnly ?? true,
+  });
+
+  const bySubject = data.byStudent.get(opts.studentId);
+  const result = buildMonthlyResult(bySubject ?? new Map(), data.classHighest);
+
+  // ranking across the cohort (only students who have at least one mark).
+  // GPA uses THE official formula (compulsory average + best-4th bonus +
+  // fail-cap) so the position ranking can never contradict the report card.
+  const rankEntries: (import("./engine").RankEntry & { photoKey: string | null; section: string | null })[] = [];
+  for (const st of data.students) {
+    const sm = data.byStudent.get(st.studentId);
+    if (!sm || sm.size === 0) continue;
+    const overall = aggregate([...sm.values()].flatMap((v) => v.exams));
+    const official = computeFinalGpa(
+      [...sm.values()].map((v) => ({ ...aggregate(v.exams), isFourth: v.isFourth })),
+      overall.percentage
+    );
+    rankEntries.push({
+      studentId: st.studentId,
+      roll: st.roll,
+      name: st.name,
+      percentage: overall.percentage,
+      totalObtained: overall.obtained,
+      gpa: official.gpa,
+      photoKey: st.photoKey,
+      section: st.section,
+    });
+  }
+  const ranked = calculateRanking(rankEntries);
+  const me = ranked.find((r) => r.studentId === opts.studentId);
+
+  const detailedRows = await getStudentExamRows(db, {
+    studentId: opts.studentId,
+    subjectIds: opts.subjectIds ?? null,
+    month: opts.month,
+    year: opts.year,
+    mode: opts.mode,
+    publishedOnly: opts.publishedOnly ?? true,
+  });
+  const examRowsBySubject = new Map<number, SearchResultRow[]>();
+  for (const row of detailedRows) {
+    const list = examRowsBySubject.get(row.subjectId) ?? [];
+    list.push(row);
+    examRowsBySubject.set(row.subjectId, list);
+  }
+
+  return {
+    student,
+    month: opts.month,
+    year: opts.year,
+    subjects: result.subjects,
+    overall: result.overall,
+    examRowsBySubject,
+    position: me?.position,
+    cohortSize: rankEntries.length,
+  };
+}
+
+// ------------------------------------------------------------------
+// Class summary (all students) — monthly report "All" view & merit list
+// ------------------------------------------------------------------
+export interface ClassSummaryEntry {
+  studentId: number;
+  name: string;
+  roll: number;
+  photoKey: string | null;
+  section: string | null;
+  percentage: number;
+  totalObtained: number;
+  totalMarks: number;
+  gpa: number;
+  grade: string;
+  position: number;
+  bySubjectPct: Map<number, number>; // subjectId -> aggregated percentage
+}
+
+export async function buildMonthlyClassSummary(
+  db: D1Database,
+  opts: {
+    classId: number;
+    division: string | null;
+    month: number;
+    year: number;
+    subjectIds?: number[] | null;
+    mode?: "MONTHLY" | "MODEL" | "ALL";
+    publishedOnly?: boolean;
+  }
+): Promise<{ entries: ClassSummaryEntry[]; subjectNames: Map<number, { name: string; isFourth: boolean }> }> {
+  const data = await getMonthlyClassData(db, {
+    ...opts,
+    subjectIds: opts.subjectIds ?? null,
+    mode: opts.mode,
+    publishedOnly: opts.publishedOnly ?? true,
+  });
+  const rankEntries: (import("./engine").RankEntry & { photoKey: string | null; section: string | null })[] = [];
+  const details = new Map<number, ClassSummaryEntry>();
+
+  for (const st of data.students) {
+    const sm = data.byStudent.get(st.studentId);
+    if (!sm || sm.size === 0) continue;
+    const overall = aggregate([...sm.values()].flatMap((v) => v.exams));
+    // THE official GPA (same formula as the monthly report card) — the
+    // merit list previously showed a percentage->grade GPA, so a student
+    // with one compulsory fail showed GPA 4.00 here and 0.00 on the card.
+    const official = computeFinalGpa(
+      [...sm.values()].map((v) => ({ ...aggregate(v.exams), isFourth: v.isFourth })),
+      overall.percentage
+    );
+    const bySubjectPct = new Map<number, number>();
+    for (const [sid, v] of sm) {
+      bySubjectPct.set(sid, aggregate(v.exams).percentage);
+    }
+    const entry: ClassSummaryEntry = {
+      studentId: st.studentId,
+      name: st.name,
+      roll: st.roll,
+      photoKey: st.photoKey,
+      section: st.section,
+      percentage: overall.percentage,
+      totalObtained: overall.obtained,
+      totalMarks: overall.totalMarks,
+      gpa: official.gpa,
+      grade: official.grade,
+      position: 0,
+      bySubjectPct,
+    };
+    details.set(st.studentId, entry);
+    rankEntries.push({
+      studentId: st.studentId,
+      roll: st.roll,
+      name: st.name,
+      percentage: overall.percentage,
+      totalObtained: overall.obtained,
+      gpa: official.gpa,
+      photoKey: st.photoKey,
+      section: st.section,
+    });
+  }
+
+  const ranked = calculateRanking(rankEntries);
+  for (const r of ranked) {
+    const d = details.get(r.studentId);
+    if (d) d.position = r.position;
+  }
+  return {
+    entries: ranked
+      .map((r) => details.get(r.studentId)!)
+      .filter(Boolean),
+    subjectNames: data.subjectNames,
+  };
+}
+
+// ------------------------------------------------------------------
+// Annual report — one student, Jan..Dec percentages
+// ------------------------------------------------------------------
+export async function buildStudentAnnualReport(
+  db: D1Database,
+  opts: { studentId: number; year: number; subjectIds?: number[] | null; publishedOnly?: boolean }
+): Promise<{ student: StudentInfo; annual: ReturnType<typeof buildAnnualResult> } | null> {
+  const student = await getStudentInfo(db, opts.studentId, opts.year);
+  if (!student) return null;
+
+  const clauses = ["m.student_id = ?", "e.year = ?"];
+  const params: unknown[] = [opts.studentId, opts.year];
+  if (opts.publishedOnly ?? true) {
+    clauses.push("COALESCE(e.is_published, 0) = 1");
+  }
+  if (opts.subjectIds !== null && opts.subjectIds !== undefined) {
+    if (opts.subjectIds.length === 0) return { student, annual: buildAnnualResult(new Map()) };
+    clauses.push(`e.subject_id IN (${opts.subjectIds.map(() => "?").join(",")})`);
+    params.push(...opts.subjectIds);
+  }
+  const rows = (
+    await db
+      .prepare(
+        `SELECT e.month, e.total_marks, m.obtained_marks
+         FROM marks m JOIN exams e ON e.id = m.exam_id
+         WHERE ${clauses.join(" AND ")}`
+      )
+      .bind(...params)
+      .all<{ month: number; total_marks: number; obtained_marks: number }>()
+  ).results;
+
+  const byMonth = new Map<number, { total: number; obtained: number }[]>();
+  for (const r of rows) {
+    if (!byMonth.has(r.month)) byMonth.set(r.month, []);
+    byMonth.get(r.month)!.push({ total: r.total_marks, obtained: r.obtained_marks });
+  }
+  return { student, annual: buildAnnualResult(byMonth) };
+}
+
+export interface DirectorSignatureItem {
+  id: number;
+  name: string;
+  institution: string | null;
+  signatureUrl: string | null;
+}
+
+export async function getAllDirectorsList(db: D1Database): Promise<DirectorSignatureItem[]> {
+  const rows = (
+    await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         ORDER BY d.id ASC`
+      )
+      .all<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null)
+  )?.results ?? [];
+
+  const fallbackKey = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_DIRECTOR_SIGNATURE)
+    .first<{ value: string | null }>()
+    .catch(() => null);
+
+  const fallbackUrl = fallbackKey?.value ? `/api/files/${fallbackKey.value}` : null;
+
+  const result: DirectorSignatureItem[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    institution: r.institution,
+    signatureUrl: r.signature_key ? `/api/files/${r.signature_key}` : fallbackUrl,
+  }));
+
+  if (result.length === 0) {
+    result.push({
+      id: 1,
+      name: "ডাঃ মোঃ শাহিন",
+      institution: "এম.বি.বি.এস, রামেক",
+      signatureUrl: fallbackUrl,
+    });
+  }
+
+  return result;
+}
+
+export async function getDirectorSignatureInfo(db: D1Database, directorId?: number | null) {
+  let d: { id: number; signature_key: string | null; name: string; institution: string | null } | null = null;
+  if (directorId) {
+    d = await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         WHERE d.id = ?`
+      )
+      .bind(directorId)
+      .first<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null);
+  }
+
+  if (!d) {
+    d = await db
+      .prepare(
+        `SELECT d.id, d.signature_key, u.name, d.institution
+         FROM directors d
+         JOIN users u ON u.id = d.user_id
+         ORDER BY (d.signature_key IS NOT NULL) DESC, d.id ASC
+         LIMIT 1`
+      )
+      .first<{ id: number; signature_key: string | null; name: string; institution: string | null }>()
+      .catch(() => null);
+  }
+
+  const fallbackKey = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_DIRECTOR_SIGNATURE)
+    .first<{ value: string | null }>()
+    .catch(() => null);
+
+  const key = d?.signature_key || fallbackKey?.value || null;
+  return {
+    id: d?.id ?? null,
+    signatureUrl: key ? `/api/files/${key}` : null,
+    name: d?.name || "পরিচালক",
+    institution: d?.institution || null,
+  };
+}
+
+export async function getSubjectTeachersMap(db: D1Database): Promise<Map<number, { name: string; shortName: string }>> {
+  const map = new Map<number, { name: string; shortName: string }>();
+  const rows = (
+    await db
+      .prepare(
+        `SELECT ts.subject_id, u.name as teacher_name, t.short_name as teacher_short_name
+         FROM teacher_subjects ts
+         JOIN teachers t ON t.id = ts.teacher_id
+         JOIN users u ON u.id = t.user_id`
+      )
+      .all<{ subject_id: number; teacher_name: string; teacher_short_name: string }>()
+      .catch(() => null)
+  )?.results ?? [];
+  for (const r of rows) {
+    map.set(r.subject_id, {
+      name: r.teacher_name,
+      shortName: r.teacher_short_name || (r.teacher_name ? r.teacher_name.slice(0, 2).toUpperCase() : ""),
+    });
+  }
+  return map;
+}
+
+export interface TeacherRemarkItem {
+  id?: number;
+  studentId?: number;
+  teacherId: number;
+  teacherName: string;
+  teacherShortName?: string | null;
+  signatureKey?: string | null;
+  signatureUrl?: string | null;
+  comment: string;
+  date?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function ensureStudentMonthlyCommentsTable(db: D1Database): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS student_monthly_comments (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          student_id  INTEGER NOT NULL,
+          teacher_id  INTEGER NOT NULL,
+          month       INTEGER NOT NULL,
+          year        INTEGER NOT NULL,
+          mode        TEXT NOT NULL DEFAULT 'MONTHLY',
+          comment     TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(student_id, teacher_id, month, year, mode)
+        )`
+      )
+      .run()
+      .catch(() => null);
+    await db
+      .prepare(
+        `CREATE INDEX IF NOT EXISTS idx_smc_lookup ON student_monthly_comments(student_id, month, year, mode)`
+      )
+      .run()
+      .catch(() => null);
+  } catch {
+    // ignore
+  }
+}
+
+export async function getStudentMonthlyComments(
+  db: D1Database,
+  params: {
+    studentId: number;
+    month: number;
+    year: number;
+    mode?: string;
+  }
+): Promise<TeacherRemarkItem[]> {
+  await ensureStudentMonthlyCommentsTable(db);
+  const mode = params.mode?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
+  const rows = (
+    await db
+      .prepare(
+        `SELECT c.id, c.student_id, c.teacher_id, c.comment, c.created_at, c.updated_at,
+                t.short_name, t.signature_key, COALESCE(u.name, t.short_name, 'শিক্ষক') as teacher_name
+         FROM student_monthly_comments c
+         LEFT JOIN teachers t ON t.id = c.teacher_id
+         LEFT JOIN users u ON u.id = t.user_id
+         WHERE c.student_id = ? AND c.month = ? AND c.year = ? AND c.mode = ?
+         ORDER BY c.created_at ASC`
+      )
+      .bind(params.studentId, params.month, params.year, mode)
+      .all<{
+        id: number;
+        student_id: number;
+        teacher_id: number;
+        comment: string;
+        created_at: string;
+        updated_at: string;
+        short_name: string | null;
+        signature_key: string | null;
+        teacher_name: string;
+      }>()
+      .catch(() => null)
+  )?.results ?? [];
+
+  return rows.map((r) => {
+    // format date as DD/MM/YYYY
+    let dateStr = "";
+    try {
+      const d = new Date(r.updated_at || r.created_at);
+      if (!isNaN(d.getTime())) {
+        dateStr = d.toLocaleDateString("en-GB");
+      }
+    } catch {
+      dateStr = "";
+    }
+    return {
+      id: r.id,
+      studentId: r.student_id,
+      teacherId: r.teacher_id,
+      teacherName: r.teacher_name || "শিক্ষক",
+      teacherShortName: r.short_name,
+      signatureKey: r.signature_key,
+      signatureUrl: r.signature_key ? `/api/files/${r.signature_key}` : null,
+      comment: r.comment,
+      date: dateStr,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  });
+}
+
+export async function saveTeacherMonthlyComment(
+  db: D1Database,
+  params: {
+    studentId: number;
+    teacherId: number;
+    month: number;
+    year: number;
+    comment: string;
+    mode?: string;
+  }
+): Promise<void> {
+  await ensureStudentMonthlyCommentsTable(db);
+  const mode = params.mode?.toUpperCase() === "MODEL" ? "MODEL" : "MONTHLY";
+  const commentText = params.comment.trim();
+
+  // 1. Check if comment already exists for this student, teacher, month, year, mode
+  const existing = await db
+    .prepare(
+      `SELECT id FROM student_monthly_comments
+       WHERE student_id = ? AND teacher_id = ? AND month = ? AND year = ? AND mode = ?
+       LIMIT 1`
+    )
+    .bind(params.studentId, params.teacherId, params.month, params.year, mode)
+    .first<{ id: number }>()
+    .catch(() => null);
+
+  if (existing?.id) {
+    await db
+      .prepare(
+        `UPDATE student_monthly_comments
+         SET comment = ?, updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .bind(commentText, existing.id)
+      .run();
+  } else {
+    // 2. Insert new record
+    try {
+      await db
+        .prepare(
+          `INSERT INTO student_monthly_comments
+           (student_id, teacher_id, month, year, mode, comment, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+        )
+        .bind(params.studentId, params.teacherId, params.month, params.year, mode, commentText)
+        .run();
+    } catch (insertErr) {
+      console.error("[saveTeacherMonthlyComment insert failed]", insertErr);
+      // Fallback: update if concurrent insert happened
+      await db
+        .prepare(
+          `UPDATE student_monthly_comments
+           SET comment = ?, updated_at = datetime('now')
+           WHERE student_id = ? AND teacher_id = ? AND month = ? AND year = ? AND mode = ?`
+        )
+        .bind(commentText, params.studentId, params.teacherId, params.month, params.year, mode)
+        .run()
+        .catch(() => null);
+    }
+  }
+}
+

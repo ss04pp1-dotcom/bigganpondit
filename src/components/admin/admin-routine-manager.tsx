@@ -705,8 +705,8 @@ export function AdminRoutineManager() {
         /* WEEKLY GRID VIEW */
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {DAYS_OF_WEEK.map((d) => {
-              const dayRoutines = routines.filter((r) => r.day_of_week === d.id);
+            {(filterDay === "all" ? DAYS_OF_WEEK : DAYS_OF_WEEK.filter((d) => String(d.id) === filterDay)).map((d) => {
+              const dayRoutines = filteredRoutines.filter((r) => r.day_of_week === d.id);
               const isToday = d.id === todayDayOfWeek;
 
               return (

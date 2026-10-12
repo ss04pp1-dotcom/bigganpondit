@@ -814,6 +814,24 @@ export function OfficialResultCard({
                   </>
                 )}
               </div>
+
+              {/* প্রকাশনী লোগোর নিচে ডেভেলপার ব্র্যান্ডিং (সবুজ চিহ্নিত স্থান) */}
+              <div
+                className="rc-a font-sans text-slate-500 select-none pointer-events-none text-center"
+                style={{
+                  top: 718,
+                  left: 0,
+                  right: 0,
+                  width: "100%",
+                  fontSize: 9,
+                  letterSpacing: "0.2px",
+                  lineHeight: "13px",
+                }}
+              >
+                Developed by <span className="font-semibold text-slate-700">{DEVELOPER_INFO.name}</span> • <span className="font-semibold text-slate-700">{DEVELOPER_INFO.company}</span>
+                <br />
+                <span className="text-[8px] text-slate-400 font-mono">Gmail: {DEVELOPER_INFO.email}</span>
+              </div>
             </div>
 
             {/* ডান প্যানেল */}
@@ -889,18 +907,6 @@ export function OfficialResultCard({
                 ))}
               </div>
               <div className="rc-a rc-qt">“ মানুষ তাই পাবে, যা সে চেষ্টা করে ” – (সূরা আল নাজম, ৩৯)</div>
-              <div
-                className="rc-a font-sans text-slate-400 select-none pointer-events-none"
-                style={{
-                  top: 768,
-                  left: 48,
-                  width: 500,
-                  fontSize: 9,
-                  letterSpacing: "0.2px",
-                }}
-              >
-                Developed by {DEVELOPER_INFO.name} • {DEVELOPER_INFO.company} | Gmail: {DEVELOPER_INFO.email}
-              </div>
             </div>
           </div>
         </div>
@@ -1147,24 +1153,6 @@ export function OfficialResultCard({
               <div className="rc-a rc-sb" style={{ left: 448.5, width: 374.5 }}>
                 <div className="rc-sig-wrap" />
                 <div className="rc-ln">অভিভাবকের স্বাক্ষর</div>
-              </div>
-
-              {/* Developer Signature & Branding Footer */}
-              <div
-                className="rc-a font-sans text-slate-500 select-none pointer-events-none"
-                style={{
-                  top: 766,
-                  left: 54,
-                  width: 769,
-                  textAlign: "center",
-                  fontSize: 10,
-                  letterSpacing: "0.2px",
-                  lineHeight: "14px",
-                  borderTop: "1px dashed #cbd5e1",
-                  paddingTop: 3,
-                }}
-              >
-                Developed by <span className="font-bold text-slate-700">{DEVELOPER_INFO.name}</span> • <span className="font-bold text-slate-700">{DEVELOPER_INFO.company}</span> | Gmail: <span className="font-semibold text-slate-600">{DEVELOPER_INFO.email}</span>
               </div>
             </div>
           </div>

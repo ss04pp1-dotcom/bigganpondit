@@ -2,14 +2,14 @@
 // Student API for Viewing Fees, Dues Breakdown, Invoices and Notifications
 
 import { requireApiUser } from "@/lib/auth/guards";
-import { assertSameOrigin, fail, ok } from "@/lib/api";
+import { assertSameOrigin, fail, handleError, ok } from "@/lib/api";
 import { getStudentFeeSummary, FEE_CATEGORY_LABELS } from "@/lib/fees/engine";
 
 export async function GET(req: Request) {
   try {
     const { user, db } = await requireApiUser(["STUDENT"]);
     if (!user.studentId) {
-      return fail("শিক্ষার্থী আইডি পাওয়া যায়নি।", 400);
+      return fail(400, "শিক্ষার্থী আইডি পাওয়া যায়নি।");
     }
 
     const summary = await getStudentFeeSummary(db, user.studentId);
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       categories: FEE_CATEGORY_LABELS,
     });
   } catch (err) {
-    return fail((err as Error).message, 500);
+    return handleError(err);
   }
 }
 
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
     const { user, db } = await requireApiUser(["STUDENT"]);
-    if (!user.studentId) return fail("শিক্ষার্থী আইডি পাওয়া যায়নি।", 400);
+    if (!user.studentId) return fail(400, "শিক্ষার্থী আইডি পাওয়া যায়নি।");
 
     const body = await req.json().catch(() => ({}));
     const notificationId = body.notificationId;
@@ -61,6 +61,6 @@ export async function POST(req: Request) {
 
     return ok({ message: "নোটিফিকেশন পঠিত হিসেবে চিহ্নিত করা হয়েছে।" });
   } catch (err) {
-    return fail((err as Error).message, 500);
+    return handleError(err);
   }
 }

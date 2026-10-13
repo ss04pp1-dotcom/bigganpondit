@@ -107,10 +107,9 @@ export async function syncExamAbsentAndFailFines(
       e.class_id,
       s.id as subject_id,
       s.name as subject_name,
-      s.is_fourth as subject_is_fourth,
+      s.is_fourth_subject as subject_is_fourth,
       st.name as student_name,
       st.roll as student_roll,
-      st.fourth_subject_id,
       c.name as class_name
     FROM marks m
     JOIN exams e ON e.id = m.exam_id
@@ -199,7 +198,7 @@ export async function syncExamAbsentAndFailFines(
       const grade = calculateGrade(pct).grade;
 
       // Check if this subject is 4th subject for this student
-      const is4th = row.subject_is_fourth === 1 || (row.fourth_subject_id && row.fourth_subject_id === row.subject_id);
+      const is4th = Number(row.subject_is_fourth) === 1;
 
       if (grade === "F" && !is4th) {
         const existing = await db
@@ -270,7 +269,7 @@ export async function generateMonthlyTuitionFees(
     createdBy?: number;
   }
 ): Promise<{ generatedCount: number; skippedCount: number; totalAmount: number }> {
-  let studentSql = `SELECT s.id, s.name, s.roll, c.name as class_name FROM students s JOIN classes c ON c.id = s.class_id WHERE s.is_active = 1`;
+  let studentSql = `SELECT s.id, s.name, s.roll, c.name as class_name FROM students s JOIN classes c ON c.id = s.class_id WHERE c.is_active = 1`;
   const sqlParams: unknown[] = [];
 
   if (params.classId) {
@@ -484,7 +483,7 @@ export async function sendDueReminderNotifications(
     FROM students s
     JOIN classes c ON c.id = s.class_id
     JOIN fee_items fi ON fi.student_id = s.id
-    WHERE fi.status IN ('PENDING', 'PARTIAL') AND fi.due_amount > 0 AND s.is_active = 1
+    WHERE fi.status IN ('PENDING', 'PARTIAL') AND fi.due_amount > 0 AND c.is_active = 1
   `;
   const params: unknown[] = [];
 

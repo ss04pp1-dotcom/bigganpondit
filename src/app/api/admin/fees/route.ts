@@ -2,7 +2,7 @@
 // Admin API for Fee Management, Payments, Dues, and Invoices
 
 import { requireApiUser } from "@/lib/auth/guards";
-import { assertSameOrigin, fail, ok } from "@/lib/api";
+import { assertSameOrigin, fail, handleError, ok } from "@/lib/api";
 import {
   generateMonthlyTuitionFees,
   recordFeePayment,
@@ -119,7 +119,7 @@ export async function GET(req: Request) {
            FROM students s
            JOIN classes c ON c.id = s.class_id
            LEFT JOIN batches b ON b.id = s.batch_id
-           WHERE s.is_active = 1
+           WHERE c.is_active = 1
            ORDER BY c.id ASC, s.roll ASC`
         )
         .all<any>()
@@ -144,7 +144,7 @@ export async function GET(req: Request) {
       categories: FEE_CATEGORY_LABELS,
     });
   } catch (err) {
-    return fail((err as Error).message, 500);
+    return handleError(err);
   }
 }
 
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
       // Bulk monthly fee generation
       const { classId, batchId, month, year, amount, dueDate, customTitle } = body;
       if (!month || !year || !amount || Number(amount) <= 0) {
-        return fail("মাস, বছর এবং সঠিক টাকার পরিমাণ প্রদান করুন।", 400);
+        return fail(400, "মাস, বছর এবং সঠিক টাকার পরিমাণ প্রদান করুন।");
       }
 
       const res = await generateMonthlyTuitionFees(db, {
@@ -192,7 +192,7 @@ export async function POST(req: Request) {
       } = body;
 
       if (!studentId || !amountPaid || Number(amountPaid) <= 0) {
-        return fail("শিক্ষার্থী নির্বাচন করুন এবং পরিশোধিত টাকার পরিমাণ দিন।", 400);
+        return fail(400, "শিক্ষার্থী নির্বাচন করুন এবং পরিশোধিত টাকার পরিমাণ দিন।");
       }
 
       const res = await recordFeePayment(db, {
@@ -227,7 +227,7 @@ export async function POST(req: Request) {
       } = body;
 
       if (!studentId || !title || !amount || Number(amount) <= 0) {
-        return fail("শিক্ষার্থী, বিবরণ এবং সঠিক টাকার পরিমাণ দিন।", 400);
+        return fail(400, "শিক্ষার্থী, বিবরণ এবং সঠিক টাকার পরিমাণ দিন।");
       }
 
       const validCategories = [
@@ -270,9 +270,9 @@ export async function POST(req: Request) {
       });
     }
 
-    return fail("অবৈধ অ্যাকশন অনুরোধ।", 400);
+    return fail(400, "অবৈধ অ্যাকশন অনুরোধ।");
   } catch (err) {
-    return fail((err as Error).message, 500);
+    return handleError(err);
   }
 }
 
@@ -283,7 +283,7 @@ export async function DELETE(req: Request) {
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
 
-    if (!id) return fail("আইডি প্রদান করুন।", 400);
+    if (!id) return fail(400, "আইডি প্রদান করুন।");
 
     const item = await db
       .prepare(`SELECT * FROM fee_items WHERE id = ?`)
@@ -291,19 +291,16 @@ export async function DELETE(req: Request) {
       .first<any>()
       .catch(() => null);
 
-    if (!item) return fail("ফি আইটেম পাওয়া যায়নি।", 404);
+    if (!item) return fail(404, "ফি আইটেম পাওয়া যায়নি।");
 
     if (item.paid_amount > 0) {
-      return fail(
-        "এই আইটেমে ইতিমধ্যে পেমেন্ট গ্রহণ করা হয়েছে, তাই এটি সরাসরি মোছা যাবে না।",
-        400
-      );
+      return fail(400, "এই আইটেমে ইতিমধ্যে পেমেন্ট গ্রহণ করা হয়েছে, তাই এটি সরাসরি মোছা যাবে না।");
     }
 
     await db.prepare(`DELETE FROM fee_items WHERE id = ?`).bind(id).run();
 
     return ok({ message: "ফি রেকর্ড সফলভাবে মুছে ফেলা হয়েছে।" });
   } catch (err) {
-    return fail((err as Error).message, 500);
+    return handleError(err);
   }
 }

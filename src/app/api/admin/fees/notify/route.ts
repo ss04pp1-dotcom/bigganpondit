@@ -2,7 +2,7 @@
 // Send Due Reminders and Monthly Notifications to Students
 
 import { requireApiUser } from "@/lib/auth/guards";
-import { assertSameOrigin, fail, ok } from "@/lib/api";
+import { assertSameOrigin, handleError, ok } from "@/lib/api";
 import { sendDueReminderNotifications } from "@/lib/fees/engine";
 
 export async function POST(req: Request) {
@@ -29,6 +29,6 @@ export async function POST(req: Request) {
       ...res,
     });
   } catch (err) {
-    return fail(500, (err as Error).message);
+    return handleError(err);
   }
 }

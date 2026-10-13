@@ -2,7 +2,7 @@
 // Automated Absent & Fail Fine Synchronizer API
 
 import { requireApiUser } from "@/lib/auth/guards";
-import { assertSameOrigin, fail, ok } from "@/lib/api";
+import { assertSameOrigin, handleError, ok } from "@/lib/api";
 import { syncExamAbsentAndFailFines } from "@/lib/fees/engine";
 
 export async function POST(req: Request) {
@@ -29,6 +29,6 @@ export async function POST(req: Request) {
       ...result,
     });
   } catch (err) {
-    return fail(500, (err as Error).message);
+    return handleError(err);
   }
 }

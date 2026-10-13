@@ -25,6 +25,8 @@ import {
   X,
   FileText,
   UserCheck,
+  PiggyBank,
+  Coins,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,7 +106,8 @@ export function AdminFeesManager() {
   const [customNote, setCustomNote] = useState("");
   const [isSubmittingCustom, setIsSubmittingCustom] = useState(false);
 
-  // Payment form state
+  // Payment & Advance form state
+  const [paymentMode, setPaymentMode] = useState<"DUE" | "ADVANCE">("DUE");
   const [payStudentId, setPayStudentId] = useState("");
   const [payFeeItemId, setPayFeeItemId] = useState("");
   const [payAmount, setPayAmount] = useState("");
@@ -112,6 +115,10 @@ export function AdminFeesManager() {
   const [payMethod, setPayMethod] = useState("CASH");
   const [payTrxId, setPayTrxId] = useState("");
   const [payNote, setPayNote] = useState("");
+  const [advancePurposeType, setAdvancePurposeType] = useState("advance_monthly");
+  const [customAdvancePurpose, setCustomAdvancePurpose] = useState("");
+  const [advanceMonth, setAdvanceMonth] = useState(String(new Date().getMonth() + 1));
+  const [advanceYear, setAdvanceYear] = useState(String(new Date().getFullYear()));
   const [isSubmittingPay, setIsSubmittingPay] = useState(false);
 
   // Sync state
@@ -281,13 +288,26 @@ export function AdminFeesManager() {
     }
   };
 
-  // Submit payment
+  // Resolved advance purpose
+  const getResolvedAdvancePurpose = () => {
+    if (advancePurposeType === "advance_monthly") return "অগ্রিম মাসিক বেতন";
+    if (advancePurposeType === "excess_deposit") return "অতিরিক্ত জমা আমানত";
+    if (advancePurposeType === "exam_fee") return "ভবিষ্যৎ পরীক্ষার ফি বাবদ অগ্রিম";
+    if (advancePurposeType === "notes_sheet") return "নোটস ও শিটের অগ্রিম জমা";
+    return customAdvancePurpose.trim() || "অগ্রিম / অতিরিক্ত জমা";
+  };
+
+  // Submit payment or advance deposit
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payStudentId || !payAmount) {
       toast({ title: "সতর্কতা", description: "শিক্ষার্থী ও টাকার পরিমাণ দিন।", variant: "destructive" });
       return;
     }
+
+    const isAdv = paymentMode === "ADVANCE";
+    const resolvedPurpose = isAdv ? getResolvedAdvancePurpose() : null;
+
     try {
       setIsSubmittingPay(true);
       const res = await fetch("/api/admin/fees", {
@@ -296,17 +316,24 @@ export function AdminFeesManager() {
         body: JSON.stringify({
           action: "RECORD_PAYMENT",
           studentId: payStudentId,
-          feeItemId: payFeeItemId ? payFeeItemId : undefined,
+          feeItemId: !isAdv && payFeeItemId ? payFeeItemId : undefined,
           amountPaid: payAmount,
-          discount: payDiscount,
+          discount: !isAdv ? payDiscount : 0,
           paymentMethod: payMethod,
           transactionId: payTrxId,
           receiptNote: payNote,
+          isAdvance: isAdv,
+          advancePurpose: resolvedPurpose,
+          advanceMonth: isAdv && advanceMonth ? Number(advanceMonth) : undefined,
+          advanceYear: isAdv && advanceYear ? Number(advanceYear) : undefined,
         }),
       });
       const data = await res.json();
       if (data.ok) {
-        toast({ title: "পেমেন্ট সফল!", description: data.message });
+        toast({
+          title: isAdv ? "অগ্রিম জমা সম্পন্ন!" : "পেমেন্ট সফল!",
+          description: data.message,
+        });
         setIsPaymentModalOpen(false);
         const paidStudent = students.find((s) => String(s.id) === String(payStudentId));
         const invoiceNo = data.invoiceNo;
@@ -321,6 +348,7 @@ export function AdminFeesManager() {
         setPayDiscount("0");
         setPayNote("");
         setPayTrxId("");
+        setCustomAdvancePurpose("");
         await fetchData();
 
         // Switch to payments tab so user sees the newly recorded payment immediately
@@ -339,6 +367,9 @@ export function AdminFeesManager() {
             payment_date: new Date().toISOString(),
             collector_name: "অ্যাডমিন",
             receipt_note: currentNote,
+            is_advance: isAdv || data.isAdvance,
+            advance_purpose: resolvedPurpose,
+            advance_surplus: data.advanceSurplus || 0,
           });
           setIsReceiptModalOpen(true);
         }
@@ -352,11 +383,17 @@ export function AdminFeesManager() {
     }
   };
 
-  // Delete fee item
-  const handleDeleteItem = async (id: number) => {
-    if (!confirm("আপনি কি এই ফি রেকর্ডটি মুছে ফেলতে চান?")) return;
+  // Delete fee item (supports deleting mistakenly added or paid fee items)
+  const handleDeleteItem = async (item: any) => {
+    const isPaid = (Number(item.paid_amount) || 0) > 0;
+    const confirmMsg = isPaid
+      ? `আপনি কি নিশ্চিত যে এই ফি রেকর্ডটি (${item.title}, ${bn(item.amount)} ৳) মুছে ফেলতে চান?\n\nসতর্কতা: এতে ইতিমধ্যে আদায়কৃত পেমেন্ট (${bn(item.paid_amount)} ৳) এবং সংশ্লিষ্ট মানি রিসিটও স্বয়ংক্রিয়ভাবে মুছে যাবে।`
+      : `আপনি কি নিশ্চিত যে এই ফি রেকর্ডটি (${item.title}) মুছে ফেলতে চান?`;
+
+    if (!confirm(confirmMsg)) return;
+
     try {
-      const res = await fetch(`/api/admin/fees?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/fees?id=${item.id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.ok) {
         toast({ title: "মুছে ফেলা হয়েছে", description: data.message });
@@ -369,8 +406,28 @@ export function AdminFeesManager() {
     }
   };
 
+  // Delete / Cancel wrongly recorded payment
+  const handleDeletePayment = async (payment: any) => {
+    const confirmMsg = `আপনি কি নিশ্চিত যে মানি রিসিট নং ${payment.invoice_no} (${bn(payment.amount_paid)} ৳)-এর পেমেন্ট রেকর্ডটি মুছে ফেলতে চান?\n\nভুলবশত জমা হয়ে থাকলে এটি বাতিল করলে বকেয়া পুনর্নির্ধারণ করা হবে।`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch(`/api/admin/fees?type=payment&paymentId=${payment.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "পেমেন্ট বাতিল সম্পন্ন", description: data.message });
+        fetchData();
+      } else {
+        toast({ title: "ব্যর্থ", description: data.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "ত্রুটি", description: "পেমেন্ট বাতিল করতে সমস্যা হয়েছে।", variant: "destructive" });
+    }
+  };
+
   // Open payment for specific student item
   const openPayForItem = (item: any) => {
+    setPaymentMode("DUE");
     setPayStudentId(String(item.student_id));
     setPayFeeItemId(String(item.id));
     setPayAmount(String(item.due_amount));
@@ -397,6 +454,10 @@ export function AdminFeesManager() {
       (it) => String(it.student_id) === payStudentId && it.status !== "PAID"
     );
   }, [items, payStudentId]);
+
+  const totalSelectedStudentDue = useMemo(() => {
+    return selectedStudentPendingItems.reduce((acc, it) => acc + (Number(it.due_amount) || 0), 0);
+  }, [selectedStudentPendingItems]);
 
   return (
     <div className="space-y-6">
@@ -448,9 +509,10 @@ export function AdminFeesManager() {
             জরিমানা / নোটস যোগ
           </Button>
 
-          {/* Receive Payment Button */}
+          {/* Receive Due Payment Button */}
           <Button
             onClick={() => {
+              setPaymentMode("DUE");
               setPayStudentId("");
               setPayFeeItemId("");
               setPayAmount("");
@@ -459,7 +521,24 @@ export function AdminFeesManager() {
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs h-9 shadow-xs"
           >
             <Receipt className="mr-1.5 h-3.5 w-3.5" />
-            পেমেন্ট গ্রহণ / রসিদ
+            পেমেন্ট গ্রহণ / বকেয়া আদায়
+          </Button>
+
+          {/* Advance Deposit Option Button */}
+          <Button
+            onClick={() => {
+              setPaymentMode("ADVANCE");
+              setPayStudentId("");
+              setPayFeeItemId("");
+              setPayAmount("");
+              setAdvancePurposeType("advance_monthly");
+              setIsPaymentModalOpen(true);
+            }}
+            variant="outline"
+            className="border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-medium text-xs h-9 shadow-xs"
+          >
+            <PiggyBank className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+            অগ্রিম / অতিরিক্ত জমা
           </Button>
 
           {/* Send Due Notification Reminder Button */}
@@ -739,16 +818,15 @@ export function AdminFeesManager() {
                                 গ্রহণ
                               </Button>
                             )}
-                            {item.paid_amount === 0 && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteItem(item)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                              title="ফি রেকর্ডটি মুছে ফেলুন"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </td>
                         </tr>
                       );
@@ -775,7 +853,7 @@ export function AdminFeesManager() {
                     <th className="py-2.5 px-3 font-semibold">পেমেন্ট মাধ্যম</th>
                     <th className="py-2.5 px-3 font-semibold">তারিখ</th>
                     <th className="py-2.5 px-3 font-semibold">সংগ্রাহক</th>
-                    <th className="py-2.5 px-3 font-semibold text-right">রসিদ প্রিন্ট</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">অ্যাকশন</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -820,7 +898,7 @@ export function AdminFeesManager() {
                         <td className="py-2.5 px-3 text-slate-500">
                           {p.collector_name || "অ্যাডমিন"}
                         </td>
-                        <td className="py-2.5 px-3 text-right">
+                        <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
                           <Button
                             size="sm"
                             variant="outline"
@@ -829,9 +907,19 @@ export function AdminFeesManager() {
                               setIsReceiptModalOpen(true);
                             }}
                             className="h-7 px-2 text-[11px] border-blue-200 text-blue-700 hover:bg-blue-50"
+                            title="রসিদ প্রিন্ট করুন"
                           >
                             <Printer className="h-3 w-3 mr-1" />
                             রসিদ
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeletePayment(p)}
+                            className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                            title="ভুলবশত গৃহীত পেমেন্ট বাতিল / মুছে ফেলুন"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </td>
                       </tr>
@@ -1089,20 +1177,78 @@ export function AdminFeesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* 6. MODAL: Payment Collection */}
+      {/* 6. MODAL: Payment Collection & Advance Deposit */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-blue-600" />
-              পেমেন্ট গ্রহণ ও মানি রিসিট ইস্যু
+              {paymentMode === "ADVANCE" ? (
+                <>
+                  <PiggyBank className="h-4 w-4 text-emerald-600" />
+                  অগ্রিম / অতিরিক্ত জমা ও রসিদ
+                </>
+              ) : (
+                <>
+                  <Receipt className="h-4 w-4 text-blue-600" />
+                  পেমেন্ট গ্রহণ ও বকেয়া আদায়
+                </>
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              শিক্ষার্থীর বকেয়া ফি পরিশোধ গ্রহণ করে ডিজিটাল মানি রিসিট তৈরি করুন।
+              {paymentMode === "ADVANCE"
+                ? "বকেয়া ছাড়া আগেই পরিশোধিত টাকা বা ভবিষ্যতের জন্য অতিরিক্ত জমা আমানত হিসেবে রেকর্ড করুন।"
+                : "শিক্ষার্থীর বকেয়া ফি পরিশোধ গ্রহণ করে ডিজিটাল মানি রিসিট তৈরি করুন।"}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handlePaymentSubmit} className="space-y-3 py-2 text-xs">
+          {/* Mode Switcher Tabs */}
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMode("DUE");
+                setPayFeeItemId("");
+              }}
+              className={`py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                paymentMode === "DUE"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              বকেয়া আদায়
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMode("ADVANCE");
+                setPayFeeItemId("");
+              }}
+              className={`py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                paymentMode === "ADVANCE"
+                  ? "bg-white text-emerald-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <PiggyBank className="h-3.5 w-3.5" />
+              অগ্রিম / অতিরিক্ত জমা
+            </button>
+          </div>
+
+          <form onSubmit={handlePaymentSubmit} className="space-y-3 py-1 text-xs">
+            {/* Advance Mode Helper Banner */}
+            {paymentMode === "ADVANCE" && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-emerald-900 space-y-0.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
+                  <Coins className="h-3.5 w-3.5 text-emerald-600" />
+                  আলাদা অগ্রিম বা অতিরিক্ত জমা অপশন
+                </div>
+                <p className="text-[11px] text-emerald-700">
+                  শিক্ষার্থী বকেয়া ছাড়াই আগেই জমা দিয়ে থাকলে কিংবা অতিরিক্ত টাকা জমা রাখতে চাইলে এই স্লিপ ব্যবহার করুন।
+                </p>
+              </div>
+            )}
+
             <div>
               <Label className="text-xs">শিক্ষার্থী নির্বাচন</Label>
               <Select value={payStudentId} onValueChange={setPayStudentId}>
@@ -1119,39 +1265,156 @@ export function AdminFeesManager() {
               </Select>
             </div>
 
-            {/* If student selected, show pending dues */}
-            {selectedStudentPendingItems.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5">
-                <div className="text-[11px] font-semibold text-amber-800 mb-1.5">
-                  এই শিক্ষার্থীর বকেয়া ফি সমূহ ({bn(selectedStudentPendingItems.length)}টি):
-                </div>
-                <div className="max-h-28 overflow-y-auto space-y-1">
-                  {selectedStudentPendingItems.map((pi) => (
-                    <div
-                      key={pi.id}
-                      onClick={() => {
-                        setPayFeeItemId(String(pi.id));
-                        setPayAmount(String(pi.due_amount));
-                      }}
-                      className={`flex items-center justify-between p-1.5 rounded cursor-pointer text-[10px] ${
-                        payFeeItemId === String(pi.id)
-                          ? "bg-blue-100 border border-blue-300 font-semibold text-blue-900"
-                          : "bg-white hover:bg-slate-100 text-slate-700"
-                      }`}
-                    >
-                      <span className="truncate pr-2">{pi.title}</span>
-                      <span className="font-bold text-rose-600 whitespace-nowrap">
-                        {bn(pi.due_amount)} ৳
-                      </span>
+            {/* DUE MODE: If student selected, show pending dues or FALLBACK */}
+            {paymentMode === "DUE" && payStudentId && (
+              <>
+                {selectedStudentPendingItems.length > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-amber-900">
+                      <span>এই শিক্ষার্থীর বকেয়া ফি সমূহ ({bn(selectedStudentPendingItems.length)}টি):</span>
+                      <span className="font-bold text-rose-700">মোট বকেয়া: {bn(totalSelectedStudentDue)} ৳</span>
                     </div>
-                  ))}
-                </div>
-              </div>
+
+                    <div className="flex items-center justify-end pb-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayFeeItemId("");
+                          setPayAmount(String(totalSelectedStudentDue));
+                        }}
+                        className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded hover:bg-blue-100 font-semibold"
+                      >
+                        সম্পূর্ণ বকেয়া পরিশোধ ({bn(totalSelectedStudentDue)} ৳)
+                      </button>
+                    </div>
+
+                    <div className="max-h-28 overflow-y-auto space-y-1">
+                      {selectedStudentPendingItems.map((pi) => (
+                        <div
+                          key={pi.id}
+                          onClick={() => {
+                            setPayFeeItemId(String(pi.id));
+                            setPayAmount(String(pi.due_amount));
+                          }}
+                          className={`flex items-center justify-between p-1.5 rounded cursor-pointer text-[10px] ${
+                            payFeeItemId === String(pi.id)
+                              ? "bg-blue-100 border border-blue-300 font-semibold text-blue-900"
+                              : "bg-white hover:bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          <span className="truncate pr-2">{pi.title}</span>
+                          <span className="font-bold text-rose-600 whitespace-nowrap">
+                            {bn(pi.due_amount)} ৳
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Extra money notice if payAmount exceeds total due */}
+                    {Number(payAmount) > totalSelectedStudentDue && (
+                      <div className="rounded bg-indigo-50 border border-indigo-200 p-2 text-[10px] text-indigo-800 font-medium">
+                        ✓ বকেয়া {bn(totalSelectedStudentDue)} ৳ পরিশোধের পর অবশিষ্ট {bn(Number(payAmount) - totalSelectedStudentDue)} ৳ স্বয়ংক্রিয়ভাবে অতিরিক্ত অগ্রিম জমা হিসেবে অ্যাকাউন্টে সংরক্ষিত থাকবে।
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* FALLBACK: No dues for this student */
+                  <div className="rounded-lg border border-emerald-300 bg-emerald-50/90 p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-xs text-emerald-950">কোনো বকেয়া নেই! (সব পরিশোধিত)</div>
+                        <p className="text-[11px] text-emerald-800 mt-0.5">
+                          এই শিক্ষার্থীর বর্তমানে কোনো অপরিশোধিত ফি বা জরিমানা বকেয়া নেই।
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-[10px] text-emerald-900">
+                        শিক্ষার্থী যদি আগেই জমা দিয়ে থাকে বা অতিরিক্ত টাকা জমা রাখতে চান:
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setPaymentMode("ADVANCE");
+                          setAdvancePurposeType("advance_monthly");
+                        }}
+                        className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium shrink-0"
+                      >
+                        <PiggyBank className="h-3.5 w-3.5 mr-1" />
+                        অগ্রিম জমার অপশনে যান
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            {/* ADVANCE MODE: Advance Purpose & Month/Year */}
+            {paymentMode === "ADVANCE" && (
+              <>
+                <div>
+                  <Label className="text-xs">জমার উদ্দেশ্য / খাত</Label>
+                  <Select value={advancePurposeType} onValueChange={setAdvancePurposeType}>
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="advance_monthly">অগ্রিম মাসিক বেতন</SelectItem>
+                      <SelectItem value="excess_deposit">অতিরিক্ত টাকা জমা আমানত</SelectItem>
+                      <SelectItem value="exam_fee">ভবিষ্যৎ পরীক্ষার ফি বাবদ অগ্রিম</SelectItem>
+                      <SelectItem value="notes_sheet">নোটস ও শিটের অগ্রিম জমা</SelectItem>
+                      <SelectItem value="custom">অন্যান্য উদ্দেশ্য (কাস্টম)</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {advancePurposeType === "custom" && (
+                    <Input
+                      placeholder="উদ্দেশ্য লিখুন (যেমন: বিশেষ অগ্রিম ফি)"
+                      value={customAdvancePurpose}
+                      onChange={(e) => setCustomAdvancePurpose(e.target.value)}
+                      className="h-8 text-xs mt-1.5"
+                      required
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">অগ্রিম মাস (ঐচ্ছিক)</Label>
+                    <Select value={advanceMonth} onValueChange={setAdvanceMonth}>
+                      <SelectTrigger className="h-8 text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MONTHS_BN.map((m, idx) => (
+                          <SelectItem key={idx + 1} value={String(idx + 1)}>
+                            {m}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs">বছর</Label>
+                    <Input
+                      type="number"
+                      value={advanceYear}
+                      onChange={(e) => setAdvanceYear(e.target.value)}
+                      className="h-8 text-xs mt-1"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className={`grid ${paymentMode === "ADVANCE" ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
               <div>
-                <Label className="text-xs">পরিশোধিত টাকা (৳)</Label>
+                <Label className="text-xs">
+                  {paymentMode === "ADVANCE" ? "অগ্রিম জমার পরিমাণ (৳)" : "পরিশোধিত টাকা (৳)"}
+                </Label>
                 <Input
                   type="number"
                   placeholder="টাকার পরিমাণ"
@@ -1162,15 +1425,17 @@ export function AdminFeesManager() {
                 />
               </div>
 
-              <div>
-                <Label className="text-xs">ছাড় / ডিসকাউন্ট (৳)</Label>
-                <Input
-                  type="number"
-                  value={payDiscount}
-                  onChange={(e) => setPayDiscount(e.target.value)}
-                  className="h-8 text-xs mt-1"
-                />
-              </div>
+              {paymentMode === "DUE" && (
+                <div>
+                  <Label className="text-xs">ছাড় / ডিসকাউন্ট (৳)</Label>
+                  <Input
+                    type="number"
+                    value={payDiscount}
+                    onChange={(e) => setPayDiscount(e.target.value)}
+                    className="h-8 text-xs mt-1"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1205,7 +1470,7 @@ export function AdminFeesManager() {
             <div>
               <Label className="text-xs">রসিদ নোট / মন্তব্য (ঐচ্ছিক)</Label>
               <Input
-                placeholder="যেমন: অভিভাবকের মাধ্যমে পরিশোধ"
+                placeholder="যেমন: অভিভাবকের মাধ্যমে পরিশোধ / অগ্রিম জমা"
                 value={payNote}
                 onChange={(e) => setPayNote(e.target.value)}
                 className="h-8 text-xs mt-1"
@@ -1224,10 +1489,23 @@ export function AdminFeesManager() {
               <Button
                 type="submit"
                 size="sm"
-                disabled={isSubmittingPay}
-                className="bg-blue-600 text-white hover:bg-blue-700"
+                disabled={
+                  isSubmittingPay ||
+                  (paymentMode === "DUE" && payStudentId !== "" && selectedStudentPendingItems.length === 0)
+                }
+                className={
+                  paymentMode === "ADVANCE"
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }
               >
-                {isSubmittingPay ? "সংরক্ষণ হচ্ছে..." : "পেমেন্ট নিশ্চিত করুন"}
+                {isSubmittingPay
+                  ? "সংরক্ষণ হচ্ছে..."
+                  : paymentMode === "DUE" && payStudentId && selectedStudentPendingItems.length === 0
+                  ? "বকেয়া নেই (অগ্রিম অপশনে যান)"
+                  : paymentMode === "ADVANCE"
+                  ? "অগ্রিম জমা নিশ্চিত করুন"
+                  : "পেমেন্ট নিশ্চিত করুন"}
               </Button>
             </DialogFooter>
           </form>
@@ -1241,7 +1519,14 @@ export function AdminFeesManager() {
             <div className="space-y-4" id="printable-receipt">
               <div className="text-center border-b border-dashed border-slate-300 pb-3">
                 <h2 className="text-base font-bold text-slate-800">বিজ্ঞান পণ্ডিত একাডেমি</h2>
-                <p className="text-[10px] text-slate-500">অফিসিয়াল মানি রিসিট / পেমেন্ট স্লিপ</p>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                  <p className="text-[10px] text-slate-500">অফিসিয়াল মানি রিসিট / পেমেন্ট স্লিপ</p>
+                  {(selectedReceipt.is_advance || selectedReceipt.receipt_note?.includes("অগ্রিম")) && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[9px] font-bold border border-emerald-200">
+                      অগ্রিম / অতিরিক্ত জমা
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 font-mono text-[11px] font-semibold text-blue-700">
                   রসিদ নং: {selectedReceipt.invoice_no}
                 </div>
@@ -1258,6 +1543,12 @@ export function AdminFeesManager() {
                     রোল {bn(selectedReceipt.student_roll)}, {classLabel(selectedReceipt.class_name)}
                   </span>
                 </div>
+                {selectedReceipt.advance_purpose && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">জমার উদ্দেশ্য:</span>
+                    <span className="font-semibold text-emerald-700">{selectedReceipt.advance_purpose}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-500">তারিখ:</span>
                   <span>{selectedReceipt.payment_date}</span>
@@ -1272,17 +1563,29 @@ export function AdminFeesManager() {
                     <span>{selectedReceipt.transaction_id}</span>
                   </div>
                 )}
+                {selectedReceipt.receipt_note && (
+                  <div className="flex justify-between text-[11px] text-slate-600">
+                    <span className="text-slate-500">মন্তব্য:</span>
+                    <span>{selectedReceipt.receipt_note}</span>
+                  </div>
+                )}
               </div>
 
               <div className="rounded border border-slate-200 bg-slate-50 p-3 space-y-1 text-xs">
                 <div className="flex justify-between font-medium">
-                  <span>পরিশোধিত টাকা:</span>
+                  <span>পরিশোধিত / জমাকৃত টাকা:</span>
                   <span className="font-bold text-emerald-700">{bn(selectedReceipt.amount_paid)} ৳</span>
                 </div>
                 {selectedReceipt.discount > 0 && (
                   <div className="flex justify-between text-slate-500">
                     <span>বিশেষ ছাড়:</span>
                     <span>{bn(selectedReceipt.discount)} ৳</span>
+                  </div>
+                )}
+                {selectedReceipt.advance_surplus > 0 && (
+                  <div className="flex justify-between text-indigo-700 bg-indigo-50/80 p-1 rounded text-[11px]">
+                    <span>উদ্বৃত্ত অতিরিক্ত জমা হিসেবে সংরক্ষিত:</span>
+                    <span className="font-bold">{bn(selectedReceipt.advance_surplus)} ৳</span>
                   </div>
                 )}
               </div>

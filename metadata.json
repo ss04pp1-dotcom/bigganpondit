@@ -1,6 +1,6 @@
 {
-  "name": "Bigganpondit Academy",
-  "description": "বিজ্ঞান পণ্ডিত একাডেমি — নম্বর সংগ্রহক, শিক্ষার্থী ও ফলাফল ব্যবস্থাপনা সফটওয়্যার",
+  "name": "BigganPondit Academy",
+  "description": "বিজ্ঞান পণ্ডিত একাডেমি — পূর্ণাঙ্গ কোচিং ও একাডেমি ম্যানেজমেন্ট সিস্টেম, ক্লাস রুটিন, ব্যাচ ট্র্যাকিং ও রেজাল্ট পোর্টাল।",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

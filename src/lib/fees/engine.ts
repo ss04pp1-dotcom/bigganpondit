@@ -350,8 +350,12 @@ export async function recordFeePayment(
     receiptNote?: string | null;
     collectedBy?: number | null;
     collectorName?: string | null;
+    isAdvance?: boolean;
+    advancePurpose?: string | null;
+    advanceMonth?: number | null;
+    advanceYear?: number | null;
   }
-): Promise<{ invoiceNo: string; paidAmount: number; discount: number; paymentId: number; feeItemId?: number }> {
+): Promise<{ invoiceNo: string; paidAmount: number; discount: number; paymentId: number; feeItemId?: number; isAdvance?: boolean; advanceSurplus?: number }> {
   const discount = Math.max(0, Number(params.discount) || 0);
   const amountPaid = Math.max(0, Number(params.amountPaid) || 0);
   const totalCovered = amountPaid + discount;
@@ -362,10 +366,38 @@ export async function recordFeePayment(
 
   const invoiceNo = `BP-REC-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
   let linkedFeeItemId = params.feeItemId || null;
+  let surplusRemaining = 0;
 
-  // Allocate payment to fee items
-  if (params.feeItemId) {
-    // Specific fee item
+  // 1. If explicit advance deposit or extra payment
+  if (params.isAdvance) {
+    const purpose = params.advancePurpose?.trim() || "অগ্রিম / অতিরিক্ত জমা";
+    const currentMonth = params.advanceMonth || (new Date().getMonth() + 1);
+    const currentYear = params.advanceYear || new Date().getFullYear();
+    const itemTitle = `অগ্রিম জমা: ${purpose}`;
+
+    const insertItemRes = await db
+      .prepare(
+        `INSERT INTO fee_items (
+          student_id, category, title, amount, paid_amount, due_amount,
+          month, year, status, reference_note, created_by
+        ) VALUES (?, 'OTHER_FEE', ?, ?, ?, 0, ?, ?, 'PAID', ?, ?)`
+      )
+      .bind(
+        params.studentId,
+        itemTitle,
+        totalCovered,
+        totalCovered,
+        currentMonth,
+        currentYear,
+        `ADVANCE_DEPOSIT - মানি রিসিট: ${invoiceNo}`,
+        params.collectedBy || null
+      )
+      .run();
+
+    const createdItemId = Number((insertItemRes as any)?.meta?.last_row_id || 0);
+    linkedFeeItemId = createdItemId;
+  } else if (params.feeItemId) {
+    // 2. Specific fee item due settlement
     const item = await db
       .prepare(`SELECT id, amount, paid_amount, due_amount FROM fee_items WHERE id = ? AND student_id = ?`)
       .bind(params.feeItemId, params.studentId)
@@ -383,7 +415,7 @@ export async function recordFeePayment(
         .run();
     }
   } else {
-    // Auto-allocate across oldest pending fee items
+    // 3. Auto-allocate across oldest pending fee items
     let remaining = totalCovered;
     const pendingItems = (
       await db
@@ -412,8 +444,10 @@ export async function recordFeePayment(
       remaining -= alloc;
     }
 
+    surplusRemaining = remaining;
+
     // If student had no pending items or payment exceeded pending items,
-    // automatically create a paid fee_item representing this collected payment!
+    // automatically save excess as advance/surplus credit so money is not lost!
     if (remaining > 0) {
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
@@ -422,16 +456,16 @@ export async function recordFeePayment(
           `INSERT INTO fee_items (
             student_id, category, title, amount, paid_amount, due_amount,
             month, year, status, reference_note, created_by
-          ) VALUES (?, 'MONTHLY_FEE', ?, ?, ?, 0, ?, ?, 'PAID', ?, ?)`
+          ) VALUES (?, 'OTHER_FEE', ?, ?, ?, 0, ?, ?, 'PAID', ?, ?)`
         )
         .bind(
           params.studentId,
-          params.receiptNote ? `মাসিক বেতন / ফি পরিশোধ (${params.receiptNote})` : "মাসিক বেতন / ফি পরিশোধ",
+          params.receiptNote ? `অতিরিক্ত / অগ্রিম জমা (${params.receiptNote})` : "অতিরিক্ত / অগ্রিম জমা (উদ্বৃত্ত)",
           remaining,
           remaining,
           currentMonth,
           currentYear,
-          `মানি রিসিট: ${invoiceNo}`,
+          `ADVANCE_SURPLUS - মানি রিসিট: ${invoiceNo}`,
           params.collectedBy || null
         )
         .run();
@@ -443,7 +477,11 @@ export async function recordFeePayment(
     }
   }
 
-  // Record payment
+  // Record payment in ledger
+  const finalReceiptNote = params.isAdvance
+    ? (params.receiptNote ? `[অগ্রিম জমা] ${params.advancePurpose || 'অগ্রিম ফি'} - ${params.receiptNote}` : `[অগ্রিম জমা] ${params.advancePurpose || 'অগ্রিম ফি'}`)
+    : (params.receiptNote || null);
+
   const res = await db
     .prepare(
       `INSERT INTO fee_payments (
@@ -459,7 +497,7 @@ export async function recordFeePayment(
       discount,
       params.paymentMethod || "CASH",
       params.transactionId || null,
-      params.receiptNote || null,
+      finalReceiptNote,
       params.collectedBy || null,
       params.collectorName || "অ্যাডমিন"
     )
@@ -469,6 +507,15 @@ export async function recordFeePayment(
 
   // Auto-send payment receipt alert to student
   const student = await db.prepare(`SELECT name FROM students WHERE id = ?`).bind(params.studentId).first<{ name: string }>().catch(() => null);
+  let notifMsg: string;
+  if (params.isAdvance) {
+    notifMsg = `সম্মানিত ${student?.name || "শিক্ষার্থী"}, আপনার ${bn(amountPaid)} ৳ অগ্রিম / অতিরিক্ত জমা সফলভাবে গৃহীত হয়েছে (রসিদ নং: ${invoiceNo})। এই টাকা আপনার হিসেবে সংরক্ষিত থাকবে। ধন্যবাদ।`;
+  } else if (surplusRemaining > 0 && surplusRemaining < totalCovered) {
+    notifMsg = `সম্মানিত ${student?.name || "শিক্ষার্থী"}, আপনার বকেয়া পরিশোধ হয়েছে এবং অতিরিক্ত ${bn(surplusRemaining)} ৳ অগ্রিম জমা হিসেবে আপনার হিসেবে সংরক্ষিত রইল (রসিদ নং: ${invoiceNo})। মোট জমা: ${bn(amountPaid)} ৳। ধন্যবাদ।`;
+  } else {
+    notifMsg = `সম্মানিত ${student?.name || "শিক্ষার্থী"}, আপনার ${bn(amountPaid)} ৳ পেমেন্ট সফলভাবে জমা হয়েছে (রসিদ নং: ${invoiceNo})। ধন্যবাদ।`;
+  }
+
   await db
     .prepare(
       `INSERT INTO fee_notifications (student_id, title, message, total_due, sent_by, type)
@@ -476,7 +523,7 @@ export async function recordFeePayment(
     )
     .bind(
       params.studentId,
-      `সম্মানিত ${student?.name || "শিক্ষার্থী"}, আপনার ${bn(amountPaid)} ৳ পেমেন্ট সফলভাবে জমা হয়েছে (রসিদ নং: ${invoiceNo})। ধন্যবাদ।`,
+      notifMsg,
       params.collectedBy || null
     )
     .run()
@@ -488,6 +535,8 @@ export async function recordFeePayment(
     discount,
     paymentId,
     feeItemId: linkedFeeItemId || undefined,
+    isAdvance: Boolean(params.isAdvance),
+    advanceSurplus: surplusRemaining > 0 ? surplusRemaining : 0,
   };
 }
 

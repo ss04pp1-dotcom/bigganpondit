@@ -367,7 +367,16 @@ export function StudentFeesViewer() {
                       };
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-2.5 px-3 font-medium text-slate-800">{item.title}</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-800">
+                            <div className="flex items-center gap-1.5">
+                              <span>{item.title}</span>
+                              {(item.title?.includes("অগ্রিম") || item.reference_note?.includes("ADVANCE")) && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[9px] font-bold border border-emerald-200">
+                                  অগ্রিম জমা
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2.5 px-3">
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${catInfo.color}`}>
                               {catInfo.label}
@@ -420,7 +429,14 @@ export function StudentFeesViewer() {
                     summary.payments.map((p: any) => (
                       <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="py-2.5 px-3 font-mono font-semibold text-blue-700">
-                          {p.invoice_no}
+                          <div className="flex items-center gap-1.5">
+                            <span>{p.invoice_no}</span>
+                            {p.receipt_note?.includes("অগ্রিম") && (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[8px] font-bold border border-emerald-200">
+                                অগ্রিম
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                           {bn(p.amount_paid)} ৳
@@ -467,7 +483,14 @@ export function StudentFeesViewer() {
             <div className="space-y-4" id="printable-receipt">
               <div className="text-center border-b border-dashed border-slate-300 pb-3">
                 <h2 className="text-base font-bold text-slate-800">বিজ্ঞান পণ্ডিত একাডেমি</h2>
-                <p className="text-[10px] text-slate-500">অফিসিয়াল পেমেন্ট মানি রিসিট</p>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                  <p className="text-[10px] text-slate-500">অফিসিয়াল পেমেন্ট মানি রিসিট</p>
+                  {selectedReceipt.receipt_note?.includes("অগ্রিম") && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[9px] font-bold border border-emerald-200">
+                      অগ্রিম / অতিরিক্ত জমা
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 font-mono text-[11px] font-semibold text-blue-700">
                   রসিদ নং: {selectedReceipt.invoice_no}
                 </div>

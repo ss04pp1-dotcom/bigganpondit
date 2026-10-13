@@ -183,7 +183,7 @@ export async function POST(req: Request) {
     }
 
     if (action === "RECORD_PAYMENT") {
-      // Receive fee payment
+      // Receive fee payment or advance deposit
       const {
         studentId,
         feeItemId,
@@ -192,6 +192,10 @@ export async function POST(req: Request) {
         paymentMethod,
         transactionId,
         receiptNote,
+        isAdvance,
+        advancePurpose,
+        advanceMonth,
+        advanceYear,
       } = body;
 
       if (!studentId || !amountPaid || Number(amountPaid) <= 0) {
@@ -208,10 +212,16 @@ export async function POST(req: Request) {
         receiptNote: receiptNote?.trim() || null,
         collectedBy: user.id,
         collectorName: user.name || "অ্যাডমিন",
+        isAdvance: Boolean(isAdvance),
+        advancePurpose: advancePurpose?.trim() || null,
+        advanceMonth: advanceMonth ? Number(advanceMonth) : null,
+        advanceYear: advanceYear ? Number(advanceYear) : null,
       });
 
       return ok({
-        message: `পেমেন্ট সফলভাবে সংরক্ষণ করা হয়েছে। মানি রিসিট নং: ${res.invoiceNo}`,
+        message: isAdvance
+          ? `অগ্রিম / অতিরিক্ত জমা সফলভাবে সংরক্ষণ করা হয়েছে। মানি রিসিট নং: ${res.invoiceNo}`
+          : `পেমেন্ট সফলভাবে সংরক্ষণ করা হয়েছে। মানি রিসিট নং: ${res.invoiceNo}`,
         ...res,
       });
     }
@@ -284,8 +294,73 @@ export async function DELETE(req: Request) {
     assertSameOrigin(req);
     const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR"]);
     const url = new URL(req.url);
+    const type = url.searchParams.get("type");
+    const paymentId = url.searchParams.get("paymentId");
     const id = url.searchParams.get("id");
 
+    // 1. DELETE PAYMENT RECORD (ভুল পেমেন্ট বা মানি রিসিট বাতিল)
+    if (type === "payment" || paymentId) {
+      const pid = paymentId || id;
+      if (!pid) return fail(400, "পেমেন্ট আইডি প্রদান করুন।");
+
+      const payment = await db
+        .prepare(`SELECT * FROM fee_payments WHERE id = ?`)
+        .bind(pid)
+        .first<any>()
+        .catch(() => null);
+
+      if (!payment) return fail(404, "পেমেন্ট রেকর্ড পাওয়া যায়নি।");
+
+      // Revert/restore linked fee item
+      if (payment.fee_item_id) {
+        const item = await db
+          .prepare(`SELECT * FROM fee_items WHERE id = ?`)
+          .bind(payment.fee_item_id)
+          .first<any>()
+          .catch(() => null);
+
+        if (item) {
+          // If the item was created solely for advance deposit or surplus payment, delete the item as well
+          const isAdvanceOrSurplusItem =
+            (item.reference_note && item.reference_note.includes("ADVANCE")) ||
+            item.title.includes("অগ্রিম") ||
+            item.title.includes("উদ্বৃত্ত");
+
+          if (isAdvanceOrSurplusItem) {
+            await db.prepare(`DELETE FROM fee_items WHERE id = ?`).bind(item.id).run();
+          } else {
+            // Restore regular fee item's due amount
+            const totalToRevert = (Number(payment.amount_paid) || 0) + (Number(payment.discount) || 0);
+            const restoredPaid = Math.max(0, (Number(item.paid_amount) || 0) - totalToRevert);
+            const restoredDue = Math.max(0, (Number(item.amount) || 0) - restoredPaid);
+            const restoredStatus = restoredDue === 0 ? "PAID" : (restoredPaid > 0 ? "PARTIAL" : "PENDING");
+
+            await db
+              .prepare(`UPDATE fee_items SET paid_amount = ?, due_amount = ?, status = ?, updated_at = datetime('now') WHERE id = ?`)
+              .bind(restoredPaid, restoredDue, restoredStatus, item.id)
+              .run();
+          }
+        }
+      }
+
+      // Remove receipt confirmation notification if any
+      if (payment.invoice_no) {
+        await db
+          .prepare(`DELETE FROM fee_notifications WHERE student_id = ? AND message LIKE ?`)
+          .bind(payment.student_id, `%${payment.invoice_no}%`)
+          .run()
+          .catch(() => null);
+      }
+
+      // Delete payment row
+      await db.prepare(`DELETE FROM fee_payments WHERE id = ?`).bind(pid).run();
+
+      return ok({
+        message: `মানি রিসিট নং ${payment.invoice_no}-এর পেমেন্ট সফলভাবে বাতিল ও মুছে ফেলা হয়েছে।`,
+      });
+    }
+
+    // 2. DELETE FEE ITEM RECORD (ফি রেকর্ড মুছে ফেলা - পরিশোধিত হলেও মুছে ফেলা যাবে)
     if (!id) return fail(400, "আইডি প্রদান করুন।");
 
     const item = await db
@@ -296,13 +371,15 @@ export async function DELETE(req: Request) {
 
     if (!item) return fail(404, "ফি আইটেম পাওয়া যায়নি।");
 
+    // If item had payments, clean up associated fee_payments
     if (item.paid_amount > 0) {
-      return fail(400, "এই আইটেমে ইতিমধ্যে পেমেন্ট গ্রহণ করা হয়েছে, তাই এটি সরাসরি মোছা যাবে না।");
+      await db.prepare(`DELETE FROM fee_payments WHERE fee_item_id = ?`).bind(id).run();
     }
 
+    // Delete fee item
     await db.prepare(`DELETE FROM fee_items WHERE id = ?`).bind(id).run();
 
-    return ok({ message: "ফি রেকর্ড সফলভাবে মুছে ফেলা হয়েছে।" });
+    return ok({ message: "ফি রেকর্ড ও সংশ্লিষ্ট পেমেন্ট সফলভাবে মুছে ফেলা হয়েছে।" });
   } catch (err) {
     return handleError(err);
   }

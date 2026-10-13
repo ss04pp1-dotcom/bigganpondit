@@ -92,6 +92,7 @@ export function formatRoutineMessage(
   const teacherName = routine.teacher_name || "";
   const period = routine.period || "";
   const division = routine.division ? divisionLabel(routine.division) : "";
+  const batch = (routine as any).batch_name || "";
 
   return template
     .replace(/\{subject\}/g, subject || "")
@@ -101,7 +102,8 @@ export function formatRoutineMessage(
     .replace(/\{room_no\}/g, roomNo || "")
     .replace(/\{teacher_name\}/g, teacherName || "")
     .replace(/\{period\}/g, period || "")
-    .replace(/\{division\}/g, division || "");
+    .replace(/\{division\}/g, division || "")
+    .replace(/\{batch\}/g, batch || "");
 }
 
 /**

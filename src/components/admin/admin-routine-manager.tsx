@@ -72,12 +72,14 @@ export function AdminRoutineManager() {
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
   const [teachers, setTeachers] = useState<{ id: number; name: string; short_name: string }[]>([]);
   const [subjects, setSubjects] = useState<{ id: number; name: string; class_name: string; division: string | null }[]>([]);
+  const [batches, setBatches] = useState<{ id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"TABLE" | "GRID">("TABLE");
 
   // Filters
   const [filterDay, setFilterDay] = useState<string>("all");
   const [filterClass, setFilterClass] = useState<string>("all");
+  const [filterBatch, setFilterBatch] = useState<string>("all");
   const [filterTeacher, setFilterTeacher] = useState<string>("all");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -93,6 +95,8 @@ export function AdminRoutineManager() {
   const [formClass, setFormClass] = useState<string>("10");
   const [formDivision, setFormDivision] = useState<string>("SCIENCE");
   const [formSection, setFormSection] = useState<string>("ক");
+  const [formBatchId, setFormBatchId] = useState<string>("all");
+  const [formBatchName, setFormBatchName] = useState<string>("");
   const [formSubjectName, setFormSubjectName] = useState<string>("");
   const [formTeacherId, setFormTeacherId] = useState<string>("");
   const [formTeacherName, setFormTeacherName] = useState<string>("");
@@ -122,6 +126,14 @@ export function AdminRoutineManager() {
         setRoutines(json.routines || []);
         setTeachers(json.teachers || []);
         setSubjects(json.subjects || []);
+        if (json.batches) {
+          setBatches(json.batches);
+        } else {
+          // Fallback fetch batches
+          const bRes = await fetch("/api/batches").catch(() => null);
+          const bJson = await bRes?.json().catch(() => null);
+          if (bJson?.ok) setBatches(bJson.batches || []);
+        }
       }
     } catch (e) {
       toast({ title: "রুটিন লোড করতে ব্যর্থ হয়েছে", variant: "destructive" });
@@ -134,6 +146,15 @@ export function AdminRoutineManager() {
     loadData();
   }, []);
 
+  const availableBatchesForForm = useMemo(() => {
+    return batches.filter((b) => b.class_name === formClass);
+  }, [batches, formClass]);
+
+  const availableBatchesForFilter = useMemo(() => {
+    if (filterClass === "all") return batches;
+    return batches.filter((b) => b.class_name === filterClass);
+  }, [batches, filterClass]);
+
   const openAddModal = () => {
     setEditingId(null);
     setFormDay("6");
@@ -141,6 +162,8 @@ export function AdminRoutineManager() {
     setFormClass("10");
     setFormDivision("SCIENCE");
     setFormSection("ক");
+    setFormBatchId("all");
+    setFormBatchName("");
     setFormSubjectName("");
     setFormPeriod("১ম পিরিয়ড");
     setFormTeacherId(teachers[0]?.id ? String(teachers[0].id) : "");
@@ -160,6 +183,8 @@ export function AdminRoutineManager() {
     setFormClass(r.class_name);
     setFormDivision(r.division || "NONE");
     setFormSection(r.section || "");
+    setFormBatchId(r.batch_id ? String(r.batch_id) : "all");
+    setFormBatchName(r.batch_name || "");
     setFormSubjectName(r.subject_name);
     setFormPeriod(r.period || "১ম পিরিয়ড");
 
@@ -292,6 +317,8 @@ export function AdminRoutineManager() {
         className: formClass,
         division: formDivision === "NONE" ? null : formDivision,
         section: formSection.trim() || null,
+        batchId: formBatchId !== "all" ? parseInt(formBatchId, 10) : null,
+        batchName: formBatchName.trim() || null,
         subjectName: formSubjectName.trim(),
         teacherId: formTeacherId ? parseInt(formTeacherId, 10) : null,
         teacherName: formTeacherName.trim(),
@@ -351,6 +378,11 @@ export function AdminRoutineManager() {
     return routines.filter((r) => {
       if (filterDay !== "all" && String(r.day_of_week) !== filterDay) return false;
       if (filterClass !== "all" && r.class_name !== filterClass) return false;
+      if (filterBatch !== "all") {
+        const matchesId = r.batch_id && String(r.batch_id) === filterBatch;
+        const matchesName = r.batch_name && r.batch_name === filterBatch;
+        if (!matchesId && !matchesName) return false;
+      }
       if (filterTeacher !== "all" && String(r.teacher_id) !== filterTeacher) return false;
       if (filterPeriod !== "all") {
         if (r.period !== filterPeriod && !r.period?.includes(filterPeriod)) return false;
@@ -361,11 +393,12 @@ export function AdminRoutineManager() {
         const matchTea = r.teacher_name.toLowerCase().includes(q);
         const matchRoom = r.room_no?.toLowerCase().includes(q);
         const matchPeriod = r.period?.toLowerCase().includes(q);
-        if (!matchSub && !matchTea && !matchRoom && !matchPeriod) return false;
+        const matchBatch = r.batch_name?.toLowerCase().includes(q);
+        if (!matchSub && !matchTea && !matchRoom && !matchPeriod && !matchBatch) return false;
       }
       return true;
     });
-  }, [routines, filterDay, filterClass, filterTeacher, filterPeriod, searchQuery]);
+  }, [routines, filterDay, filterClass, filterBatch, filterTeacher, filterPeriod, searchQuery]);
 
   const todayDayOfWeek = getBangladeshDayOfWeek();
   const todayClassesCount = routines.filter((r) => r.day_of_week === todayDayOfWeek).length;
@@ -434,7 +467,7 @@ export function AdminRoutineManager() {
       {/* Filters Bar */}
       <Card className="border-slate-200 shadow-2xs">
         <CardContent className="p-4 sm:p-5 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
             {/* Filter Day */}
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-600 font-semibold">দিন নির্বাচন</Label>
@@ -456,7 +489,13 @@ export function AdminRoutineManager() {
             {/* Filter Class */}
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-600 font-semibold">শ্রেণী নির্বাচন</Label>
-              <Select value={filterClass} onValueChange={setFilterClass}>
+              <Select
+                value={filterClass}
+                onValueChange={(val) => {
+                  setFilterClass(val);
+                  setFilterBatch("all");
+                }}
+              >
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="সব শ্রেণী" />
                 </SelectTrigger>
@@ -465,6 +504,33 @@ export function AdminRoutineManager() {
                   {CLASS_NUMBERS.map((c) => (
                     <SelectItem key={c} value={c}>
                       {classLabel(c)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filter Batch (Under Selected Class) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-slate-600 font-semibold">ব্যাচ ফিল্টার</Label>
+                {filterClass !== "all" && (
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {availableBatchesForFilter.length > 0 ? `${bn(availableBatchesForFilter.length)}টি` : "নাই"}
+                  </span>
+                )}
+              </div>
+              <Select value={filterBatch} onValueChange={setFilterBatch}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="সকল ব্যাচ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {filterClass !== "all" ? `সকল ব্যাচ (${classLabel(filterClass)})` : "সকল ব্যাচ (উন্মুক্ত)"}
+                  </SelectItem>
+                  {availableBatchesForFilter.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name} {filterClass === "all" ? `(${classLabel(b.class_name)})` : ""} {b.time_slot ? `[${b.time_slot}]` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -584,7 +650,7 @@ export function AdminRoutineManager() {
                 <tr>
                   <th className="px-4 py-3">বার / দিন</th>
                   <th className="px-4 py-3">সময়সূচি</th>
-                  <th className="px-4 py-3">শ্রেণী ও শাখা</th>
+                  <th className="px-4 py-3">শ্রেণী, শাখা ও ব্যাচ</th>
                   <th className="px-4 py-3">বিষয়</th>
                   <th className="px-4 py-3">শিক্ষক</th>
                   <th className="px-4 py-3">কক্ষ / রুম</th>
@@ -618,15 +684,24 @@ export function AdminRoutineManager() {
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          <span className="font-bold text-slate-800">{classLabel(r.class_name)}</span>
-                          {r.division && (
-                            <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-600">
-                              {r.division === "SCIENCE" ? "বিজ্ঞান" : "মানবিক"}
+                        <div className="flex flex-col gap-1 items-start">
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-slate-800">{classLabel(r.class_name)}</span>
+                            {r.division && (
+                              <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-600">
+                                {r.division === "SCIENCE" ? "বিজ্ঞান" : "মানবিক"}
+                              </Badge>
+                            )}
+                            {r.section && (
+                              <span className="text-slate-500 text-[11px]">({r.section})</span>
+                            )}
+                          </div>
+                          {r.batch_name ? (
+                            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                              ব্যাচ: {r.batch_name}
                             </Badge>
-                          )}
-                          {r.section && (
-                            <span className="text-slate-500 text-[11px]">({r.section})</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">সকল ব্যাচ</span>
                           )}
                         </div>
                       </td>
@@ -745,7 +820,14 @@ export function AdminRoutineManager() {
                         >
                           <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
                             <span className="font-bold text-slate-800">{r.start_time} - {r.end_time}</span>
-                            <span className="font-semibold text-indigo-700">{classLabel(r.class_name)}</span>
+                            <div className="flex items-center gap-1 font-sans">
+                              <span className="font-semibold text-indigo-700">{classLabel(r.class_name)}</span>
+                              {r.batch_name && (
+                                <Badge variant="outline" className="text-[9px] py-0 px-1 bg-purple-50 text-purple-700 border-purple-200">
+                                  {r.batch_name}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
                             <span>{r.subject_name}</span>
@@ -892,7 +974,14 @@ export function AdminRoutineManager() {
               {/* Class */}
               <div className={`space-y-1.5 ${!editingId ? "col-span-2 sm:col-span-1" : ""}`}>
                 <Label className="text-xs font-semibold text-slate-700">শ্রেণী *</Label>
-                <Select value={formClass} onValueChange={setFormClass}>
+                <Select
+                  value={formClass}
+                  onValueChange={(val) => {
+                    setFormClass(val);
+                    setFormBatchId("all");
+                    setFormBatchName("");
+                  }}
+                >
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -932,6 +1021,47 @@ export function AdminRoutineManager() {
                   className="h-9 text-xs"
                 />
               </div>
+            </div>
+
+            {/* Batch Selector (Scoped to Class) */}
+            <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-800">
+                  ব্যাচ নির্বাচন ({classLabel(formClass)})
+                </Label>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {availableBatchesForForm.length > 0
+                    ? `${bn(availableBatchesForForm.length)}টি ব্যাচ বিদ্যমান`
+                    : "এই শ্রেণিতে ব্যাচ নেই"}
+                </span>
+              </div>
+              <Select
+                value={formBatchId}
+                onValueChange={(val) => {
+                  setFormBatchId(val);
+                  if (val === "all") {
+                    setFormBatchName("");
+                  } else {
+                    const found = batches.find((b) => String(b.id) === val);
+                    setFormBatchName(found ? found.name : "");
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs bg-white">
+                  <SelectValue placeholder="সকল ব্যাচ (উন্মুক্ত)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">সকল ব্যাচ (উন্মুক্ত / সাধারণ ক্লাস)</SelectItem>
+                  {availableBatchesForForm.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.name} {b.time_slot ? `— (${b.time_slot})` : ""} {b.division ? `[${b.division === "SCIENCE" ? "বিজ্ঞান" : "মানবিক"}]` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-slate-500">
+                💡 নির্দিষ্ট ব্যাচ নির্বাচন করলে রুটিনটি শুধুমাত্র সেই ব্যাচের জন্য প্রযোজ্য হবে। &quot;সকল ব্যাচ&quot; রাখলে শ্রেণির সকল শিক্ষার্থী দেখতে পাবে।
+              </p>
             </div>
 
             {/* Subject */}

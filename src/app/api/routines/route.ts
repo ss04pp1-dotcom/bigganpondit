@@ -13,6 +13,8 @@ export interface RoutineRow {
   class_name: string;
   division: string | null;
   section: string | null;
+  batch_id?: number | null;
+  batch_name?: string | null;
   subject_id: number | null;
   subject_name: string;
   teacher_id: number | null;
@@ -64,19 +66,29 @@ export async function GET(req: NextRequest) {
     let studentDivision: string | null = null;
     let studentSection: string | null = null;
     let studentRoll: number | null = null;
+    let studentBatchId: number | null = null;
+    let studentBatchName: string | null = null;
     let teacherId: number | null = null;
     let teacherShortName: string | null = null;
 
     if (user.role === "STUDENT") {
       const st = await db
         .prepare(
-          `SELECT s.id, c.name as class_name, s.division, s.section, s.roll
+          `SELECT s.id, c.name as class_name, s.division, s.section, s.roll, s.batch_id, s.batch_name
            FROM students s
            JOIN classes c ON c.id = s.class_id
            WHERE s.user_id = ?`
         )
         .bind(user.id)
-        .first<{ id: number; class_name: string; division: string | null; section: string | null; roll: number | null }>()
+        .first<{
+          id: number;
+          class_name: string;
+          division: string | null;
+          section: string | null;
+          roll: number | null;
+          batch_id: number | null;
+          batch_name: string | null;
+        }>()
         .catch(() => null);
 
       if (st) {
@@ -84,6 +96,8 @@ export async function GET(req: NextRequest) {
         studentDivision = st.division;
         studentSection = st.section;
         studentRoll = st.roll;
+        studentBatchId = st.batch_id;
+        studentBatchName = st.batch_name;
       } else {
         // Student has no assigned class: return empty routine
         return NextResponse.json({
@@ -98,9 +112,12 @@ export async function GET(req: NextRequest) {
             studentDivision: null,
             studentSection: null,
             studentRoll: null,
+            studentBatchId: null,
+            studentBatchName: null,
           },
           teachers: [],
           subjects: [],
+          batches: [],
         });
       }
     } else if (user.role === "TEACHER") {
@@ -162,6 +179,10 @@ export async function GET(req: NextRequest) {
         sql += ` AND (r.section IS NULL OR r.section = '' OR r.section = ?)`;
         params.push(studentSection);
       }
+      if (studentBatchId || studentBatchName) {
+        sql += ` AND (r.batch_id IS NULL OR r.batch_id = 0 OR r.batch_id = ? OR r.batch_name IS NULL OR r.batch_name = '' OR r.batch_name = ?)`;
+        params.push(studentBatchId || 0, studentBatchName || "");
+      }
     }
     // 2. Teacher can NEVER see other teachers' routines
     else if (user.role === "TEACHER") {
@@ -180,6 +201,8 @@ export async function GET(req: NextRequest) {
     else if (user.role === "ADMIN" || user.role === "DIRECTOR") {
       const classParam = searchParams.get("class");
       const divisionParam = searchParams.get("division");
+      const batchIdParam = searchParams.get("batchId") || searchParams.get("batch_id");
+      const batchParam = searchParams.get("batch");
       const teacherIdParam = searchParams.get("teacherId");
 
       if (classParam && classParam !== "all") {
@@ -189,6 +212,17 @@ export async function GET(req: NextRequest) {
           sql += ` AND (r.division IS NULL OR r.division = '' OR r.division = ?)`;
           params.push(divisionParam);
         }
+      }
+
+      if (batchIdParam && batchIdParam !== "all") {
+        const bid = parseInt(batchIdParam, 10);
+        if (!isNaN(bid) && bid > 0) {
+          sql += ` AND r.batch_id = ?`;
+          params.push(bid);
+        }
+      } else if (batchParam && batchParam !== "all") {
+        sql += ` AND (r.batch_name = ? OR r.batch_id = ?)`;
+        params.push(batchParam, isNaN(Number(batchParam)) ? -1 : Number(batchParam));
       }
 
       if (teacherIdParam && teacherIdParam !== "all") {
@@ -209,9 +243,32 @@ export async function GET(req: NextRequest) {
       ? (await stmt.bind(...params).all<RoutineRow>()).results
       : (await stmt.all<RoutineRow>()).results;
 
-    // Teachers & subjects directory
+    // Teachers, subjects & batches directory
     let teachersList: any[] = [];
     let subjectsList: any[] = [];
+    let batchesList: any[] = [];
+
+    // Load active batches list for filtering and form selection
+    batchesList = (
+      await db
+        .prepare(
+          `SELECT b.id, b.name, b.class_id, c.name as class_name, b.division, b.time_slot, b.room_no
+           FROM batches b
+           JOIN classes c ON c.id = b.class_id
+           WHERE b.is_active = 1
+           ORDER BY c.sort_order DESC, b.name ASC`
+        )
+        .all<{
+          id: number;
+          name: string;
+          class_id: number;
+          class_name: string;
+          division: string | null;
+          time_slot: string | null;
+          room_no: string | null;
+        }>()
+        .catch(() => ({ results: [] }))
+    ).results;
 
     if (user.role === "ADMIN" || user.role === "DIRECTOR") {
       teachersList = (
@@ -260,11 +317,14 @@ export async function GET(req: NextRequest) {
         studentDivision,
         studentSection,
         studentRoll,
+        studentBatchId,
+        studentBatchName,
         teacherId,
         teacherShortName,
       },
       teachers: teachersList || [],
       subjects: subjectsList || [],
+      batches: batchesList || [],
     });
   } catch (err: any) {
     console.error("GET /api/routines error:", err);
@@ -285,6 +345,8 @@ export async function POST(req: NextRequest) {
       className,
       division = null,
       section = null,
+      batchId = null,
+      batchName = null,
       subjectId = null,
       subjectName,
       teacherId = null,
@@ -350,10 +412,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Resolve batch info
+    let finalBatchId = batchId && Number(batchId) > 0 ? Number(batchId) : null;
+    let finalBatchName = batchName && String(batchName).trim() && String(batchName) !== "all" && String(batchName) !== "NONE" ? String(batchName).trim() : null;
+
+    if (finalBatchId && !finalBatchName) {
+      const bRow = await db
+        .prepare("SELECT name FROM batches WHERE id = ?")
+        .bind(finalBatchId)
+        .first<{ name: string }>()
+        .catch(() => null);
+      if (bRow) finalBatchName = bRow.name;
+    } else if (!finalBatchId && finalBatchName) {
+      const bRow = await db
+        .prepare("SELECT b.id FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = ? AND b.name = ? LIMIT 1")
+        .bind(String(className), finalBatchName)
+        .first<{ id: number }>()
+        .catch(() => null);
+      if (bRow) finalBatchId = bRow.id;
+    }
+
     const insertStmt = db.prepare(
       `INSERT INTO routines 
-       (day_of_week, class_name, division, section, subject_id, subject_name, teacher_id, teacher_name, period, start_time, end_time, room_no, note, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (day_of_week, class_name, division, section, batch_id, batch_name, subject_id, subject_name, teacher_id, teacher_name, period, start_time, end_time, room_no, note, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     let firstInsertId = 0;
@@ -364,6 +446,8 @@ export async function POST(req: NextRequest) {
           String(className),
           division || null,
           section || null,
+          finalBatchId,
+          finalBatchName,
           subjectId ? Number(subjectId) : null,
           subjectName.trim(),
           finalTeacherId,
@@ -408,6 +492,8 @@ export async function PUT(req: NextRequest) {
       className,
       division = null,
       section = null,
+      batchId = null,
+      batchName = null,
       subjectId = null,
       subjectName,
       teacherId = null,
@@ -438,10 +524,31 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // Resolve batch info
+    let finalBatchId = batchId && Number(batchId) > 0 ? Number(batchId) : null;
+    let finalBatchName = batchName && String(batchName).trim() && String(batchName) !== "all" && String(batchName) !== "NONE" ? String(batchName).trim() : null;
+
+    if (finalBatchId && !finalBatchName) {
+      const bRow = await db
+        .prepare("SELECT name FROM batches WHERE id = ?")
+        .bind(finalBatchId)
+        .first<{ name: string }>()
+        .catch(() => null);
+      if (bRow) finalBatchName = bRow.name;
+    } else if (!finalBatchId && finalBatchName) {
+      const bRow = await db
+        .prepare("SELECT b.id FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = ? AND b.name = ? LIMIT 1")
+        .bind(String(className), finalBatchName)
+        .first<{ id: number }>()
+        .catch(() => null);
+      if (bRow) finalBatchId = bRow.id;
+    }
+
     await db
       .prepare(
         `UPDATE routines
          SET day_of_week = ?, class_name = ?, division = ?, section = ?,
+             batch_id = ?, batch_name = ?,
              subject_id = ?, subject_name = ?, teacher_id = ?, teacher_name = ?,
              period = ?, start_time = ?, end_time = ?, room_no = ?, note = ?, is_active = ?,
              updated_at = datetime('now')
@@ -452,6 +559,8 @@ export async function PUT(req: NextRequest) {
         String(className),
         division || null,
         section || null,
+        finalBatchId,
+        finalBatchName,
         subjectId ? Number(subjectId) : null,
         subjectName.trim(),
         finalTeacherId,

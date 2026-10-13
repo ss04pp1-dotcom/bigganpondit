@@ -54,6 +54,8 @@ export interface RoutineItem {
   class_name: string;
   division: string | null;
   section: string | null;
+  batch_id?: number | null;
+  batch_name?: string | null;
   subject_id: number | null;
   subject_name: string;
   teacher_id: number | null;
@@ -80,10 +82,13 @@ interface RoutineApiResponse {
     studentDivision?: string | null;
     studentSection?: string | null;
     studentRoll?: number | null;
+    studentBatchId?: number | null;
+    studentBatchName?: string | null;
     teacherId?: number | null;
     teacherShortName?: string | null;
   };
   teachers: { id: number; user_id?: number; name: string; short_name: string; photo_key?: string | null }[];
+  batches?: { id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null }[];
 }
 
 function parseTimeToMinutes(timeStr: string): number | null {
@@ -520,6 +525,11 @@ export function TodayRoutineModal({
                                 {routine.period && (
                                   <Badge variant="outline" className="text-[10px] font-bold bg-amber-50 text-amber-800 border-amber-200">
                                     {routine.period}
+                                  </Badge>
+                                )}
+                                {routine.batch_name && (
+                                  <Badge variant="outline" className="text-[10px] font-semibold bg-violet-50 text-violet-700 border-violet-200">
+                                    ব্যাচ: {routine.batch_name}
                                   </Badge>
                                 )}
                               </div>

@@ -69,12 +69,16 @@ export function RoutineViewer({
   const [teachers, setTeachers] = useState<
     { id: number; name: string; short_name: string; photo_key?: string | null }[]
   >([]);
+  const [batches, setBatches] = useState<
+    { id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [selectedDay, setSelectedDay] = useState<string>("today"); // 'today' | 'all' | '0'-'6'
   const [selectedClass, setSelectedClass] = useState<string>("all");
+  const [selectedBatch, setSelectedBatch] = useState<string>("all");
   const [selectedDivision, setSelectedDivision] = useState<string>("all");
   const [selectedTeacher, setSelectedTeacher] = useState<string>("all");
 
@@ -86,6 +90,8 @@ export function RoutineViewer({
     studentDivision?: string | null;
     studentSection?: string | null;
     studentRoll?: number | null;
+    studentBatchId?: number | null;
+    studentBatchName?: string | null;
     teacherId?: number | null;
     teacherShortName?: string | null;
   } | null>(null);
@@ -110,6 +116,13 @@ export function RoutineViewer({
           setRoutines(json.routines || []);
           setTeachers(json.teachers || []);
           setUserContext(json.userContext || null);
+          if (json.batches) {
+            setBatches(json.batches);
+          } else {
+            const bRes = await fetch("/api/batches").catch(() => null);
+            const bJson = await bRes?.json().catch(() => null);
+            if (bJson?.ok) setBatches(bJson.batches || []);
+          }
         } else {
           setError(json.error || "রুটিন লোড করা যায়নি।");
         }
@@ -136,6 +149,12 @@ export function RoutineViewer({
       ? null
       : parseInt(selectedDay, 10);
 
+  // Batches available under selected class
+  const availableBatches = useMemo(() => {
+    if (selectedClass === "all") return batches;
+    return batches.filter((b) => b.class_name === selectedClass);
+  }, [batches, selectedClass]);
+
   // Class filtering logic
   const filtered = useMemo(() => {
     return routines.filter((r) => {
@@ -144,7 +163,7 @@ export function RoutineViewer({
         return false;
       }
 
-      // 2. Student Role scoping (strictly locked to student's class)
+      // 2. Student Role scoping (strictly locked to student's class and batch)
       if (isStudent) {
         if (userContext?.studentClass && r.class_name !== userContext.studentClass) {
           return false;
@@ -162,6 +181,13 @@ export function RoutineViewer({
           r.section !== userContext.studentSection
         ) {
           return false;
+        }
+        if (userContext?.studentBatchId || userContext?.studentBatchName) {
+          const isCommon = !r.batch_id && !r.batch_name;
+          const isMyBatch =
+            (r.batch_id && r.batch_id === userContext.studentBatchId) ||
+            (r.batch_name && r.batch_name === userContext.studentBatchName);
+          if (!isCommon && !isMyBatch) return false;
         }
         return true;
       }
@@ -189,6 +215,11 @@ export function RoutineViewer({
       if (isDirector || isAdmin) {
         if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
         if (selectedDivision !== "all" && r.division && r.division !== selectedDivision) return false;
+        if (selectedBatch !== "all") {
+          const matchesId = r.batch_id && String(r.batch_id) === selectedBatch;
+          const matchesName = r.batch_name && r.batch_name === selectedBatch;
+          if (!matchesId && !matchesName) return false;
+        }
         if (selectedTeacher !== "all") {
           const tid = parseInt(selectedTeacher, 10);
           if (!isNaN(tid)) {
@@ -216,6 +247,7 @@ export function RoutineViewer({
     isDirector,
     isAdmin,
     selectedClass,
+    selectedBatch,
     selectedDivision,
     selectedTeacher,
     userContext,
@@ -339,6 +371,7 @@ export function RoutineViewer({
                 {userContext.studentDivision ? ` (${divisionLabel(userContext.studentDivision)})` : ""}
                 {userContext.studentSection ? ` • শাখা: ${userContext.studentSection}` : ""}
                 {userContext.studentRoll ? ` • রোল: ${bn(userContext.studentRoll)}` : ""}
+                {userContext.studentBatchName ? ` • ব্যাচ: ${userContext.studentBatchName}` : ""}
               </p>
             </div>
           </div>
@@ -464,7 +497,13 @@ export function RoutineViewer({
             <div className="flex flex-wrap items-center gap-2.5">
               {/* Class Filter */}
               <div className="w-[145px]">
-                <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <Select
+                  value={selectedClass}
+                  onValueChange={(val) => {
+                    setSelectedClass(val);
+                    setSelectedBatch("all");
+                  }}
+                >
                   <SelectTrigger className="h-9 text-xs">
                     <SelectValue placeholder="সব শ্রেণি" />
                   </SelectTrigger>
@@ -473,6 +512,25 @@ export function RoutineViewer({
                     {CLASS_NUMBERS.map((c) => (
                       <SelectItem key={c} value={c}>
                         {classLabel(c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Batch Filter (Under Selected Class) */}
+              <div className="w-[160px]">
+                <Select value={selectedBatch} onValueChange={setSelectedBatch}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="সকল ব্যাচ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {selectedClass !== "all" ? `সকল ব্যাচ (${classLabel(selectedClass)})` : "সকল ব্যাচ (উন্মুক্ত)"}
+                    </SelectItem>
+                    {availableBatches.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name} {selectedClass === "all" ? `(${classLabel(b.class_name)})` : ""} {b.time_slot ? `[${b.time_slot}]` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -518,6 +576,7 @@ export function RoutineViewer({
                 onClick={() => {
                   setSelectedDay("today");
                   setSelectedClass("all");
+                  setSelectedBatch("all");
                   setSelectedDivision("all");
                   setSelectedTeacher("all");
                 }}
@@ -664,6 +723,14 @@ export function RoutineViewer({
                         <span className="text-[11px] text-slate-500 font-medium bg-slate-50 border border-slate-200 px-1.5 py-0.2 rounded">
                           শাখা: {r.section}
                         </span>
+                      )}
+                      {r.batch_name && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-semibold bg-violet-50 text-violet-700 border-violet-200"
+                        >
+                          ব্যাচ: {r.batch_name}
+                        </Badge>
                       )}
                     </div>
                   </div>

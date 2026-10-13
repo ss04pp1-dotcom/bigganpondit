@@ -218,11 +218,14 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         "note TEXT",
         "section TEXT",
         "division TEXT",
+        "batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL",
+        "batch_name TEXT",
         "is_active INTEGER NOT NULL DEFAULT 1",
       ];
       for (const colDef of routineColsToAdd) {
         await db.prepare(`ALTER TABLE routines ADD COLUMN ${colDef}`).run().catch(() => null);
       }
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_routines_batch ON routines(batch_id)`).run().catch(() => null);
 
       await db.prepare("ALTER TABLE exams ADD COLUMN exam_type TEXT DEFAULT 'MONTHLY'").run().catch(() => null);
       await db.prepare("ALTER TABLE directors ADD COLUMN updated_at TEXT").run().catch(() => null);
@@ -609,6 +612,8 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         class_name   TEXT NOT NULL,
         division     TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
         section      TEXT,
+        batch_id     INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+        batch_name   TEXT,
         subject_id   INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
         subject_name TEXT NOT NULL,
         teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
@@ -624,10 +629,13 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       );
       CREATE INDEX IF NOT EXISTS idx_routines_day_class ON routines(day_of_week, class_name);
       CREATE INDEX IF NOT EXISTS idx_routines_teacher ON routines(teacher_id);
+      CREATE INDEX IF NOT EXISTS idx_routines_batch ON routines(batch_id);
     `,
     "routines"
   );
   await execSchemaStep(db, `ALTER TABLE routines ADD COLUMN period TEXT;`, "routines.period");
+  await execSchemaStep(db, `ALTER TABLE routines ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL;`, "routines.batch_id");
+  await execSchemaStep(db, `ALTER TABLE routines ADD COLUMN batch_name TEXT;`, "routines.batch_name");
 
   // Student monthly comments
   await execSchemaStep(

@@ -418,6 +418,15 @@ async function ensureRoutines(db: D1Database) {
   const idRI = tRI?.id ?? null;
   const idMH = tMH?.id ?? null;
 
+  const b10Morning = await db
+    .prepare("SELECT b.id, b.name FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = '10' AND b.name = 'সকাল ব্যাচ'")
+    .first<{ id: number; name: string }>()
+    .catch(() => null);
+  const b10Evening = await db
+    .prepare("SELECT b.id, b.name FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = '10' AND b.name = 'সন্ধ্যা ব্যাচ'")
+    .first<{ id: number; name: string }>()
+    .catch(() => null);
+
   // Days: 6 (শনিবার), 0 (রবিবার), 1 (সোমবার), 2 (মঙ্গলবার), 3 (বুধবার), 4 (বৃহস্পতিবার)
   const days = [6, 0, 1, 2, 3, 4];
   const stmts: import("./types").D1PreparedStatement[] = [];
@@ -425,18 +434,18 @@ async function ensureRoutines(db: D1Database) {
   for (const day of days) {
     // Class 10 (Science)
     stmts.push(
-      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
-                  VALUES (?, '10', 'SCIENCE', 'ক', 'পদার্থবিজ্ঞান', ?, ?, '10:00 AM', '11:00 AM', 'বিজ্ঞান ল্যাব', 'অধ্যায় ভিত্তিক তত্ত্ব ও প্রয়োগ')`)
-        .bind(day, idMH, nameMH),
-      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
-                  VALUES (?, '10', 'SCIENCE', 'ক', 'রসায়ন', ?, ?, '11:05 AM', '12:05 PM', 'রুম ১০১', 'মডেল টেস্ট প্রস্তুতি')`)
-        .bind(day, idRI, nameRI),
-      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
-                  VALUES (?, '10', 'SCIENCE', 'ক', 'উচ্চতর গণিত', ?, ?, '02:00 PM', '03:00 PM', 'রুম ১০১', 'সমস্যা সমাধান ক্লাস')`)
-        .bind(day, idMH, nameMH),
-      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
-                  VALUES (?, '10', 'SCIENCE', 'ক', 'জীববিজ্ঞান', ?, ?, '03:05 PM', '04:05 PM', 'রুম ১০২', 'চিত্রাঙ্কন ও আলোচনা')`)
-        .bind(day, idRI, nameRI),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, batch_id, batch_name, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', ?, ?, 'পদার্থবিজ্ঞান', ?, ?, '10:00 AM', '11:00 AM', 'বিজ্ঞান ল্যাব', 'অধ্যায় ভিত্তিক তত্ত্ব ও প্রয়োগ')`)
+        .bind(day, b10Morning?.id ?? null, b10Morning?.name ?? "সকাল ব্যাচ", idMH, nameMH),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, batch_id, batch_name, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', ?, ?, 'রসায়ন', ?, ?, '11:05 AM', '12:05 PM', 'রুম ১০১', 'মডেল টেস্ট প্রস্তুতি')`)
+        .bind(day, b10Morning?.id ?? null, b10Morning?.name ?? "সকাল ব্যাচ", idRI, nameRI),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, batch_id, batch_name, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', ?, ?, 'উচ্চতর গণিত', ?, ?, '02:00 PM', '03:00 PM', 'রুম ১০১', 'সমস্যা সমাধান ক্লাস')`)
+        .bind(day, b10Evening?.id ?? null, b10Evening?.name ?? "সন্ধ্যা ব্যাচ", idMH, nameMH),
+      db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, batch_id, batch_name, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)
+                  VALUES (?, '10', 'SCIENCE', 'ক', ?, ?, 'জীববিজ্ঞান', ?, ?, '03:05 PM', '04:05 PM', 'রুম ১০২', 'চিত্রাঙ্কন ও আলোচনা')`)
+        .bind(day, b10Evening?.id ?? null, b10Evening?.name ?? "সন্ধ্যা ব্যাচ", idRI, nameRI),
 
       // Class 9 (Science)
       db.prepare(`INSERT INTO routines (day_of_week, class_name, division, section, subject_name, teacher_id, teacher_name, start_time, end_time, room_no, note)

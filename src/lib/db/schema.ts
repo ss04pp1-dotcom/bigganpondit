@@ -336,6 +336,8 @@ CREATE TABLE IF NOT EXISTS routines (
   class_name   TEXT NOT NULL,
   division     TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
   section      TEXT,
+  batch_id     INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+  batch_name   TEXT,
   subject_id   INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
   subject_name TEXT NOT NULL,
   teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
@@ -351,6 +353,7 @@ CREATE TABLE IF NOT EXISTS routines (
 );
 CREATE INDEX IF NOT EXISTS idx_routines_day_class ON routines(day_of_week, class_name);
 CREATE INDEX IF NOT EXISTS idx_routines_teacher ON routines(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_routines_batch ON routines(batch_id);
 
 CREATE TABLE IF NOT EXISTS student_monthly_comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

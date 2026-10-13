@@ -251,6 +251,125 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_smc_lookup ON student_monthly_comments(student_id, month, year, mode)").run().catch(() => null);
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_smc_teacher ON student_monthly_comments(teacher_id)").run().catch(() => null);
 
+      // Ensure fee_items, fee_payments, fee_notifications exist in fast-path (Cloudflare Workers)
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS fee_items (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            category        TEXT NOT NULL CHECK (category IN ('MONTHLY_FEE', 'EXAM_FEE', 'ABSENT_FINE', 'FAIL_FINE', 'NOTE_MATERIAL', 'ADMISSION_FEE', 'OTHER_FINE', 'OTHER_FEE')),
+            title           TEXT NOT NULL,
+            amount          REAL NOT NULL CHECK (amount >= 0),
+            paid_amount     REAL NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
+            due_amount      REAL NOT NULL CHECK (due_amount >= 0),
+            month           INTEGER CHECK (month IS NULL OR (month BETWEEN 1 AND 12)),
+            year            INTEGER,
+            exam_id         INTEGER REFERENCES exams(id) ON DELETE SET NULL,
+            subject_id      INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+            reference_note  TEXT,
+            due_date        TEXT,
+            status          TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PARTIAL', 'PAID', 'WAIVED')),
+            created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_items_student ON fee_items(student_id)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_items_status ON fee_items(status)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_items_category ON fee_items(category)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_items_period ON fee_items(year, month)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_items_exam ON fee_items(exam_id)").run().catch(() => null);
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS fee_payments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_no      TEXT NOT NULL UNIQUE,
+            student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            fee_item_id     INTEGER REFERENCES fee_items(id) ON DELETE SET NULL,
+            amount_paid     REAL NOT NULL CHECK (amount_paid > 0),
+            discount        REAL NOT NULL DEFAULT 0 CHECK (discount >= 0),
+            payment_method  TEXT NOT NULL DEFAULT 'CASH' CHECK (payment_method IN ('CASH', 'BKASH', 'NAGAD', 'ROCKET', 'BANK', 'OTHER')),
+            transaction_id  TEXT,
+            receipt_note    TEXT,
+            collected_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            collector_name  TEXT,
+            payment_date    TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_payments_student ON fee_payments(student_id)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_payments_invoice ON fee_payments(invoice_no)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_payments_date ON fee_payments(payment_date)").run().catch(() => null);
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS fee_notifications (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id      INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+            title           TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            total_due       REAL NOT NULL DEFAULT 0,
+            is_read         INTEGER NOT NULL DEFAULT 0,
+            sent_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            type            TEXT NOT NULL DEFAULT 'DUE_REMINDER' CHECK (type IN ('DUE_REMINDER', 'MONTHLY_BILL', 'FINE_ALERT', 'RECEIPT_ALERT')),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_notifications_student ON fee_notifications(student_id)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_fee_notifications_read ON fee_notifications(is_read)").run().catch(() => null);
+
+      // Backfill orphan payments into fee_items so they show up in items & summaries
+      await db
+        .prepare(
+          `INSERT INTO fee_items (
+            student_id, category, title, amount, paid_amount, due_amount,
+            month, year, status, reference_note, created_by, created_at, updated_at
+          )
+          SELECT 
+            fp.student_id,
+            'MONTHLY_FEE',
+            COALESCE(fp.receipt_note, 'মাসিক বেতন / ফি পরিশোধ'),
+            fp.amount_paid,
+            fp.amount_paid,
+            0,
+            CAST(strftime('%m', fp.payment_date) AS INTEGER),
+            CAST(strftime('%Y', fp.payment_date) AS INTEGER),
+            'PAID',
+            'রসিদ নং: ' || fp.invoice_no,
+            fp.collected_by,
+            fp.payment_date,
+            fp.payment_date
+          FROM fee_payments fp
+          WHERE fp.fee_item_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM fee_items fi WHERE fi.student_id = fp.student_id AND fi.reference_note = ('রসিদ নং: ' || fp.invoice_no)
+          )`
+        )
+        .run()
+        .catch(() => null);
+
+      // Link orphan payments to their created fee_items
+      await db
+        .prepare(
+          `UPDATE fee_payments
+           SET fee_item_id = (
+             SELECT fi.id FROM fee_items fi
+             WHERE fi.student_id = fee_payments.student_id
+             AND fi.reference_note = ('রসিদ নং: ' || fee_payments.invoice_no)
+             LIMIT 1
+           )
+           WHERE fee_item_id IS NULL`
+        )
+        .run()
+        .catch(() => null);
+
       // Schema is already applied. Check if initial admin needs creation.
       const env = cf ?? localEnv();
       const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;

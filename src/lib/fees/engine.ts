@@ -351,7 +351,7 @@ export async function recordFeePayment(
     collectedBy?: number | null;
     collectorName?: string | null;
   }
-): Promise<{ invoiceNo: string; paidAmount: number; discount: number; paymentId: number }> {
+): Promise<{ invoiceNo: string; paidAmount: number; discount: number; paymentId: number; feeItemId?: number }> {
   const discount = Math.max(0, Number(params.discount) || 0);
   const amountPaid = Math.max(0, Number(params.amountPaid) || 0);
   const totalCovered = amountPaid + discount;
@@ -361,30 +361,7 @@ export async function recordFeePayment(
   }
 
   const invoiceNo = `BP-REC-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
-
-  // Record payment
-  const res = await db
-    .prepare(
-      `INSERT INTO fee_payments (
-        invoice_no, student_id, fee_item_id, amount_paid, discount,
-        payment_method, transaction_id, receipt_note, collected_by, collector_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
-      invoiceNo,
-      params.studentId,
-      params.feeItemId || null,
-      amountPaid,
-      discount,
-      params.paymentMethod || "CASH",
-      params.transactionId || null,
-      params.receiptNote || null,
-      params.collectedBy || null,
-      params.collectorName || "অ্যাডমিন"
-    )
-    .run();
-
-  const paymentId = Number((res as any)?.meta?.last_row_id || 0);
+  let linkedFeeItemId = params.feeItemId || null;
 
   // Allocate payment to fee items
   if (params.feeItemId) {
@@ -429,9 +406,66 @@ export async function recordFeePayment(
         .bind(newPaid, newDue, newStatus, item.id)
         .run();
 
+      if (!linkedFeeItemId) {
+        linkedFeeItemId = item.id;
+      }
       remaining -= alloc;
     }
+
+    // If student had no pending items or payment exceeded pending items,
+    // automatically create a paid fee_item representing this collected payment!
+    if (remaining > 0) {
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      const insertItemRes = await db
+        .prepare(
+          `INSERT INTO fee_items (
+            student_id, category, title, amount, paid_amount, due_amount,
+            month, year, status, reference_note, created_by
+          ) VALUES (?, 'MONTHLY_FEE', ?, ?, ?, 0, ?, ?, 'PAID', ?, ?)`
+        )
+        .bind(
+          params.studentId,
+          params.receiptNote ? `মাসিক বেতন / ফি পরিশোধ (${params.receiptNote})` : "মাসিক বেতন / ফি পরিশোধ",
+          remaining,
+          remaining,
+          currentMonth,
+          currentYear,
+          `মানি রিসিট: ${invoiceNo}`,
+          params.collectedBy || null
+        )
+        .run();
+
+      const createdItemId = Number((insertItemRes as any)?.meta?.last_row_id || 0);
+      if (!linkedFeeItemId && createdItemId) {
+        linkedFeeItemId = createdItemId;
+      }
+    }
   }
+
+  // Record payment
+  const res = await db
+    .prepare(
+      `INSERT INTO fee_payments (
+        invoice_no, student_id, fee_item_id, amount_paid, discount,
+        payment_method, transaction_id, receipt_note, collected_by, collector_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      invoiceNo,
+      params.studentId,
+      linkedFeeItemId,
+      amountPaid,
+      discount,
+      params.paymentMethod || "CASH",
+      params.transactionId || null,
+      params.receiptNote || null,
+      params.collectedBy || null,
+      params.collectorName || "অ্যাডমিন"
+    )
+    .run();
+
+  const paymentId = Number((res as any)?.meta?.last_row_id || 0);
 
   // Auto-send payment receipt alert to student
   const student = await db.prepare(`SELECT name FROM students WHERE id = ?`).bind(params.studentId).first<{ name: string }>().catch(() => null);
@@ -453,6 +487,7 @@ export async function recordFeePayment(
     paidAmount: amountPaid,
     discount,
     paymentId,
+    feeItemId: linkedFeeItemId || undefined,
   };
 }
 
@@ -600,6 +635,15 @@ export async function getStudentFeeSummary(
     } else {
       pendingItems.push(it);
     }
+  }
+
+  // Ensure totalPaid accounts for all recorded payments
+  const paymentsTotal = payments.reduce((acc, p) => acc + (Number(p.amount_paid) || 0), 0);
+  if (paymentsTotal > totalPaid) {
+    totalPaid = paymentsTotal;
+  }
+  if (totalPaid + totalDue > totalOriginal) {
+    totalOriginal = totalPaid + totalDue;
   }
 
   return {

@@ -83,6 +83,7 @@ export function AdminFeesManager() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("items");
 
   // Bulk form state
   const [bulkClassId, setBulkClassId] = useState("all");
@@ -307,11 +308,40 @@ export function AdminFeesManager() {
       if (data.ok) {
         toast({ title: "পেমেন্ট সফল!", description: data.message });
         setIsPaymentModalOpen(false);
+        const paidStudent = students.find((s) => String(s.id) === String(payStudentId));
+        const invoiceNo = data.invoiceNo;
+        const currentPayAmount = payAmount;
+        const currentDiscount = payDiscount;
+        const currentMethod = payMethod;
+        const currentNote = payNote;
+
         setPayStudentId("");
         setPayFeeItemId("");
         setPayAmount("");
         setPayDiscount("0");
-        fetchData();
+        setPayNote("");
+        setPayTrxId("");
+        await fetchData();
+
+        // Switch to payments tab so user sees the newly recorded payment immediately
+        setActiveTab("payments");
+
+        // Automatically open the printable money receipt modal
+        if (invoiceNo) {
+          setSelectedReceipt({
+            invoice_no: invoiceNo,
+            student_name: paidStudent?.name || "শিক্ষার্থী",
+            student_roll: paidStudent?.roll || "",
+            class_name: paidStudent?.class_name || "",
+            amount_paid: Number(currentPayAmount),
+            discount: Number(currentDiscount) || 0,
+            payment_method: currentMethod,
+            payment_date: new Date().toISOString(),
+            collector_name: "অ্যাডমিন",
+            receipt_note: currentNote,
+          });
+          setIsReceiptModalOpen(true);
+        }
       } else {
         toast({ title: "ব্যর্থ", description: data.error, variant: "destructive" });
       }
@@ -513,7 +543,7 @@ export function AdminFeesManager() {
       </div>
 
       {/* 3. Main Tabs & Filters */}
-      <Tabs defaultValue="items" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
           <TabsList className="bg-slate-100">
             <TabsTrigger value="items" className="text-xs">

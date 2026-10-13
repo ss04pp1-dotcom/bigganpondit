@@ -34,7 +34,7 @@ export async function GET(req: Request) {
         b.name as batch_name
       FROM fee_items fi
       JOIN students s ON s.id = fi.student_id
-      JOIN classes c ON c.id = s.class_id
+      LEFT JOIN classes c ON c.id = s.class_id
       LEFT JOIN batches b ON b.id = s.batch_id
       WHERE 1=1
     `;
@@ -76,7 +76,7 @@ export async function GET(req: Request) {
           `SELECT fp.*, s.name as student_name, s.roll as student_roll, c.name as class_name
            FROM fee_payments fp
            JOIN students s ON s.id = fp.student_id
-           JOIN classes c ON c.id = s.class_id
+           LEFT JOIN classes c ON c.id = s.class_id
            ORDER BY fp.payment_date DESC LIMIT 50`
         )
         .all<any>()
@@ -86,18 +86,21 @@ export async function GET(req: Request) {
     const statsRow = await db
       .prepare(
         `SELECT
-          COALESCE(SUM(amount), 0) as total_charged,
-          COALESCE(SUM(paid_amount), 0) as total_paid,
-          COALESCE(SUM(due_amount), 0) as total_due,
-          COALESCE(SUM(CASE WHEN category = 'ABSENT_FINE' THEN due_amount ELSE 0 END), 0) as absent_fine_due,
-          COALESCE(SUM(CASE WHEN category = 'FAIL_FINE' THEN due_amount ELSE 0 END), 0) as fail_fine_due,
-          COALESCE(SUM(CASE WHEN category = 'MONTHLY_FEE' THEN due_amount ELSE 0 END), 0) as monthly_fee_due,
-          COALESCE(SUM(CASE WHEN category = 'NOTE_MATERIAL' THEN due_amount ELSE 0 END), 0) as note_due,
-          COUNT(DISTINCT CASE WHEN due_amount > 0 THEN student_id ELSE NULL END) as defaulter_students_count
-         FROM fee_items`
+          (SELECT COALESCE(SUM(amount), 0) FROM fee_items) as total_charged,
+          (SELECT COALESCE(SUM(amount_paid), 0) FROM fee_payments) as total_paid,
+          (SELECT COALESCE(SUM(due_amount), 0) FROM fee_items) as total_due,
+          (SELECT COALESCE(SUM(CASE WHEN category = 'ABSENT_FINE' THEN due_amount ELSE 0 END), 0) FROM fee_items) as absent_fine_due,
+          (SELECT COALESCE(SUM(CASE WHEN category = 'FAIL_FINE' THEN due_amount ELSE 0 END), 0) FROM fee_items) as fail_fine_due,
+          (SELECT COALESCE(SUM(CASE WHEN category = 'MONTHLY_FEE' THEN due_amount ELSE 0 END), 0) FROM fee_items) as monthly_fee_due,
+          (SELECT COALESCE(SUM(CASE WHEN category = 'NOTE_MATERIAL' THEN due_amount ELSE 0 END), 0) FROM fee_items) as note_due,
+          (SELECT COUNT(DISTINCT CASE WHEN due_amount > 0 THEN student_id ELSE NULL END) FROM fee_items) as defaulter_students_count`
       )
       .first<any>()
       .catch(() => null);
+
+    const totalPaidNum = Number(statsRow?.total_paid || 0);
+    const totalDueNum = Number(statsRow?.total_due || 0);
+    const totalChargedNum = Math.max(Number(statsRow?.total_charged || 0), totalPaidNum + totalDueNum);
 
     // 4. Fetch Active Classes & Batches & Students for Selectors
     const classes = (
@@ -117,9 +120,9 @@ export async function GET(req: Request) {
         .prepare(
           `SELECT s.id, s.name, s.roll, s.class_id, s.batch_id, c.name as class_name, b.name as batch_name
            FROM students s
-           JOIN classes c ON c.id = s.class_id
+           LEFT JOIN classes c ON c.id = s.class_id
            LEFT JOIN batches b ON b.id = s.batch_id
-           WHERE c.is_active = 1
+           WHERE c.is_active = 1 OR c.id IS NULL
            ORDER BY c.id ASC, s.roll ASC`
         )
         .all<any>()
@@ -129,9 +132,9 @@ export async function GET(req: Request) {
       items,
       payments,
       stats: {
-        totalCharged: Number(statsRow?.total_charged || 0),
-        totalPaid: Number(statsRow?.total_paid || 0),
-        totalDue: Number(statsRow?.total_due || 0),
+        totalCharged: totalChargedNum,
+        totalPaid: totalPaidNum,
+        totalDue: totalDueNum,
         absentFineDue: Number(statsRow?.absent_fine_due || 0),
         failFineDue: Number(statsRow?.fail_fine_due || 0),
         monthlyFeeDue: Number(statsRow?.monthly_fee_due || 0),

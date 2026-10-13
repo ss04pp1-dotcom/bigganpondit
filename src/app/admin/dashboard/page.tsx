@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { DashboardBanner } from "@/components/app/dashboard-banner";
 import { RecentResultBox } from "@/components/app/recent-result-box";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, GraduationCap, BookOpen, ClipboardEdit, Database, Building2 } from "lucide-react";
+import { Users, GraduationCap, BookOpen, ClipboardEdit, Database, Building2, Wallet } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtNum } from "@/lib/constants";
 import Link from "next/link";
 
@@ -19,7 +19,7 @@ export default async function AdminDashboard() {
   const user = await requirePageUser(["ADMIN"]);
   const db = await getDb();
 
-  const [teacherCount, studentCount, subjectCount, examCount, markCount, pendingRequestsCount, pendingPasswordRequestsCount] = await Promise.all([
+  const [teacherCount, studentCount, subjectCount, examCount, markCount, pendingRequestsCount, pendingPasswordRequestsCount, feeDueRow] = await Promise.all([
     countOf(db, "teachers"),
     countOf(db, "students"),
     countOf(db, "subjects"),
@@ -32,6 +32,10 @@ export default async function AdminDashboard() {
     (async () => {
       const r = await db.prepare("SELECT COUNT(*) as c FROM password_change_requests WHERE status = 'PENDING'").first<{ c: number }>().catch(() => null);
       return r?.c ?? 0;
+    })(),
+    (async () => {
+      const r = await db.prepare("SELECT COALESCE(SUM(due_amount), 0) as due FROM fee_items WHERE status != 'PAID'").first<{ due: number }>().catch(() => null);
+      return r?.due ?? 0;
     })(),
   ]);
 
@@ -63,9 +67,10 @@ export default async function AdminDashboard() {
   const stats = [
     { label: "শিক্ষক", value: bn(teacherCount), href: "/admin/teachers", icon: GraduationCap, tint: "bg-blue-50 text-blue-600" },
     { label: "শিক্ষার্থী", value: bn(studentCount), href: "/admin/students", icon: Users, tint: "bg-emerald-50 text-emerald-600" },
+    { label: "ফি ও বকেয়া", value: `${bn(feeDueRow)}৳`, href: "/admin/fees", icon: Wallet, tint: "bg-rose-50 text-rose-600" },
     { label: "বিষয়", value: bn(subjectCount), href: "/admin/subjects", icon: BookOpen, tint: "bg-amber-50 text-amber-600" },
     { label: "পরীক্ষা", value: bn(examCount), href: "/admin/results", icon: ClipboardEdit, tint: "bg-violet-50 text-violet-600" },
-    { label: "নম্বর এন্ট্রি", value: bn(markCount), href: "/admin/marks", icon: Database, tint: "bg-rose-50 text-rose-600" },
+    { label: "নম্বর এন্ট্রি", value: bn(markCount), href: "/admin/marks", icon: Database, tint: "bg-cyan-50 text-cyan-600" },
   ];
 
   return (

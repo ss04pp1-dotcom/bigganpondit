@@ -14,7 +14,7 @@ import {
   fmtNum,
   fmtPct,
 } from "@/lib/constants";
-import { ArrowRight, FileText, CalendarRange, Search, BookMarked, Bell, CalendarDays } from "lucide-react";
+import { ArrowRight, FileText, CalendarRange, Search, BookMarked, Bell, CalendarDays, Wallet } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "ড্যাশবোর্ড" };
@@ -36,6 +36,19 @@ export default async function StudentDashboard() {
   });
   const recent = rows.slice(-6).reverse();
 
+  // Query student pending dues
+  const feeSummary = await db
+    .prepare(
+      `SELECT COALESCE(SUM(due_amount), 0) as total_due, COUNT(*) as due_count
+       FROM fee_items
+       WHERE student_id = ? AND status IN ('PENDING', 'PARTIAL') AND due_amount > 0`
+    )
+    .bind(user.studentId)
+    .first<{ total_due: number; due_count: number }>()
+    .catch(() => null);
+  const totalDue = Number(feeSummary?.total_due || 0);
+  const dueCount = Number(feeSummary?.due_count || 0);
+
   const quickLinks = [
     {
       href: "/student/routine",
@@ -44,6 +57,14 @@ export default async function StudentDashboard() {
       bg: "bg-[#ecfdf5] border-[#a7f3d0] hover:bg-[#d1fae5]",
       iconBg: "bg-[#059669] text-white",
       textColor: "text-[#065f46]",
+    },
+    {
+      href: "/student/fees",
+      label: "ফি ও বকেয়া",
+      icon: Wallet,
+      bg: "bg-[#fef2f2] border-[#fecaca] hover:bg-[#fee2e2]",
+      iconBg: "bg-[#ef4444] text-white",
+      textColor: "text-[#991b1b]",
     },
     {
       href: "/student/results",
@@ -61,14 +82,6 @@ export default async function StudentDashboard() {
       iconBg: "bg-[#10b981] text-white",
       textColor: "text-[#0f5132]",
     },
-    {
-      href: "/student/annual-result",
-      label: "বাৎসরিক রেজাল্ট",
-      icon: CalendarRange,
-      bg: "bg-[#fef6e9] border-[#ffe8cc] hover:bg-[#fdedd3]",
-      iconBg: "bg-[#f59e0b] text-white",
-      textColor: "text-[#854d0e]",
-    },
   ];
 
   return (
@@ -79,6 +92,40 @@ export default async function StudentDashboard() {
         panelTitle="শিক্ষার্থী প্যানেল"
         panelDesc="তোমার পরীক্ষার ফলাফল, মেধা তালিকা ও বইসমূহ।"
       />
+
+      {/* Prominent Due Alert Card if student has pending dues */}
+      {totalDue > 0 && (
+        <div className="rounded-xl border border-rose-300 bg-gradient-to-r from-rose-50 via-white to-rose-50/80 p-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-rose-900">
+                    আপনার মোট বকেয়া: {bn(totalDue)} ৳
+                  </span>
+                  <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px] font-bold text-rose-800">
+                    {bn(dueCount)}টি আইটেম
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700">
+                  মাসিক বেতন, অনুপস্থিতির জরিমানা বা পরীক্ষার ফি বকেয়া রয়েছে। বিস্তারিত দেখে দ্রুত পরিশোধ করুন।
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/student/fees"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition-colors whitespace-nowrap"
+            >
+              <span>বকেয়ার বিস্তারিত দেখুন</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Student Welcome Card — Panel 7 */}
       <div className="rounded-xl border border-[#dce6f2] bg-white p-5 shadow-xs">

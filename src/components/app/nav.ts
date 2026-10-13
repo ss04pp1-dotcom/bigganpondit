@@ -24,6 +24,7 @@ import {
   Award,
   CalendarDays,
   Layers,
+  Wallet,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -39,6 +40,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/director/teachers", label: "শিক্ষক পরিদর্শক", icon: GraduationCap },
     { href: "/director/classes", label: "শ্রেণি ও ব্যাচ", icon: Layers },
     { href: "/director/students", label: "শিক্ষার্থী", icon: Users },
+    { href: "/director/fees", label: "ফি ও বকেয়া", icon: Wallet },
     { href: "/director/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/director/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/director/results", label: "ফলাফল ও মার্কশিট", icon: Search },
@@ -67,6 +69,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/teachers", label: "শিক্ষক", icon: GraduationCap },
     { href: "/admin/classes", label: "শ্রেণি ও ব্যাচ", icon: Layers },
     { href: "/admin/students", label: "শিক্ষার্থী", icon: Users },
+    { href: "/admin/fees", label: "ফি ও বকেয়া", icon: Wallet },
     { href: "/admin/attendance", label: "হাজিরা শিট", icon: CheckSquare },
     { href: "/admin/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/admin/subjects", label: "বিষয়", icon: BookOpen },
@@ -81,6 +84,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   STUDENT: [
     { href: "/student/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
     { href: "/student/profile", label: "আমার প্রোফাইল", icon: User },
+    { href: "/student/fees", label: "ফি ও বকেয়া", icon: Wallet },
     { href: "/student/routine", label: "ক্লাস রুটিন", icon: CalendarDays },
     { href: "/student/results", label: "ফলাফল", icon: Search },
     { href: "/student/monthly-result", label: "মাসিক ফলাফল", icon: FileText },

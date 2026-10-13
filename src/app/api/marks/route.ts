@@ -12,6 +12,7 @@ import { ApiError, assertSameOrigin, fail, handleError, ok } from "@/lib/api";
 import { MSG } from "@/lib/constants";
 import { markSaveSchema, num, parseJson } from "@/lib/validation";
 import { teacherSubjectAllowed } from "@/lib/permissions";
+import { syncExamAbsentAndFailFines } from "@/lib/fees/engine";
 
 export async function POST(req: Request) {
   try {
@@ -215,6 +216,12 @@ export async function POST(req: Request) {
           .all<Record<string, unknown>>()
       ).results;
 
+      // Auto-calculate & sync absent (20৳) and fail (50৳) fines for this exam
+      await syncExamAbsentAndFailFines(db, {
+        examId: exam.id,
+        createdBy: user.id,
+      }).catch((err) => console.warn("[auto-fine] Batch sync error:", err));
+
       return ok({
         saved: true,
         batch: true,
@@ -285,6 +292,12 @@ export async function POST(req: Request) {
       .first<{ h: number }>(undefined as never)
       .catch(() => null);
     const highest = highestRow?.h ?? obtained;
+
+    // Auto-calculate & sync absent (20৳) and fail (50৳) fines for this exam
+    await syncExamAbsentAndFailFines(db, {
+      examId: exam.id,
+      createdBy: user.id,
+    }).catch((err) => console.warn("[auto-fine] Single sync error:", err));
 
     return ok({
       saved: true,

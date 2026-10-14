@@ -48,6 +48,140 @@ export interface FeeItemRow {
   due_date: string | null;
   status: "PENDING" | "PARTIAL" | "PAID" | "WAIVED";
   created_at: string;
+  // Dynamic evaluation fields
+  is_overdue?: boolean;
+  is_current?: boolean;
+  due_status_label?: string;
+  badge_class?: string;
+  type_label?: string;
+}
+
+export interface FeeItemDueStatus {
+  isOverdue: boolean;
+  isCurrent: boolean;
+  isPaid: boolean;
+  statusLabel: string;
+  badgeClass: string;
+  typeLabel: string; // "বর্তমান মাসের বেতন" | "চলতি ফি" | "বকেয়া" | "পরিশোধিত"
+  deadlineText: string;
+}
+
+/**
+ * Evaluates whether an unpaid fee item is 'Current Month Fee / চলতি ফি'
+ * or 'Overdue / বকেয়া'.
+ * Rule:
+ * 1. If status is PAID -> "পরিশোধিত"
+ * 2. If due_date is specified:
+ *    - today <= due_date: Deadline not passed yet -> "বর্তমান মাসের বেতন" (for MONTHLY_FEE) or "চলতি ফি"
+ *    - today > due_date: Deadline passed -> "বকেয়া"
+ * 3. If due_date is NOT specified:
+ *    - If month/year is in the past -> "বকেয়া"
+ *    - If month/year is current month -> "বর্তমান মাসের বেতন" (until 10th or month end)
+ */
+export function evaluateFeeDueStatus(item: {
+  status: string;
+  category?: string;
+  due_date?: string | null;
+  month?: number | null;
+  year?: number | null;
+  created_at?: string;
+}): FeeItemDueStatus {
+  if (item.status === "PAID") {
+    return {
+      isOverdue: false,
+      isCurrent: false,
+      isPaid: true,
+      statusLabel: "পরিশোধিত",
+      badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      typeLabel: "পরিশোধিত",
+      deadlineText: "পরিশোধ সম্পন্ন",
+    };
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const todayStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  let isOverdue = false;
+  let deadlineText = "অফিস সময়ে";
+
+  if (item.due_date && item.due_date.trim()) {
+    const cleanDueDate = item.due_date.trim().split("T")[0];
+    isOverdue = cleanDueDate < todayStr;
+    deadlineText = isOverdue ? `মেয়াদ শেষ (${cleanDueDate})` : `শেষ তারিখ: ${cleanDueDate}`;
+  } else if (item.year && item.month) {
+    if (item.year < currentYear) {
+      isOverdue = true;
+      deadlineText = `পূর্ববর্তী মাস (${item.month}/${item.year})`;
+    } else if (item.year === currentYear) {
+      if (item.month < currentMonth) {
+        isOverdue = true;
+        deadlineText = `পূর্ববর্তী মাস (${item.month}/${item.year})`;
+      } else if (item.month === currentMonth) {
+        // By default, during the current month before 10th or if not specified
+        isOverdue = now.getDate() > 10;
+        deadlineText = isOverdue ? "চলতি মাসের ১০ তারিখ পার হয়েছে" : "চলতি মাসের বেতন";
+      } else {
+        isOverdue = false;
+        deadlineText = "ভবিষ্যৎ মাস";
+      }
+    } else {
+      isOverdue = false;
+      deadlineText = "ভবিষ্যৎ শিক্ষাবর্ষ";
+    }
+  }
+
+  const isCurrent = !isOverdue;
+  const isMonthly = item.category === "MONTHLY_FEE";
+
+  if (item.status === "PARTIAL") {
+    if (isOverdue) {
+      return {
+        isOverdue: true,
+        isCurrent: false,
+        isPaid: false,
+        statusLabel: "আংশিক বকেয়া (মেয়াদোত্তীর্ণ)",
+        badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+        typeLabel: "বকেয়া",
+        deadlineText,
+      };
+    }
+    return {
+      isOverdue: false,
+      isCurrent: true,
+      isPaid: false,
+      statusLabel: isMonthly ? "আংশিক পরিশোধিত (বর্তমান মাসের বেতন)" : "আংশিক পরিশোধিত (চলতি ফি)",
+      badgeClass: "bg-amber-100 text-amber-800 border-amber-200",
+      typeLabel: isMonthly ? "বর্তমান মাসের বেতন" : "চলতি ফি",
+      deadlineText,
+    };
+  }
+
+  // PENDING status
+  if (isOverdue) {
+    return {
+      isOverdue: true,
+      isCurrent: false,
+      isPaid: false,
+      statusLabel: "বকেয়া",
+      badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+      typeLabel: "বকেয়া",
+      deadlineText,
+    };
+  }
+
+  return {
+    isOverdue: false,
+    isCurrent: true,
+    isPaid: false,
+    statusLabel: isMonthly ? "বর্তমান মাসের বেতন" : "চলতি ফি (নির্ধারিত সময়ের মধ্যে)",
+    badgeClass: isMonthly
+      ? "bg-sky-100 text-sky-800 border-sky-200"
+      : "bg-indigo-100 text-indigo-800 border-indigo-200",
+    typeLabel: isMonthly ? "বর্তমান মাসের বেতন" : "চলতি ফি",
+    deadlineText,
+  };
 }
 
 export interface FeePaymentRow {
@@ -252,24 +386,38 @@ export async function syncExamAbsentAndFailFines(
 
 /**
  * -------------------------------------------------------------
- * 2. BULK MONTHLY TUITION FEE GENERATION
+ * 2. BULK FEE ASSIGNMENT (ALL STUDENTS IN CLASS/BATCH)
  * -------------------------------------------------------------
- * Generates monthly tuition fees for students in a class or batch.
+ * Assigns fee (monthly tuition, exam fee, notes, etc.) to all students
+ * in a selected class or batch with one click.
  */
-export async function generateMonthlyTuitionFees(
+export async function assignBulkFees(
   db: D1Database,
   params: {
     classId?: number;
     batchId?: number;
-    month: number;
-    year: number;
+    category: FeeCategory;
+    title: string;
     amount: number;
-    dueDate?: string;
-    customTitle?: string;
-    createdBy?: number;
+    month?: number | null;
+    year?: number | null;
+    dueDate?: string | null;
+    referenceNote?: string | null;
+    createdBy?: number | null;
   }
-): Promise<{ generatedCount: number; skippedCount: number; totalAmount: number }> {
-  let studentSql = `SELECT s.id, s.name, s.roll, c.name as class_name FROM students s JOIN classes c ON c.id = s.class_id WHERE c.is_active = 1`;
+): Promise<{
+  generatedCount: number;
+  skippedCount: number;
+  totalAmount: number;
+  studentsCount: number;
+}> {
+  let studentSql = `
+    SELECT s.id, s.name, s.roll, c.name as class_name, b.name as batch_name
+    FROM students s
+    JOIN classes c ON c.id = s.class_id
+    LEFT JOIN batches b ON b.id = s.batch_id
+    WHERE c.is_active = 1
+  `;
   const sqlParams: unknown[] = [];
 
   if (params.classId) {
@@ -281,21 +429,33 @@ export async function generateMonthlyTuitionFees(
     sqlParams.push(params.batchId);
   }
 
-  const students = (await db.prepare(studentSql).bind(...sqlParams).all<any>()).results || [];
+  studentSql += ` ORDER BY s.class_id ASC, s.roll ASC`;
 
-  const monthNameBn = MONTHS_BN[params.month] || `মাস ${params.month}`;
-  const defaultTitle = params.customTitle || `${monthNameBn} ${params.year} — মাসিক টিউশন ফি`;
+  const students = (await db.prepare(studentSql).bind(...sqlParams).all<any>()).results || [];
 
   let generatedCount = 0;
   let skippedCount = 0;
 
   for (const st of students) {
-    // Check duplicate monthly fee for same student, month, year
+    // Check duplicate
+    let checkSql = `SELECT id FROM fee_items WHERE student_id = ? AND category = ?`;
+    const checkParams: unknown[] = [st.id, params.category];
+
+    if (params.category === "MONTHLY_FEE" && params.month && params.year) {
+      checkSql += ` AND month = ? AND year = ?`;
+      checkParams.push(params.month, params.year);
+    } else {
+      checkSql += ` AND title = ?`;
+      checkParams.push(params.title.trim());
+      if (params.month && params.year) {
+        checkSql += ` AND month = ? AND year = ?`;
+        checkParams.push(params.month, params.year);
+      }
+    }
+
     const existing = await db
-      .prepare(
-        `SELECT id FROM fee_items WHERE student_id = ? AND category = 'MONTHLY_FEE' AND month = ? AND year = ?`
-      )
-      .bind(st.id, params.month, params.year)
+      .prepare(checkSql)
+      .bind(...checkParams)
       .first<{ id: number }>()
       .catch(() => null);
 
@@ -308,17 +468,19 @@ export async function generateMonthlyTuitionFees(
       .prepare(
         `INSERT INTO fee_items (
           student_id, category, title, amount, paid_amount, due_amount,
-          month, year, due_date, status, created_by
-        ) VALUES (?, 'MONTHLY_FEE', ?, ?, 0, ?, ?, ?, ?, 'PENDING', ?)`
+          month, year, due_date, reference_note, status, created_by
+        ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 'PENDING', ?)`
       )
       .bind(
         st.id,
-        defaultTitle,
+        params.category,
+        params.title.trim(),
         params.amount,
         params.amount,
-        params.month,
-        params.year,
+        params.month || null,
+        params.year || null,
         params.dueDate || null,
+        params.referenceNote?.trim() || null,
         params.createdBy || null
       )
       .run();
@@ -330,7 +492,37 @@ export async function generateMonthlyTuitionFees(
     generatedCount,
     skippedCount,
     totalAmount: generatedCount * params.amount,
+    studentsCount: students.length,
   };
+}
+
+export async function generateMonthlyTuitionFees(
+  db: D1Database,
+  params: {
+    classId?: number;
+    batchId?: number;
+    month: number;
+    year: number;
+    amount: number;
+    dueDate?: string;
+    customTitle?: string;
+    createdBy?: number;
+  }
+): Promise<{ generatedCount: number; skippedCount: number; totalAmount: number; studentsCount?: number }> {
+  const monthNameBn = MONTHS_BN[params.month] || `মাস ${params.month}`;
+  const defaultTitle = params.customTitle || `${monthNameBn} ${params.year} — মাসিক টিউশন ফি`;
+
+  return assignBulkFees(db, {
+    classId: params.classId,
+    batchId: params.batchId,
+    category: "MONTHLY_FEE",
+    title: defaultTitle,
+    amount: params.amount,
+    month: params.month,
+    year: params.year,
+    dueDate: params.dueDate,
+    createdBy: params.createdBy,
+  });
 }
 
 /**
@@ -595,16 +787,30 @@ export async function sendDueReminderNotifications(
     const due = Number(st.total_due) || 0;
     totalOutstanding += due;
 
-    const message =
-      options.customMessage ||
-      `সম্মানিত ${st.student_name}, আপনার কোচিংয়ের মাসিক বেতন/জরিমানা/পরীক্ষার ফি বাবদ সর্বমোট ${bn(due)} ৳ বকেয়া রয়েছে (${bn(st.due_count)}টি আইটেম)। অনুগ্রহ করে নির্ধারিত সময়ের মধ্যে অফিসে বা অনলাইনে পরিশোধ করুন।`;
+    // Check if student has overdue items vs current unexpired items
+    const studentItems = (
+      await db
+        .prepare(`SELECT * FROM fee_items WHERE student_id = ? AND status IN ('PENDING', 'PARTIAL') AND due_amount > 0`)
+        .bind(st.student_id)
+        .all<any>()
+    ).results || [];
+
+    const hasOverdue = studentItems.some((it: any) => evaluateFeeDueStatus(it).isOverdue);
+
+    const title = hasOverdue ? "মেয়াদোত্তীর্ণ বকেয়া ফি পরিশোধের তাগিদ" : "বর্তমান মাসের বেতন পরিশোধের স্মারক";
+
+    const defaultMsg = hasOverdue
+      ? `সম্মানিত ${st.student_name}, আপনার নির্ধারিত সময় পার হওয়া বকেয়া বাবদ সর্বমোট ${bn(due)} ৳ রয়েছে (${bn(st.due_count)}টি আইটেম)। অনুগ্রহ করে দ্রুত অফিসে বা অনলাইনে পরিশোধ করুন।`
+      : `সম্মানিত ${st.student_name}, আপনার বর্তমান মাসের বেতন/চলতি ফি বাবদ ${bn(due)} ৳ প্রদেয় রয়েছে। অনুগ্রহ করে নির্ধারিত শেষ তারিখের মধ্যে অফিসে বা অনলাইনে পরিশোধ করুন।`;
+
+    const message = options.customMessage || defaultMsg;
 
     await db
       .prepare(
         `INSERT INTO fee_notifications (student_id, title, message, total_due, sent_by, type)
-         VALUES (?, 'বকেয়া ফি পরিশোধের তাগিদ', ?, ?, ?, 'DUE_REMINDER')`
+         VALUES (?, ?, ?, ?, ?, 'DUE_REMINDER')`
       )
-      .bind(st.student_id, message, due, options.sentBy || null)
+      .bind(st.student_id, title, message, due, options.sentBy || null)
       .run();
 
     notifiedStudents++;
@@ -623,6 +829,10 @@ export async function getStudentFeeSummary(
   studentId: number
 ): Promise<{
   totalDue: number;
+  overdueDue: number;
+  currentMonthDue: number;
+  currentOtherDue: number;
+  totalCurrentPayable: number;
   totalPaid: number;
   totalOriginal: number;
   pendingItems: FeeItemRow[];
@@ -668,6 +878,9 @@ export async function getStudentFeeSummary(
   ).results || [];
 
   let totalDue = 0;
+  let overdueDue = 0;
+  let currentMonthDue = 0;
+  let currentOtherDue = 0;
   let totalPaid = 0;
   let totalOriginal = 0;
 
@@ -675,14 +888,44 @@ export async function getStudentFeeSummary(
   const paidItems: FeeItemRow[] = [];
 
   for (const it of items) {
-    totalDue += Number(it.due_amount) || 0;
-    totalPaid += Number(it.paid_amount) || 0;
-    totalOriginal += Number(it.amount) || 0;
+    const dueAmt = Number(it.due_amount) || 0;
+    const paidAmt = Number(it.paid_amount) || 0;
+    const origAmt = Number(it.amount) || 0;
+
+    totalDue += dueAmt;
+    totalPaid += paidAmt;
+    totalOriginal += origAmt;
+
+    const evaluation = evaluateFeeDueStatus(it);
 
     if (it.status === "PAID") {
-      paidItems.push(it);
+      paidItems.push({
+        ...it,
+        is_overdue: false,
+        is_current: false,
+        due_status_label: "পরিশোধিত",
+        badge_class: evaluation.badgeClass,
+        type_label: "পরিশোধিত",
+      });
     } else {
-      pendingItems.push(it);
+      if (evaluation.isOverdue) {
+        overdueDue += dueAmt;
+      } else {
+        if (it.category === "MONTHLY_FEE") {
+          currentMonthDue += dueAmt;
+        } else {
+          currentOtherDue += dueAmt;
+        }
+      }
+
+      pendingItems.push({
+        ...it,
+        is_overdue: evaluation.isOverdue,
+        is_current: evaluation.isCurrent,
+        due_status_label: evaluation.statusLabel,
+        badge_class: evaluation.badgeClass,
+        type_label: evaluation.typeLabel,
+      });
     }
   }
 
@@ -697,6 +940,10 @@ export async function getStudentFeeSummary(
 
   return {
     totalDue,
+    overdueDue,
+    currentMonthDue,
+    currentOtherDue,
+    totalCurrentPayable: currentMonthDue + currentOtherDue,
     totalPaid,
     totalOriginal,
     pendingItems,

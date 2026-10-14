@@ -5,7 +5,9 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { assertSameOrigin, fail, handleError, ok } from "@/lib/api";
 import {
   generateMonthlyTuitionFees,
+  assignBulkFees,
   recordFeePayment,
+  evaluateFeeDueStatus,
   FEE_CATEGORY_LABELS,
   type FeeCategory,
 } from "@/lib/fees/engine";
@@ -67,7 +69,21 @@ export async function GET(req: Request) {
 
     itemsSql += ` ORDER BY fi.created_at DESC LIMIT 300`;
 
-    const items = (await db.prepare(itemsSql).bind(...params).all<any>()).results || [];
+    const rawItems = (await db.prepare(itemsSql).bind(...params).all<any>()).results || [];
+
+    // Evaluate due status (overdue vs current month fee) for each item
+    const items = rawItems.map((it: any) => {
+      const ev = evaluateFeeDueStatus(it);
+      return {
+        ...it,
+        is_overdue: ev.isOverdue,
+        is_current: ev.isCurrent,
+        due_status_label: ev.statusLabel,
+        badge_class: ev.badgeClass,
+        type_label: ev.typeLabel,
+        deadline_text: ev.deadlineText,
+      };
+    });
 
     // 2. Fetch Recent Payments
     const payments = (
@@ -82,7 +98,7 @@ export async function GET(req: Request) {
         .all<any>()
     ).results || [];
 
-    // 3. Compute Summary Statistics
+    // 3. Compute Summary Statistics with distinct Overdue vs Current Month Fee
     const statsRow = await db
       .prepare(
         `SELECT
@@ -101,6 +117,26 @@ export async function GET(req: Request) {
     const totalPaidNum = Number(statsRow?.total_paid || 0);
     const totalDueNum = Number(statsRow?.total_due || 0);
     const totalChargedNum = Math.max(Number(statsRow?.total_charged || 0), totalPaidNum + totalDueNum);
+
+    // Precise Overdue vs Current Month split across all pending items
+    const allPendingItems = (
+      await db
+        .prepare(`SELECT category, due_date, month, year, status, due_amount FROM fee_items WHERE status IN ('PENDING', 'PARTIAL') AND due_amount > 0`)
+        .all<any>()
+    ).results || [];
+
+    let overdueDue = 0;
+    let currentMonthDue = 0;
+
+    for (const p of allPendingItems) {
+      const amt = Number(p.due_amount) || 0;
+      const ev = evaluateFeeDueStatus(p);
+      if (ev.isOverdue) {
+        overdueDue += amt;
+      } else {
+        currentMonthDue += amt;
+      }
+    }
 
     // 4. Fetch Active Classes & Batches & Students for Selectors
     const classes = (
@@ -135,6 +171,8 @@ export async function GET(req: Request) {
         totalCharged: totalChargedNum,
         totalPaid: totalPaidNum,
         totalDue: totalDueNum,
+        overdueDue,
+        currentMonthDue,
         absentFineDue: Number(statsRow?.absent_fine_due || 0),
         failFineDue: Number(statsRow?.fail_fine_due || 0),
         monthlyFeeDue: Number(statsRow?.monthly_fee_due || 0),
@@ -226,9 +264,12 @@ export async function POST(req: Request) {
       });
     }
 
-    if (action === "CREATE_ITEM") {
-      // Add custom fee/fine/notes selling
+    if (action === "CREATE_ITEM" || action === "ASSIGN_FEE") {
+      // Handles both "ALL students in class/batch" and "Single student"
       const {
+        target, // 'ALL' or 'STUDENT'
+        classId,
+        batchId,
         studentId,
         category,
         title,
@@ -239,11 +280,12 @@ export async function POST(req: Request) {
         referenceNote,
       } = body;
 
-      if (!studentId || !title || !amount || Number(amount) <= 0) {
-        return fail(400, "শিক্ষার্থী, বিবরণ এবং সঠিক টাকার পরিমাণ দিন।");
+      const numAmount = Number(amount);
+      if (!title?.trim() || !numAmount || numAmount <= 0) {
+        return fail(400, "ফি-এর শিরোনাম এবং সঠিক টাকার পরিমাণ প্রদান করুন।");
       }
 
-      const validCategories = [
+      const validCategories: FeeCategory[] = [
         "MONTHLY_FEE",
         "EXAM_FEE",
         "ABSENT_FINE",
@@ -253,9 +295,33 @@ export async function POST(req: Request) {
         "OTHER_FINE",
         "OTHER_FEE",
       ];
-      const selectedCat = validCategories.includes(category) ? category : "OTHER_FEE";
+      const selectedCat = validCategories.includes(category) ? (category as FeeCategory) : "OTHER_FEE";
 
-      const numAmount = Number(amount);
+      // 1. ALL STUDENTS IN CLASS / BATCH
+      if (target === "ALL") {
+        const res = await assignBulkFees(db, {
+          classId: classId && classId !== "all" ? Number(classId) : undefined,
+          batchId: batchId && batchId !== "all" ? Number(batchId) : undefined,
+          category: selectedCat,
+          title: title.trim(),
+          amount: numAmount,
+          month: month ? Number(month) : null,
+          year: year ? Number(year) : null,
+          dueDate: dueDate || null,
+          referenceNote: referenceNote?.trim() || null,
+          createdBy: user.id,
+        });
+
+        return ok({
+          message: `${res.generatedCount} জন শিক্ষার্থীর জন্য ফি সফলভাবে যুক্ত করা হয়েছে (${res.skippedCount} জনের আগেই নির্ধারিত ছিল)। মোট শিক্ষার্থী: ${res.studentsCount} জন।`,
+          ...res,
+        });
+      }
+
+      // 2. SINGLE SPECIFIC STUDENT
+      if (!studentId) {
+        return fail(400, "নির্দিষ্ট শিক্ষার্থী নির্বাচন করুন অথবা সকল শিক্ষার্থী অপশন বেছে নিন।");
+      }
 
       await db
         .prepare(
@@ -279,7 +345,7 @@ export async function POST(req: Request) {
         .run();
 
       return ok({
-        message: "ফি/জরিমানা সফলভাবে যুক্ত করা হয়েছে।",
+        message: "শিক্ষার্থীর অ্যাকাউন্টে ফি সফলভাবে যুক্ত করা হয়েছে।",
       });
     }
 

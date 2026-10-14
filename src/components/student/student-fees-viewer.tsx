@@ -142,26 +142,27 @@ export function StudentFeesViewer() {
       )}
 
       {/* 3. Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Total Due Card */}
+      {/* 3. Summary Cards: Differentiating Overdue vs Current Month Fee */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Overdue Card — Only for items past due date */}
         <Card
           className={`shadow-xs ${
-            summary.totalDue > 0
+            (summary.overdueDue || 0) > 0
               ? "border-rose-200 bg-gradient-to-br from-rose-50/70 to-white"
               : "border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white"
           }`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600">সর্বমোট অবশিষ্ট বকেয়া</span>
+              <span className="text-xs font-semibold text-slate-600">মেয়াদোত্তীর্ণ বকেয়া (Overdue)</span>
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full ${
-                  summary.totalDue > 0
+                  (summary.overdueDue || 0) > 0
                     ? "bg-rose-100 text-rose-600"
                     : "bg-emerald-100 text-emerald-600"
                 }`}
               >
-                {summary.totalDue > 0 ? (
+                {(summary.overdueDue || 0) > 0 ? (
                   <AlertCircle className="h-4 w-4" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
@@ -171,16 +172,38 @@ export function StudentFeesViewer() {
             <div className="mt-2 flex items-baseline gap-2">
               <span
                 className={`text-2xl font-bold ${
-                  summary.totalDue > 0 ? "text-rose-700" : "text-emerald-700"
+                  (summary.overdueDue || 0) > 0 ? "text-rose-700" : "text-emerald-700"
                 }`}
               >
-                {bn(summary.totalDue)} ৳
+                {bn(summary.overdueDue || 0)} ৳
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              {summary.totalDue > 0
-                ? `${bn((summary.pendingItems || []).length)}টি আইটেমে বকেয়া রয়েছে`
-                : "আলহামদুলিল্লাহ, আপনার কোনো বকেয়া নেই!"}
+              {(summary.overdueDue || 0) > 0
+                ? "নির্ধারিত শেষ তারিখ পার হয়ে গেছে"
+                : "আলহামদুলিল্লাহ, কোনো বকেয়া নেই!"}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Current Month Fee Card — Items before due date */}
+        <Card className="border-sky-200 bg-gradient-to-br from-sky-50/70 via-white to-blue-50/50 shadow-xs">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-sky-800">বর্তমান মাসের বেতন / চলতি ফি</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                <Calendar className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-sky-800">
+                {bn(summary.totalCurrentPayable || 0)} ৳
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-sky-600">
+              {(summary.totalCurrentPayable || 0) > 0
+                ? "পরিশোধের শেষ তারিখের মধ্যে প্রদেয়"
+                : "চলতি মাসের সব পরিশোধিত"}
             </p>
           </CardContent>
         </Card>
@@ -203,19 +226,21 @@ export function StudentFeesViewer() {
           </CardContent>
         </Card>
 
-        {/* Total Charged Card */}
+        {/* Total Payable Card */}
         <Card className="border-blue-100 bg-gradient-to-br from-blue-50/50 to-white shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-blue-700">সর্বমোট ধার্যকৃত ফি</span>
+              <span className="text-xs font-semibold text-blue-700">সর্বমোট প্রদেয় (Total Due)</span>
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                 <Receipt className="h-4 w-4" />
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-blue-800">{bn(summary.totalOriginal)} ৳</span>
+              <span className="text-2xl font-bold text-blue-800">{bn(summary.totalDue || 0)} ৳</span>
             </div>
-            <p className="mt-1 text-[11px] text-blue-600">চলতি শিক্ষাবর্ষের সর্বমোট হিসাব</p>
+            <p className="mt-1 text-[11px] text-blue-600">
+              বকেয়া + চলতি মাসের বেতন
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -224,7 +249,7 @@ export function StudentFeesViewer() {
       <Tabs defaultValue="pending" className="space-y-4">
         <TabsList className="bg-slate-100">
           <TabsTrigger value="pending" className="text-xs">
-            বকেয়ার বিস্তারিত বিবরণ ({bn((summary.pendingItems || []).length)})
+            চলতি ও বকেয়া ফি বিবরণ ({bn((summary.pendingItems || []).length)})
           </TabsTrigger>
           <TabsTrigger value="paid" className="text-xs">
             পরিশোধিত তালিকা ({bn((summary.paidItems || []).length)})
@@ -239,11 +264,11 @@ export function StudentFeesViewer() {
           <Card className="border-slate-200 shadow-xs">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-600" />
-                কিসের জন্য কত টাকা বকেয়া (Itemized Due Breakdown)
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                কিসের জন্য কত টাকা প্রদেয় (Itemized Breakdown)
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                প্রতিটি ফি, জরিমানা বা নোটসের স্পষ্ট তালিকা।
+                শেষ তারিখ পার না হলে &quot;বর্তমান মাসের বেতন&quot; এবং পার হলে &quot;বকেয়া&quot; হিসেবে চিহ্নিত থাকে।
               </CardDescription>
             </CardHeader>
             <div className="overflow-x-auto">
@@ -254,9 +279,9 @@ export function StudentFeesViewer() {
                     <th className="py-2.5 px-3 font-semibold">ক্যাটাগরি</th>
                     <th className="py-2.5 px-3 font-semibold text-right">মূল ধার্য</th>
                     <th className="py-2.5 px-3 font-semibold text-right">পরিশোধিত</th>
-                    <th className="py-2.5 px-3 font-semibold text-right text-rose-700">অবশিষ্ট বকেয়া</th>
+                    <th className="py-2.5 px-3 font-semibold text-right text-rose-700">অবশিষ্ট প্রদেয়</th>
                     <th className="py-2.5 px-3 font-semibold text-center">স্ট্যাটাস</th>
-                    <th className="py-2.5 px-3 font-semibold text-slate-500">পরিশোধের শেষ তারিখ</th>
+                    <th className="py-2.5 px-3 font-semibold text-slate-600">পরিশোধের শেষ তারিখ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -269,7 +294,7 @@ export function StudentFeesViewer() {
                   ) : (summary.pendingItems || []).length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-emerald-600 font-medium">
-                        ✓ আপনার কোনো বকেয়া নেই! ধন্যবাদ।
+                        ✓ আপনার কোনো বকেয়া বা চলতি প্রদেয় ফি নেই! ধন্যবাদ।
                       </td>
                     </tr>
                   ) : (
@@ -302,17 +327,38 @@ export function StudentFeesViewer() {
                           </td>
                           <td className="py-2.5 px-3 text-center">
                             {item.status === "PARTIAL" ? (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 text-[10px]">
-                                আংশিক বকেয়া
+                              item.is_overdue ? (
+                                <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
+                                  আংশিক বকেয়া
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 text-[10px]">
+                                  আংশিক পরিশোধিত
+                                </Badge>
+                              )
+                            ) : item.is_overdue ? (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
+                                বকেয়া (মেয়াদ পার)
                               </Badge>
                             ) : (
-                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
-                                বকেয়া
+                              <Badge className={item.category === "MONTHLY_FEE" ? "bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-100 text-[10px]" : "bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-100 text-[10px]"}>
+                                {item.category === "MONTHLY_FEE" ? "বর্তমান মাসের বেতন" : "চলতি ফি"}
                               </Badge>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 text-slate-500">
-                            {item.due_date || "অফিস সময়ে"}
+                          <td className="py-2.5 px-3">
+                            {item.due_date ? (
+                              <div>
+                                <span className="font-medium text-slate-700">{item.due_date}</span>
+                                {item.is_overdue ? (
+                                  <span className="block text-[10px] font-bold text-rose-600">তারিখ শেষ হয়েছে</span>
+                                ) : (
+                                  <span className="block text-[10px] font-semibold text-sky-700">সময় বাকি আছে</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">অফিস সময়ে</span>
+                            )}
                           </td>
                         </tr>
                       );

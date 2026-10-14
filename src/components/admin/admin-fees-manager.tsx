@@ -27,6 +27,9 @@ import {
   UserCheck,
   PiggyBank,
   Coins,
+  Users,
+  User,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,7 +90,21 @@ export function AdminFeesManager() {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("items");
 
-  // Bulk form state
+  // Unified Fee Assignment form state (both ALL students in batch/class and INDIVIDUAL student)
+  const [feeTarget, setFeeTarget] = useState<"ALL" | "STUDENT">("ALL");
+  const [assignClassId, setAssignClassId] = useState("all");
+  const [assignBatchId, setAssignBatchId] = useState("all");
+  const [assignStudentId, setAssignStudentId] = useState("");
+  const [assignCategory, setAssignCategory] = useState<FeeCategory>("MONTHLY_FEE");
+  const [assignMonth, setAssignMonth] = useState(String(new Date().getMonth() + 1));
+  const [assignYear, setAssignYear] = useState(String(new Date().getFullYear()));
+  const [assignAmount, setAssignAmount] = useState("500");
+  const [assignDueDate, setAssignDueDate] = useState("");
+  const [assignTitle, setAssignTitle] = useState("");
+  const [assignNote, setAssignNote] = useState("");
+  const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
+
+  // Bulk form state (backward compatible)
   const [bulkClassId, setBulkClassId] = useState("all");
   const [bulkBatchId, setBulkBatchId] = useState("all");
   const [bulkMonth, setBulkMonth] = useState(String(new Date().getMonth() + 1));
@@ -214,7 +231,79 @@ export function AdminFeesManager() {
     }
   };
 
-  // Submit bulk monthly fee
+  // Auto-generate default title based on category, month and year
+  const getDefaultTitle = (cat: FeeCategory, m: string, y: string) => {
+    const monthName = MONTHS_BN[Number(m)] || `মাস ${m}`;
+    switch (cat) {
+      case "MONTHLY_FEE":
+        return `${monthName} ${y} — মাসিক বেতন`;
+      case "EXAM_FEE":
+        return `${monthName} ${y} — পরীক্ষার ফি`;
+      case "NOTE_MATERIAL":
+        return "নোটস ও শিট বিক্রি";
+      case "ADMISSION_FEE":
+        return "ভর্তি ও সেশন ফি";
+      case "OTHER_FINE":
+        return "দেরিতে আসার জরিমানা";
+      case "OTHER_FEE":
+      default:
+        return "বিবিধ ফি";
+    }
+  };
+
+  // Submit Unified Fee Assignment (Both ALL students in class/batch and SINGLE student)
+  const handleAssignFeeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (feeTarget === "STUDENT" && !assignStudentId) {
+      toast({ title: "সতর্কতা", description: "শিক্ষার্থী নির্বাচন করুন।", variant: "destructive" });
+      return;
+    }
+    if (!assignAmount || Number(assignAmount) <= 0) {
+      toast({ title: "সতর্কতা", description: "সঠিক টাকার পরিমাণ দিন।", variant: "destructive" });
+      return;
+    }
+
+    const finalTitle = assignTitle.trim() || getDefaultTitle(assignCategory, assignMonth, assignYear);
+
+    try {
+      setIsSubmittingAssign(true);
+      const res = await fetch("/api/admin/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ASSIGN_FEE",
+          target: feeTarget,
+          classId: assignClassId !== "all" ? assignClassId : undefined,
+          batchId: assignBatchId !== "all" ? assignBatchId : undefined,
+          studentId: feeTarget === "STUDENT" ? assignStudentId : undefined,
+          category: assignCategory,
+          title: finalTitle,
+          amount: assignAmount,
+          month: assignMonth,
+          year: assignYear,
+          dueDate: assignDueDate || undefined,
+          referenceNote: assignNote,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "ফি নির্ধারণ সফল!", description: data.message });
+        setIsCustomFeeModalOpen(false);
+        setIsBulkModalOpen(false);
+        setAssignTitle("");
+        setAssignNote("");
+        fetchData();
+      } else {
+        toast({ title: "ব্যর্থ", description: data.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "ত্রুটি", description: "সংরক্ষণ করা যায়নি।", variant: "destructive" });
+    } finally {
+      setIsSubmittingAssign(false);
+    }
+  };
+
+  // Submit bulk monthly fee (re-uses unified flow)
   const handleBulkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -223,14 +312,16 @@ export function AdminFeesManager() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "BULK_MONTHLY",
+          action: "ASSIGN_FEE",
+          target: "ALL",
           classId: bulkClassId !== "all" ? bulkClassId : undefined,
           batchId: bulkBatchId !== "all" ? bulkBatchId : undefined,
+          category: "MONTHLY_FEE",
+          title: bulkCustomTitle.trim() || `${MONTHS_BN[Number(bulkMonth)] || `মাস ${bulkMonth}`} ${bulkYear} — মাসিক বেতন`,
+          amount: bulkAmount,
           month: bulkMonth,
           year: bulkYear,
-          amount: bulkAmount,
-          dueDate: bulkDueDate,
-          customTitle: bulkCustomTitle,
+          dueDate: bulkDueDate || undefined,
         }),
       });
       const data = await res.json();
@@ -250,42 +341,7 @@ export function AdminFeesManager() {
 
   // Submit custom fee or fine
   const handleCustomSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customStudentId) {
-      toast({ title: "সতর্কতা", description: "শিক্ষার্থী নির্বাচন করুন।", variant: "destructive" });
-      return;
-    }
-    try {
-      setIsSubmittingCustom(true);
-      const res = await fetch("/api/admin/fees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "CREATE_ITEM",
-          studentId: customStudentId,
-          category: customCategory,
-          title: customTitle,
-          amount: customAmount,
-          dueDate: customDueDate,
-          referenceNote: customNote,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        toast({ title: "সফল", description: data.message });
-        setIsCustomFeeModalOpen(false);
-        setCustomStudentId("");
-        setCustomTitle("");
-        setCustomAmount("");
-        fetchData();
-      } else {
-        toast({ title: "ব্যর্থ", description: data.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "ত্রুটি", description: "সংরক্ষণ করা যায়নি।", variant: "destructive" });
-    } finally {
-      setIsSubmittingCustom(false);
-    }
+    return handleAssignFeeSubmit(e);
   };
 
   // Resolved advance purpose
@@ -435,17 +491,46 @@ export function AdminFeesManager() {
     setIsPaymentModalOpen(true);
   };
 
-  // Filtered items
+  // Matching students count for bulk fee assignment
+  const matchingStudentsCount = useMemo(() => {
+    return students.filter((s) => {
+      if (assignClassId !== "all" && String(s.class_id) !== assignClassId) return false;
+      if (assignBatchId !== "all" && String(s.batch_id) !== assignBatchId) return false;
+      return true;
+    }).length;
+  }, [students, assignClassId, assignBatchId]);
+
+  // Students available for individual selection (filtered by class & batch if chosen)
+  const assignAvailableStudents = useMemo(() => {
+    return students.filter((s) => {
+      if (assignClassId !== "all" && String(s.class_id) !== assignClassId) return false;
+      if (assignBatchId !== "all" && String(s.batch_id) !== assignBatchId) return false;
+      return true;
+    });
+  }, [students, assignClassId, assignBatchId]);
+
+  // Filtered items (supports search and Overdue vs Current status)
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return items;
+    let list = items;
+    if (filterStatus === "CURRENT") {
+      list = list.filter((it) => it.status !== "PAID" && !it.is_overdue);
+    } else if (filterStatus === "OVERDUE") {
+      list = list.filter((it) => it.status !== "PAID" && it.is_overdue);
+    } else if (filterStatus === "PARTIAL") {
+      list = list.filter((it) => it.status === "PARTIAL");
+    } else if (filterStatus === "PAID") {
+      list = list.filter((it) => it.status === "PAID");
+    }
+
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return items.filter(
+    return list.filter(
       (it) =>
         it.student_name?.toLowerCase().includes(q) ||
         String(it.student_roll).includes(q) ||
         it.title?.toLowerCase().includes(q)
     );
-  }, [items, searchQuery]);
+  }, [items, searchQuery, filterStatus]);
 
   // Selected student dues in payment modal
   const selectedStudentPendingItems = useMemo(() => {
@@ -478,35 +563,30 @@ export function AdminFeesManager() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Auto Fine Sync Button */}
+          {/* Primary Unified Fee Assignment Button */}
           <Button
-            onClick={handleSyncFines}
-            disabled={isSyncing}
-            variant="outline"
-            className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-medium text-xs h-9 shadow-xs"
+            onClick={() => {
+              setFeeTarget("ALL");
+              setAssignCategory("MONTHLY_FEE");
+              setAssignAmount("500");
+              setAssignTitle("");
+              setAssignDueDate("");
+              setIsCustomFeeModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs h-9 shadow-xs"
           >
-            <Sparkles className={`mr-1.5 h-3.5 w-3.5 text-amber-600 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "সিঙ্ক হচ্ছে..." : "অটো জরিমানা সিঙ্ক (Absent & Fail)"}
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            ফি নির্ধারণ (সকল বা আলাদা)
           </Button>
 
-          {/* Bulk Monthly Fee Generator Button */}
+          {/* Quick Bulk Monthly Tuition Generator Button */}
           <Button
             onClick={() => setIsBulkModalOpen(true)}
             variant="outline"
             className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium text-xs h-9 shadow-xs"
           >
             <Calendar className="mr-1.5 h-3.5 w-3.5 text-blue-600" />
-            মাসিক বেতন জেনারেটর
-          </Button>
-
-          {/* Add Custom Fee/Fine/Notes Button */}
-          <Button
-            onClick={() => setIsCustomFeeModalOpen(true)}
-            variant="outline"
-            className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-xs h-9 shadow-xs"
-          >
-            <Plus className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-            জরিমানা / নোটস যোগ
+            মাসিক বেতন তৈরি (সকল)
           </Button>
 
           {/* Receive Due Payment Button */}
@@ -541,6 +621,17 @@ export function AdminFeesManager() {
             অগ্রিম / অতিরিক্ত জমা
           </Button>
 
+          {/* Auto Fine Sync Button */}
+          <Button
+            onClick={handleSyncFines}
+            disabled={isSyncing}
+            variant="outline"
+            className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-medium text-xs h-9 shadow-xs"
+          >
+            <Sparkles className={`mr-1.5 h-3.5 w-3.5 text-amber-600 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "সিঙ্ক হচ্ছে..." : "অটো জরিমানা সিঙ্ক"}
+          </Button>
+
           {/* Send Due Notification Reminder Button */}
           <Button
             onClick={handleSendDueNotifications}
@@ -554,25 +645,45 @@ export function AdminFeesManager() {
         </div>
       </div>
 
-      {/* 2. Top Statistics Cards */}
+      {/* 2. Top Statistics Cards: Clearly Separating Overdue Arrears vs Current Month Fee */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-rose-100 bg-gradient-to-br from-rose-50/60 to-white shadow-xs">
+        {/* Card 1: Overdue Due (Past Due Date) */}
+        <Card className="border-rose-200 bg-gradient-to-br from-rose-50/70 to-white shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-rose-700">সর্বমোট বকেয়া (Due)</span>
+              <span className="text-xs font-semibold text-rose-700">মেয়াদোত্তীর্ণ বকেয়া (Overdue)</span>
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-rose-600">
                 <AlertCircle className="h-4 w-4" />
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-rose-800">{bn(stats.totalDue)} ৳</span>
+              <span className="text-2xl font-bold text-rose-800">{bn(stats.overdueDue || 0)} ৳</span>
             </div>
             <p className="mt-1 text-[11px] text-rose-600">
-              বকেয়া শিক্ষার্থী: <span className="font-bold">{bn(stats.defaultersCount)}</span> জন
+              তারিখ শেষ হওয়া বকেয়া • <span className="font-bold">{bn(stats.defaultersCount || 0)}</span> জন
             </p>
           </CardContent>
         </Card>
 
+        {/* Card 2: Current Month Fee (Before Due Date) */}
+        <Card className="border-sky-200 bg-gradient-to-br from-sky-50/70 to-white shadow-xs">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-sky-800">বর্তমান মাসের বেতন / চলতি ফি</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                <Calendar className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-sky-800">{bn(stats.currentMonthDue || 0)} ৳</span>
+            </div>
+            <p className="mt-1 text-[11px] text-sky-600">
+              পরিশোধের সময় বাকি আছে (শেষ তারিখের আগে)
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Total Collected */}
         <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50/60 to-white shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -582,41 +693,29 @@ export function AdminFeesManager() {
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-emerald-800">{bn(stats.totalPaid)} ৳</span>
+              <span className="text-2xl font-bold text-emerald-800">{bn(stats.totalPaid || 0)} ৳</span>
             </div>
             <p className="mt-1 text-[11px] text-emerald-600">
-              মোট ধার্য: {bn(stats.totalCharged)} ৳
+              মোট ধার্য: {bn(stats.totalCharged || 0)} ৳ • সর্বমোট প্রদেয়: {bn(stats.totalDue || 0)} ৳
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-amber-100 bg-gradient-to-br from-amber-50/60 to-white shadow-xs">
+        {/* Card 4: Fines & Exam Due */}
+        <Card className="border-purple-100 bg-gradient-to-br from-purple-50/60 to-white shadow-xs">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-amber-700">অনুপস্থিতি জরিমানা (২০৳)</span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <span className="text-xs font-semibold text-purple-700">জরিমানা ও পরীক্ষা বকেয়া</span>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-100 text-purple-600">
                 <Sparkles className="h-4 w-4" />
               </span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-amber-800">{bn(stats.absentFineDue)} ৳</span>
+              <span className="text-2xl font-bold text-purple-800">{bn((stats.absentFineDue || 0) + (stats.failFineDue || 0))} ৳</span>
             </div>
-            <p className="mt-1 text-[11px] text-amber-600">পরীক্ষায় অনুপস্থিতির বকেয়া জরিমানা</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-purple-100 bg-gradient-to-br from-purple-50/60 to-white shadow-xs">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-purple-700">ফেল জরিমানা (৫০৳)</span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-100 text-purple-600">
-                <TrendingUp className="h-4 w-4" />
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-purple-800">{bn(stats.failFineDue)} ৳</span>
-            </div>
-            <p className="mt-1 text-[11px] text-purple-600">পরীক্ষায় ফেল সংক্রান্ত বকেয়া জরিমানা</p>
+            <p className="mt-1 text-[11px] text-purple-600">
+              অনুপস্থিতি: {bn(stats.absentFineDue || 0)} ৳ • ফেল: {bn(stats.failFineDue || 0)} ৳
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -626,7 +725,7 @@ export function AdminFeesManager() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
           <TabsList className="bg-slate-100">
             <TabsTrigger value="items" className="text-xs">
-              বকেয়া ও ধার্যকৃত ফি তালিকা ({bn(items.length)})
+              চলতি ও বকেয়া ফি তালিকা ({bn(items.length)})
             </TabsTrigger>
             <TabsTrigger value="payments" className="text-xs">
               পেমেন্ট হিস্ট্রি ও মানি রিসিট ({bn(payments.length)})
@@ -704,15 +803,16 @@ export function AdminFeesManager() {
             </SelectContent>
           </Select>
 
-          {/* Status Filter */}
+          {/* Status Filter: Distinguishes between Current Month Fee and Overdue */}
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="h-8 text-xs bg-white">
               <SelectValue placeholder="সকল স্ট্যাটাস" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">সকল স্ট্যাটাস</SelectItem>
-              <SelectItem value="PENDING">সম্পূর্ণ বকেয়া (PENDING)</SelectItem>
-              <SelectItem value="PARTIAL">আংশিক বকেয়া (PARTIAL)</SelectItem>
+              <SelectItem value="CURRENT">বর্তমান মাসের বেতন / চলতি ফি (সময় বাকি)</SelectItem>
+              <SelectItem value="OVERDUE">মেয়াদোত্তীর্ণ বকেয়া (Overdue)</SelectItem>
+              <SelectItem value="PARTIAL">আংশিক পরিশোধিত (PARTIAL)</SelectItem>
               <SelectItem value="PAID">পরিশোধিত (PAID)</SelectItem>
             </SelectContent>
           </Select>
@@ -731,7 +831,7 @@ export function AdminFeesManager() {
                     <th className="py-2.5 px-3 font-semibold">ক্যাটাগরি</th>
                     <th className="py-2.5 px-3 font-semibold text-right">ধার্য</th>
                     <th className="py-2.5 px-3 font-semibold text-right">পরিশোধিত</th>
-                    <th className="py-2.5 px-3 font-semibold text-right text-rose-700">বকেয়া</th>
+                    <th className="py-2.5 px-3 font-semibold text-right text-rose-700">বকেয়া / প্রদেয়</th>
                     <th className="py-2.5 px-3 font-semibold text-center">স্ট্যাটাস</th>
                     <th className="py-2.5 px-3 font-semibold text-right">অ্যাকশন</th>
                   </tr>
@@ -776,6 +876,22 @@ export function AdminFeesManager() {
                                 {item.reference_note}
                               </div>
                             )}
+                            {item.due_date && (
+                              <div className="text-[10px] flex items-center gap-1 mt-0.5">
+                                <span className="text-slate-500">শেষ তারিখ: {item.due_date}</span>
+                                {item.status !== "PAID" && (
+                                  item.is_overdue ? (
+                                    <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 rounded border border-rose-200">
+                                      মেয়াদ শেষ
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-medium text-sky-700 bg-sky-50 px-1 rounded border border-sky-200">
+                                      সময় বাকি
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2.5 px-3">
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${catInfo.color}`}>
@@ -797,12 +913,22 @@ export function AdminFeesManager() {
                                 পরিশোধিত
                               </Badge>
                             ) : item.status === "PARTIAL" ? (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 text-[10px]">
-                                আংশিক
+                              item.is_overdue ? (
+                                <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
+                                  আংশিক বকেয়া
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 text-[10px]">
+                                  আংশিক পরিশোধিত
+                                </Badge>
+                              )
+                            ) : item.is_overdue ? (
+                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
+                                বকেয়া (মেয়াদ পার)
                               </Badge>
                             ) : (
-                              <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[10px]">
-                                বকেয়া
+                              <Badge className={item.category === "MONTHLY_FEE" ? "bg-sky-100 text-sky-800 border-sky-200 hover:bg-sky-100 text-[10px]" : "bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-100 text-[10px]"}>
+                                {item.category === "MONTHLY_FEE" ? "বর্তমান মাসের বেতন" : "চলতি ফি"}
                               </Badge>
                             )}
                           </td>
@@ -1069,88 +1195,269 @@ export function AdminFeesManager() {
         </DialogContent>
       </Dialog>
 
-      {/* 5. MODAL: Custom Fee / Fine / Notes Selling */}
+      {/* 5. MODAL: Unified Fee Assignment (ALL students in class/batch OR Individual student) */}
       <Dialog open={isCustomFeeModalOpen} onOpenChange={setIsCustomFeeModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Plus className="h-4 w-4 text-emerald-600" />
-              জরিমানা বা নোটস বিক্রির ফি যোগ করুন
+              <Plus className="h-4 w-4 text-indigo-600" />
+              বেতন ও ফি নির্ধারণ (সকল বা আলাদা শিক্ষার্থী)
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              নির্দিষ্ট শিক্ষার্থীর অ্যাকাউন্টে নোটস বিক্রির মূল্য বা জরিমানা যুক্ত করুন।
+              শ্রেণি বা ব্যাচের সকল শিক্ষার্থীর জন্য একবারে কিংবা নির্দিষ্ট আলাদা শিক্ষার্থীর জন্য বেতন, পরীক্ষার ফি ও অন্যান্য ফি ধার্য করুন।
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCustomSubmit} className="space-y-3 py-2 text-xs">
-            <div>
-              <Label className="text-xs">শিক্ষার্থী নির্বাচন</Label>
-              <Select value={customStudentId} onValueChange={setCustomStudentId}>
-                <SelectTrigger className="h-8 text-xs mt-1">
-                  <SelectValue placeholder="শিক্ষার্থী খুঁজুন..." />
-                </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {students.map((st) => (
-                    <SelectItem key={st.id} value={String(st.id)}>
-                      {st.name} (রোল: {bn(st.roll)}, {classLabel(st.class_name)}
-                      {st.batch_name ? ` • ${st.batch_name}` : ""})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Mode Switcher: ALL students vs Individual student */}
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setFeeTarget("ALL")}
+              className={`py-1.5 px-3 rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                feeTarget === "ALL"
+                  ? "bg-white text-indigo-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              সকল শিক্ষার্থী (শ্রেণি/ব্যাচ)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeeTarget("STUDENT")}
+              className={`py-1.5 px-3 rounded-md font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                feeTarget === "STUDENT"
+                  ? "bg-white text-emerald-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <User className="h-3.5 w-3.5" />
+              আলাদা শিক্ষার্থী (একক)
+            </button>
+          </div>
+
+          <form onSubmit={handleAssignFeeSubmit} className="space-y-3 py-1 text-xs">
+            {/* Target Helper Notice */}
+            {feeTarget === "ALL" ? (
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-2.5 text-indigo-900 flex items-start gap-2">
+                <Users className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-[11px]">
+                  <span className="font-bold text-indigo-950">এক ক্লিকে সকল শিক্ষার্থীকে ধার্য: </span>
+                  <span>
+                    নির্ধারিত শ্রেণি বা ব্যাচের মোট <strong>{matchingStudentsCount}</strong> জন শিক্ষার্থীর হিসাবে এই ফি স্বয়ংক্রিয়ভাবে ধার্য হবে।
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-emerald-900 flex items-start gap-2">
+                <User className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-[11px]">
+                  <span className="font-bold text-emerald-950">আলাদা শিক্ষার্থী নির্বাচন: </span>
+                  <span>শুধুমাত্র নির্বাচিত শিক্ষার্থীর হিসাবে এই ফি বা জরিমানা যুক্ত হবে।</span>
+                </div>
+              </div>
+            )}
+
+            {/* Class & Batch filter */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">শ্রেণি নির্বাচন</Label>
+                <Select
+                  value={assignClassId}
+                  onValueChange={(val) => {
+                    setAssignClassId(val);
+                    setAssignBatchId("all");
+                    setAssignStudentId("");
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="সকল শ্রেণি" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">সকল শ্রেণি</SelectItem>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {classLabel(c.name)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">নির্দিষ্ট ব্যাচ (ঐচ্ছিক)</Label>
+                <Select
+                  value={assignBatchId}
+                  onValueChange={(val) => {
+                    setAssignBatchId(val);
+                    setAssignStudentId("");
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="সকল ব্যাচ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">সকল ব্যাচ</SelectItem>
+                    {batches
+                      .filter((b) => assignClassId === "all" || String(b.class_id) === assignClassId)
+                      .map((b) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
+            {/* If Single Student mode, show student select */}
+            {feeTarget === "STUDENT" && (
+              <div>
+                <Label className="text-xs">নির্দিষ্ট শিক্ষার্থী নির্বাচন *</Label>
+                <Select value={assignStudentId} onValueChange={setAssignStudentId}>
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="শিক্ষার্থী নির্বাচন করুন..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56">
+                    {assignAvailableStudents.map((st) => (
+                      <SelectItem key={st.id} value={String(st.id)}>
+                        {st.name} (রোল: {bn(st.roll)}, {classLabel(st.class_name)}
+                        {st.batch_name ? ` • ${st.batch_name}` : ""})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignAvailableStudents.length === 0 && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    নির্বাচিত শ্রেণি বা ব্যাচে কোনো শিক্ষার্থী পাওয়া যায়নি।
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Category & Amount */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">ফি-এর ক্যাটাগরি</Label>
                 <Select
-                  value={customCategory}
-                  onValueChange={(v) => setCustomCategory(v as FeeCategory)}
+                  value={assignCategory}
+                  onValueChange={(v) => {
+                    const cat = v as FeeCategory;
+                    setAssignCategory(cat);
+                    setAssignTitle(getDefaultTitle(cat, assignMonth, assignYear));
+                  }}
                 >
                   <SelectTrigger className="h-8 text-xs mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NOTE_MATERIAL">নোটস ও শিট বিক্রি</SelectItem>
-                    <SelectItem value="OTHER_FINE">দেরিতে আসার/অন্যান্য জরিমানা</SelectItem>
-                    <SelectItem value="EXAM_FEE">পরীক্ষার ফি</SelectItem>
-                    <SelectItem value="ADMISSION_FEE">ভর্তি/সেশন ফি</SelectItem>
                     <SelectItem value="MONTHLY_FEE">মাসিক বেতন</SelectItem>
+                    <SelectItem value="EXAM_FEE">পরীক্ষার ফি</SelectItem>
+                    <SelectItem value="NOTE_MATERIAL">নোটস ও শিট বিক্রি</SelectItem>
+                    <SelectItem value="ADMISSION_FEE">ভর্তি ও সেশন ফি</SelectItem>
+                    <SelectItem value="OTHER_FINE">দেরিতে আসার / শৃঙ্খলা জরিমানা</SelectItem>
                     <SelectItem value="OTHER_FEE">বিবিধ ফি</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label className="text-xs">টাকার পরিমাণ (৳)</Label>
+                <Label className="text-xs">টাকার পরিমাণ (৳) *</Label>
                 <Input
                   type="number"
-                  placeholder="যেমন: ৫০ বা ১০০"
-                  value={customAmount}
-                  onChange={(e) => setCustomAmount(e.target.value)}
+                  placeholder="যেমন: ৫০০"
+                  value={assignAmount}
+                  onChange={(e) => setAssignAmount(e.target.value)}
                   className="h-8 text-xs mt-1"
                   required
                 />
               </div>
             </div>
 
+            {/* Month & Year */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">মাস</Label>
+                <Select
+                  value={assignMonth}
+                  onValueChange={(val) => {
+                    setAssignMonth(val);
+                    setAssignTitle(getDefaultTitle(assignCategory, val, assignYear));
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="মাস" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS_BN.map((m, idx) => {
+                      if (!m) return null;
+                      return (
+                        <SelectItem key={idx} value={String(idx)}>
+                          {m}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">বছর</Label>
+                <Input
+                  value={assignYear}
+                  onChange={(e) => {
+                    setAssignYear(e.target.value);
+                    setAssignTitle(getDefaultTitle(assignCategory, assignMonth, e.target.value));
+                  }}
+                  className="h-8 text-xs mt-1"
+                />
+              </div>
+            </div>
+
+            {/* Due Date with Bengali Explanatory Notice */}
             <div>
-              <Label className="text-xs">ফি বা নোটসের নাম / বিবরণ</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">পরিশোধের শেষ তারিখ (Due Date)</Label>
+                {assignDueDate && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignDueDate("")}
+                    className="text-[10px] text-slate-400 hover:text-rose-500"
+                  >
+                    তারিখ মুছুন
+                  </button>
+                )}
+              </div>
               <Input
-                placeholder="যেমন: পদার্থবিজ্ঞান অধ্যায় ৩ স্পেশাল নোটস বা দেরিতে আসার জরিমানা"
-                value={customTitle}
-                onChange={(e) => setCustomTitle(e.target.value)}
+                type="date"
+                value={assignDueDate}
+                onChange={(e) => setAssignDueDate(e.target.value)}
                 className="h-8 text-xs mt-1"
-                required
+              />
+              <div className="mt-1 rounded border border-blue-100 bg-blue-50/70 p-1.5 text-[11px] text-blue-900 leading-tight">
+                <span className="font-semibold text-blue-950">📌 নিয়ম: </span>
+                পরিশোধের শেষ তারিখের আগে পর্যন্ত এটি শিক্ষার্থীর কাছে <strong>"বর্তমান মাসের বেতন"</strong> বা <strong>"চলতি ফি"</strong> হিসেবে থাকবে। শেষ তারিখ পার হলে তবেই এটি <strong>"বকেয়া"</strong>-তে যোগ হবে।
+              </div>
+            </div>
+
+            {/* Title / Description */}
+            <div>
+              <Label className="text-xs">ফি-এর শিরোনাম / বিবরণ</Label>
+              <Input
+                placeholder="যেমন: মার্চ ২০২৫ — মাসিক বেতন বা প্রথম সাময়িক পরীক্ষার ফি"
+                value={assignTitle}
+                onChange={(e) => setAssignTitle(e.target.value)}
+                className="h-8 text-xs mt-1"
               />
             </div>
 
+            {/* Reference Note */}
             <div>
               <Label className="text-xs">রেফারেন্স বা মন্তব্য (ঐচ্ছিক)</Label>
               <Input
-                placeholder="অতিরিক্ত কোনো তথ্য থাকলে লিখুন"
-                value={customNote}
-                onChange={(e) => setCustomNote(e.target.value)}
+                placeholder="অতিরিক্ত কোনো নোট বা নির্দেশনা থাকলে লিখুন"
+                value={assignNote}
+                onChange={(e) => setAssignNote(e.target.value)}
                 className="h-8 text-xs mt-1"
               />
             </div>
@@ -1167,10 +1474,14 @@ export function AdminFeesManager() {
               <Button
                 type="submit"
                 size="sm"
-                disabled={isSubmittingCustom}
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={isSubmittingAssign}
+                className="bg-indigo-600 text-white hover:bg-indigo-700"
               >
-                {isSubmittingCustom ? "সংরক্ষণ হচ্ছে..." : "ফি যুক্ত করুন"}
+                {isSubmittingAssign
+                  ? "ধার্য হচ্ছে..."
+                  : feeTarget === "ALL"
+                  ? `সকল শিক্ষার্থীকে ধার্য করুন (${matchingStudentsCount} জন)`
+                  : "শিক্ষার্থীকে ফি ধার্য করুন"}
               </Button>
             </DialogFooter>
           </form>

@@ -36,18 +36,49 @@ export default async function StudentDashboard() {
   });
   const recent = rows.slice(-6).reverse();
 
-  // Query student pending dues
-  const feeSummary = await db
-    .prepare(
-      `SELECT COALESCE(SUM(due_amount), 0) as total_due, COUNT(*) as due_count
-       FROM fee_items
-       WHERE student_id = ? AND status IN ('PENDING', 'PARTIAL') AND due_amount > 0`
-    )
-    .bind(user.studentId)
-    .first<{ total_due: number; due_count: number }>()
-    .catch(() => null);
-  const totalDue = Number(feeSummary?.total_due || 0);
-  const dueCount = Number(feeSummary?.due_count || 0);
+  // Query student pending fees with Overdue vs Current Month breakdown
+  const pendingItems = (
+    await db
+      .prepare(
+        `SELECT id, category, title, amount, due_amount, due_date, month, year, status
+         FROM fee_items
+         WHERE student_id = ? AND status IN ('PENDING', 'PARTIAL') AND due_amount > 0`
+      )
+      .bind(user.studentId)
+      .all<any>()
+  ).results || [];
+
+  let overdueDue = 0;
+  let currentMonthDue = 0;
+  let nearestDueDate: string | null = null;
+
+  for (const it of pendingItems) {
+    const amt = Number(it.due_amount) || 0;
+    // Check due date: if due_date is in past, it is overdue; otherwise it is current fee
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    let isOver = false;
+    if (it.due_date && it.due_date.trim()) {
+      isOver = it.due_date.trim().split("T")[0] < todayStr;
+      if (!isOver && (!nearestDueDate || it.due_date < nearestDueDate)) {
+        nearestDueDate = it.due_date.trim().split("T")[0];
+      }
+    } else if (it.year && it.month) {
+      if (it.year < year || (it.year === year && it.month < month)) {
+        isOver = true;
+      } else if (it.year === year && it.month === month) {
+        isOver = now.getDate() > 10;
+      }
+    }
+
+    if (isOver) {
+      overdueDue += amt;
+    } else {
+      currentMonthDue += amt;
+    }
+  }
+
+  const totalDue = overdueDue + currentMonthDue;
+  const dueCount = pendingItems.length;
 
   const quickLinks = [
     {
@@ -93,8 +124,8 @@ export default async function StudentDashboard() {
         panelDesc="তোমার পরীক্ষার ফলাফল, মেধা তালিকা ও বইসমূহ।"
       />
 
-      {/* Prominent Due Alert Card if student has pending dues */}
-      {totalDue > 0 && (
+      {/* Overdue Alert Banner — Shown ONLY if last payment date has expired */}
+      {overdueDue > 0 && (
         <div className="rounded-xl border border-rose-300 bg-gradient-to-r from-rose-50 via-white to-rose-50/80 p-4 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -104,14 +135,19 @@ export default async function StudentDashboard() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-rose-900">
-                    আপনার মোট বকেয়া: {bn(totalDue)} ৳
+                    মেয়াদোত্তীর্ণ বকেয়া: {bn(overdueDue)} ৳
                   </span>
+                  {currentMonthDue > 0 && (
+                    <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">
+                      + বর্তমান মাসের বেতন: {bn(currentMonthDue)} ৳
+                    </span>
+                  )}
                   <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px] font-bold text-rose-800">
                     {bn(dueCount)}টি আইটেম
                   </span>
                 </div>
                 <p className="text-xs text-rose-700">
-                  মাসিক বেতন, অনুপস্থিতির জরিমানা বা পরীক্ষার ফি বকেয়া রয়েছে। বিস্তারিত দেখে দ্রুত পরিশোধ করুন।
+                  নির্ধারিত শেষ তারিখ পার হয়ে গেছে। অনুগ্রহ করে যত দ্রুত সম্ভব বকেয়া পরিশোধ করুন।
                 </p>
               </div>
             </div>
@@ -121,6 +157,42 @@ export default async function StudentDashboard() {
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-rose-700 transition-colors whitespace-nowrap"
             >
               <span>বকেয়ার বিস্তারিত দেখুন</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Current Month Fee Reminder Banner — Shown before last payment date */}
+      {overdueDue === 0 && currentMonthDue > 0 && (
+        <div className="rounded-xl border border-sky-300 bg-gradient-to-r from-sky-50 via-white to-blue-50/70 p-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-xs">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-sky-950">
+                    বর্তমান মাসের বেতন: {bn(currentMonthDue)} ৳
+                  </span>
+                  <span className="rounded-full bg-sky-200 px-2 py-0.5 text-[10px] font-semibold text-sky-900">
+                    চলতি প্রদেয়
+                  </span>
+                </div>
+                <p className="text-xs text-sky-800">
+                  {nearestDueDate
+                    ? `পরিশোধের শেষ তারিখ: ${nearestDueDate}। শেষ তারিখের আগে পরিশোধ করুন (তারিখ পার হলে বকেয়ায় যুক্ত হবে)।`
+                    : "চলতি মাসের বেতন নির্ধারিত সময়ের মধ্যে একাডেমি অফিসে বা অনলাইনে পরিশোধ করুন।"}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/student/fees"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-sky-700 transition-colors whitespace-nowrap"
+            >
+              <span>বেতন ও হিসাব দেখুন</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>

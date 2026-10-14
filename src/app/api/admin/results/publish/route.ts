@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { parseJson } from "@/lib/validation";
+import { notifyResultPublished } from "@/lib/push-events";
 import { z } from "zod";
 
 const publishSchema = z.object({
@@ -36,6 +37,26 @@ export async function POST(req: Request) {
         .bind(isPublishedVal, body.examId)
         .run();
 
+      // Event-triggered push: notify the class only when results become
+      // visible (publish=true). Unpublishing does not notify.
+      if (body.publish) {
+        const examInfo = await db
+          .prepare(
+            "SELECT e.class_id, e.title, e.month, e.year, c.name as class_name FROM exams e JOIN classes c ON c.id = e.class_id WHERE e.id = ?"
+          )
+          .bind(body.examId)
+          .first<{ class_id: number; title: string; month: number; year: number; class_name: string }>()
+          .catch(() => null);
+        if (examInfo) {
+          await notifyResultPublished(db, {
+            classId: examInfo.class_id,
+            className: examInfo.class_name,
+            label: `${examInfo.title} (${examInfo.month}/${examInfo.year})`,
+            eventId: `exam:${body.examId}`,
+          });
+        }
+      }
+
       return ok({
         success: true,
         examId: body.examId,
@@ -53,6 +74,23 @@ export async function POST(req: Request) {
         )
         .bind(isPublishedVal, body.classId, body.month, body.year)
         .run();
+
+      // Event-triggered push: class-wide monthly publish.
+      if (body.publish) {
+        const cls = await db
+          .prepare("SELECT id, name FROM classes WHERE id = ?")
+          .bind(body.classId)
+          .first<{ id: number; name: string }>()
+          .catch(() => null);
+        if (cls) {
+          await notifyResultPublished(db, {
+            classId: cls.id,
+            className: cls.name,
+            label: `${body.month}/${body.year}`,
+            eventId: `class:${body.classId}:${body.month}:${body.year}`,
+          });
+        }
+      }
 
       return ok({
         success: true,

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { requireApiUser } from "@/lib/auth/guards";
 import { assertSameOrigin } from "@/lib/api";
 import { DAYS_OF_WEEK, getDayNameBn, getBangladeshDayOfWeek } from "@/lib/constants";
+import { notifyRoutineChanged } from "@/lib/push-events";
 
 export const dynamic = "force-dynamic";
 
@@ -465,6 +466,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Event-triggered push to the affected class (idempotent per save).
+    if (targetClass && firstInsertId) {
+      const dayLabel =
+        targetDays.length > 1
+          ? `${getDayNameBn(targetDays[0])}–${getDayNameBn(targetDays[targetDays.length - 1])}`
+          : getDayNameBn(targetDays[0]);
+      await notifyRoutineChanged(db, {
+        classId: targetClass.id,
+        className: String(className),
+        subjectName: subjectName.trim(),
+        teacherName: teacherName?.trim() || null,
+        startTime: startTime.trim(),
+        endTime: endTime.trim(),
+        dayLabel,
+        roomNo: roomNo?.trim() || null,
+        eventId: `create:${firstInsertId}`,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       id: firstInsertId,
@@ -574,6 +594,27 @@ export async function PUT(req: NextRequest) {
         Number(id)
       )
       .run();
+
+    // Event-triggered push: routine updated → notify the class.
+    const updatedClass = await db
+      .prepare("SELECT id, name FROM classes WHERE name = ?")
+      .bind(String(className))
+      .first<{ id: number; name: string }>()
+      .catch(() => null);
+    if (updatedClass) {
+      const stamp = new Date().toISOString().replace(/[-:TZ]/g, "").slice(0, 12); // yyyyMMddHHmm
+      await notifyRoutineChanged(db, {
+        classId: updatedClass.id,
+        className: String(className),
+        subjectName: subjectName.trim(),
+        teacherName: teacherName?.trim() || null,
+        startTime: startTime.trim(),
+        endTime: endTime.trim(),
+        dayLabel: getDayNameBn(Number(dayOfWeek)),
+        roomNo: roomNo?.trim() || null,
+        eventId: `update:${id}:${stamp}`,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

@@ -25,11 +25,22 @@ binding = "BUCKET"
 bucket_name = "academy-assets"
 
 [vars]
-APP_URL = "https://your-domain.com"
+APP_URL = "https://academy-marks-system.salman61902.workers.dev"
 # Set the real secret in production:
 #   bunx wrangler secret put AUTH_SECRET
 #   bunx wrangler secret put ADMIN_USERNAME
 #   bunx wrangler secret put ADMIN_PASSWORD
+# Push notifications (FCM HTTP v1) + cron — see docs/FCM_SETUP.md:
+#   bunx wrangler secret put FCM_SERVICE_ACCOUNT   # full service-account JSON key
+#   bunx wrangler secret put CRON_SECRET            # random string for the cron endpoint
+
+# ---- Cron Triggers: push-notification queue processor ----
+# Every 5 minutes the Worker's scheduled() handler (injected into
+# .open-next/worker.js by scripts/patch-worker.mjs after build) calls
+# POST /api/cron/push with the CRON_SECRET. The processor is
+# claim-guarded and idempotent, so overlapping or missed ticks are safe.
+[triggers]
+crons = ["*/5 * * * *"]
 
 # Preview environment — MUST use its own database & bucket.
 # Previously [env.preview] only overrode `name`, so it INHERITED the

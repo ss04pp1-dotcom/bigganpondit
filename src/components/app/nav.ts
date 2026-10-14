@@ -25,6 +25,7 @@ import {
   CalendarDays,
   Layers,
   Wallet,
+  Zap,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -78,6 +79,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/result-cards", label: "রেজাল্ট কার্ড", icon: Award },
     { href: "/admin/notebooks", label: "প্রকাশনী", icon: BookMarked },
     { href: "/admin/notices", label: "নোটিশ বোর্ড", icon: Bell },
+    { href: "/admin/notifications", label: "পুশ নোটিফিকেশন", icon: Zap },
     { href: "/admin/settings", label: "সেটিংস", icon: Settings },
     { href: "/admin/backup", label: "ব্যাকআপ", icon: DatabaseBackup },
   ],

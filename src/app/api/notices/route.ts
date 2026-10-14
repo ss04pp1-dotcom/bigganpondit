@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { getCurrentUser } from "@/lib/auth/session";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+import { notifyNoticePublished } from "@/lib/push-events";
 
 export async function GET(req: Request) {
   try {
@@ -111,6 +112,16 @@ export async function POST(req: Request) {
         isAutoApproved ? new Date().toISOString() : null
       )
       .run();
+
+    // Event-triggered push: only when the notice is actually VISIBLE now.
+    // PENDING_APPROVAL notices wait for the admin approve endpoint.
+    if (isAutoApproved) {
+      await notifyNoticePublished(db, {
+        id: Number(res.meta.last_row_id),
+        title,
+        content,
+      });
+    }
 
     return ok({
       id: res.meta.last_row_id,

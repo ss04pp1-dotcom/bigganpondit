@@ -42,6 +42,49 @@ for (const filePath of candidateFiles) {
     console.log(`[patch-worker] Added preview-props check to ${path.basename(filePath)}`);
   }
 
+  // 3. Inject the scheduled (cron) handler needed by the push-notification
+  //    queue. wrangler.toml registers a cron trigger every 5 minutes; the
+  //    OpenNext bundle has no `scheduled` export, so Cloudflare would drop
+  //    every cron invocation without this patch.
+  //
+  //    The injected handler calls POST /api/cron/push on the deployed APP_URL
+  //    with the CRON_SECRET server-side secret. All queue logic (claiming,
+  //    idempotency, retry/backoff) lives in the app route — this shim only
+  //    bridges cron → HTTP. Overlaps are safe: the processor is claim-guarded.
+  if (
+    path.basename(filePath) === "worker.js" &&
+    !/export\s+(const|let|var|async\s+function|function)\s+scheduled\b|export\s*\{[^}]*\bscheduled\b/.test(content) &&
+    !content.includes("__BIGGANPONDIT_CRON__")
+  ) {
+    const cronShim = `
+// --- [patch-worker] __BIGGANPONDIT_CRON__ scheduled handler (injected) ---
+// Cron bridge for the push-notification queue (every 5 min, see wrangler.toml).
+export async function scheduled(event, env, ctx) {
+  const baseUrl = (env && (env.APP_URL || (env.vars && env.vars.APP_URL))) || "";
+  const target =
+    (baseUrl ? String(baseUrl).replace(/\\/+$/, "") : "") + "/api/cron/push";
+  const secret = (env && (env.CRON_SECRET || (env.vars && env.vars.CRON_SECRET))) || "";
+  try {
+    if (!target.startsWith("http")) {
+      console.warn("[cron] APP_URL not set — push processor skipped");
+      return;
+    }
+    const res = await fetch(target, {
+      method: "POST",
+      headers: { "x-cron-secret": String(secret) },
+    });
+    console.log("[cron] push processor:", res.status);
+  } catch (err) {
+    console.error("[cron] push processor failed:", (err && err.message) || err);
+  }
+}
+// --- end injected scheduled handler ---
+`;
+    content = content + cronShim;
+    modified = true;
+    console.log("[patch-worker] Injected scheduled() cron handler for /api/cron/push");
+  }
+
   if (modified) {
     fs.writeFileSync(filePath, content, "utf-8");
     modifiedCount++;

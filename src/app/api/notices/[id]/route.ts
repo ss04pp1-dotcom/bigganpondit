@@ -2,6 +2,7 @@
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
+import { notifyNoticePublished } from "@/lib/push-events";
 
 export async function POST(
   req: Request,
@@ -34,6 +35,15 @@ export async function POST(
         .prepare("UPDATE notices SET status = 'APPROVED', approved_at = datetime('now') WHERE id = ?")
         .bind(noticeId)
         .run();
+      // Event-triggered push (idempotent: approving twice sends once).
+      const approved = await db
+        .prepare("SELECT title, content FROM notices WHERE id = ? AND status = 'APPROVED'")
+        .bind(noticeId)
+        .first<{ title: string; content: string }>()
+        .catch(() => null);
+      if (approved) {
+        await notifyNoticePublished(db, { id: noticeId, ...approved });
+      }
       return ok({ message: "নোটিশটি সফলভাবে অনুমোদন করা হয়েছে।" });
     } else {
       await db

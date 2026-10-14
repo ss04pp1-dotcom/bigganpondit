@@ -370,6 +370,106 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
         .run()
         .catch(() => null);
 
+      // Ensure push-notification tables exist (migration 0016) — kept here so
+      // a deploy without `wrangler d1 migrations apply` still self-heals.
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS device_tokens (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_id     TEXT NOT NULL,
+            fcm_token     TEXT NOT NULL,
+            platform      TEXT NOT NULL DEFAULT 'android',
+            app_version   TEXT,
+            active        INTEGER NOT NULL DEFAULT 1,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            last_seen_at  TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_fcm ON device_tokens(fcm_token)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_device_tokens_user_device ON device_tokens(user_id, device_id, active)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(active, user_id)`).run().catch(() => null);
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS push_notifications (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT NOT NULL,
+            body            TEXT NOT NULL,
+            deep_link       TEXT,
+            image_url       TEXT,
+            target_type     TEXT NOT NULL DEFAULT 'ALL'
+                            CHECK (target_type IN ('ALL','STUDENTS','TEACHERS','CLASS','USER')),
+            target_class_id INTEGER,
+            target_user_id  INTEGER,
+            kind            TEXT NOT NULL DEFAULT 'MANUAL'
+                            CHECK (kind IN ('MANUAL','NOTICE','ROUTINE','RESULT','SYSTEM')),
+            status          TEXT NOT NULL DEFAULT 'PENDING'
+                            CHECK (status IN ('DRAFT','PENDING','PROCESSING','SENT','PARTIAL','FAILED','CANCELLED')),
+            scheduled_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            timezone        TEXT NOT NULL DEFAULT 'Asia/Dhaka',
+            recurrence      TEXT CHECK (recurrence IS NULL OR recurrence IN ('DAILY','WEEKLY','MONTHLY')),
+            recurrence_until TEXT,
+            idempotency_key TEXT UNIQUE,
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            max_attempts    INTEGER NOT NULL DEFAULT 5,
+            next_attempt_at TEXT,
+            total_devices   INTEGER NOT NULL DEFAULT 0,
+            sent_count      INTEGER NOT NULL DEFAULT 0,
+            failed_count    INTEGER NOT NULL DEFAULT 0,
+            error_message   TEXT,
+            created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_push_notifications_due ON push_notifications(status, scheduled_at)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_push_notifications_status ON push_notifications(status, created_at DESC)`).run().catch(() => null);
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS push_deliveries (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            notification_id INTEGER NOT NULL REFERENCES push_notifications(id) ON DELETE CASCADE,
+            device_token_id INTEGER NOT NULL REFERENCES device_tokens(id) ON DELETE CASCADE,
+            user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status          TEXT NOT NULL DEFAULT 'QUEUED'
+                            CHECK (status IN ('QUEUED','SENT','FAILED','INVALID')),
+            fcm_message_id  TEXT,
+            error           TEXT,
+            attempted_at    TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_push_deliveries_notification ON push_deliveries(notification_id)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_push_deliveries_user ON push_deliveries(user_id, created_at DESC)`).run().catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_push_deliveries_cleanup ON push_deliveries(created_at)`).run().catch(() => null);
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS notification_inbox (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            notification_id INTEGER NOT NULL REFERENCES push_notifications(id) ON DELETE CASCADE,
+            title           TEXT NOT NULL,
+            body            TEXT NOT NULL,
+            deep_link       TEXT,
+            kind            TEXT NOT NULL DEFAULT 'MANUAL',
+            is_read         INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare(`CREATE INDEX IF NOT EXISTS idx_notification_inbox_user ON notification_inbox(user_id, created_at DESC)`).run().catch(() => null);
+
       // Schema is already applied. Check if initial admin needs creation.
       const env = cf ?? localEnv();
       const adminPasswordEnv = env.ADMIN_PASSWORD ? String(env.ADMIN_PASSWORD) : null;
@@ -841,6 +941,92 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       CREATE INDEX IF NOT EXISTS idx_fee_notifications_read ON fee_notifications(is_read);
     `,
     "fee_management_tables"
+  );
+
+  // Push notifications (migration 0016) — also on the fresh-db path so a
+  // brand-new local database gets the same tables as the Workers fast path.
+  await execSchemaStep(
+    db,
+    `
+      CREATE TABLE IF NOT EXISTS device_tokens (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id     TEXT NOT NULL,
+        fcm_token     TEXT NOT NULL,
+        platform      TEXT NOT NULL DEFAULT 'android',
+        app_version   TEXT,
+        active        INTEGER NOT NULL DEFAULT 1,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        last_seen_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_fcm ON device_tokens(fcm_token);
+      CREATE INDEX IF NOT EXISTS idx_device_tokens_user_device ON device_tokens(user_id, device_id, active);
+      CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(active, user_id);
+
+      CREATE TABLE IF NOT EXISTS push_notifications (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT NOT NULL,
+        body            TEXT NOT NULL,
+        deep_link       TEXT,
+        image_url       TEXT,
+        target_type     TEXT NOT NULL DEFAULT 'ALL'
+                        CHECK (target_type IN ('ALL','STUDENTS','TEACHERS','CLASS','USER')),
+        target_class_id INTEGER,
+        target_user_id  INTEGER,
+        kind            TEXT NOT NULL DEFAULT 'MANUAL'
+                        CHECK (kind IN ('MANUAL','NOTICE','ROUTINE','RESULT','SYSTEM')),
+        status          TEXT NOT NULL DEFAULT 'PENDING'
+                        CHECK (status IN ('DRAFT','PENDING','PROCESSING','SENT','PARTIAL','FAILED','CANCELLED')),
+        scheduled_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        timezone        TEXT NOT NULL DEFAULT 'Asia/Dhaka',
+        recurrence      TEXT CHECK (recurrence IS NULL OR recurrence IN ('DAILY','WEEKLY','MONTHLY')),
+        recurrence_until TEXT,
+        idempotency_key TEXT UNIQUE,
+        attempts        INTEGER NOT NULL DEFAULT 0,
+        max_attempts    INTEGER NOT NULL DEFAULT 5,
+        next_attempt_at TEXT,
+        total_devices   INTEGER NOT NULL DEFAULT 0,
+        sent_count      INTEGER NOT NULL DEFAULT 0,
+        failed_count    INTEGER NOT NULL DEFAULT 0,
+        error_message   TEXT,
+        created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_notifications_due ON push_notifications(status, scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_push_notifications_status ON push_notifications(status, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS push_deliveries (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        notification_id INTEGER NOT NULL REFERENCES push_notifications(id) ON DELETE CASCADE,
+        device_token_id INTEGER NOT NULL REFERENCES device_tokens(id) ON DELETE CASCADE,
+        user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status          TEXT NOT NULL DEFAULT 'QUEUED'
+                        CHECK (status IN ('QUEUED','SENT','FAILED','INVALID')),
+        fcm_message_id  TEXT,
+        error           TEXT,
+        attempted_at    TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_push_deliveries_notification ON push_deliveries(notification_id);
+      CREATE INDEX IF NOT EXISTS idx_push_deliveries_user ON push_deliveries(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_push_deliveries_cleanup ON push_deliveries(created_at);
+
+      CREATE TABLE IF NOT EXISTS notification_inbox (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        notification_id INTEGER NOT NULL REFERENCES push_notifications(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL,
+        body            TEXT NOT NULL,
+        deep_link       TEXT,
+        kind            TEXT NOT NULL DEFAULT 'MANUAL',
+        is_read         INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_notification_inbox_user ON notification_inbox(user_id, created_at DESC);
+    `,
+    "push_notification_tables"
   );
 
   try {

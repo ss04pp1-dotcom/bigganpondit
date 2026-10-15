@@ -34,6 +34,27 @@ export function LoginForm({
   const router = useRouter();
   const { toast } = useToast();
 
+  // অ্যাপ ডিপ-লিংক সাপোর্ট: /login?next=/student/results আকারে আসলে
+  // লগইন-পরে সেই পেজেই ফেরত যাবে (সাধারণ ব্রাউজারে আগের মতোই রোল-হোম)।
+  // শুধু same-origin আপেক্ষিক পাথ গ্রহণযোগ্য — open-redirect ইনজেকশন আটকায়।
+  const postLoginTarget = (fallback: string): string => {
+    try {
+      const n = new URLSearchParams(window.location.search).get("next");
+      if (
+        n &&
+        n.startsWith("/") &&
+        !n.startsWith("//") &&
+        !n.startsWith("/\\") &&
+        !n.startsWith("/api/")
+      ) {
+        return n;
+      }
+    } catch {
+      /* ignore */
+    }
+    return fallback;
+  };
+
   // Forgot password & Resend OTP state
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
@@ -147,7 +168,7 @@ export function LoginForm({
         });
       }
       toast({ title: `স্বাগতম, ${json.name}!` });
-      window.location.href = json.redirect;
+      window.location.href = postLoginTarget(json.redirect);
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
     } finally { setBusy(false); }
@@ -222,7 +243,7 @@ export function LoginForm({
       }
 
       toast({ title: `স্বাগতম, ${verifyJson.name}! বায়োমেট্রিক লগইন সফল।` });
-      window.location.href = verifyJson.redirect;
+      window.location.href = postLoginTarget(verifyJson.redirect);
     } catch (err: any) {
       if (err.name === "NotAllowedError") {
         toast({ title: "ফিঙ্গারপ্রিন্ট অনুরোধ বাতিল করা হয়েছে।", variant: "destructive" });

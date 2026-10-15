@@ -76,5 +76,11 @@ export function localEnv(): CloudflareEnv {
     // Opt-in demo seeding for local development (see .dev.vars.example).
     // Production must NEVER set this to "1".
     SEED_DEMO_DATA: process.env.SEED_DEMO_DATA,
+    // Public Firebase client values for /api/push/config (local dev parity
+    // with the Worker vars; these are non-secret identifiers only).
+    FIREBASE_API_KEY: process.env.FIREBASE_API_KEY,
+    FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
+    FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+    FIREBASE_SENDER_ID: process.env.FIREBASE_SENDER_ID,
   };
 }

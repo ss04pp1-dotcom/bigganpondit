@@ -70,6 +70,24 @@ openssl rand -hex 24
 bunx wrangler secret put CRON_SECRET
 ```
 
+### ৩-খ। অ্যাপের জন্য পাবলিক Firebase ভ্যারিয়েবল (WebView APK-তে রিবিল্ড ছাড়াই FCM চালু)
+
+Android WebView অ্যাপটি (bd.bigganpondit.academy) চালু হওয়ার সময়
+`GET /api/push/config` থেকে এই ৪টি **পাবলিক** ভ্যারিয়েবল পড়ে নিজে নিজে
+Firebase ইনিশিয়ালাইজ করে। ভ্যারিয়েবল সেট করার সাথে সাথেই (পরের লঞ্চ থেকে)
+পুশ চালু হয়ে যায় — **APK আবার বানানোর দরকার নেই।**
+Cloudflare Dashboard → Workers → academy-marks-system → Settings →
+Variables and Secrets → Add variable (Type: Text — এগুলো সিক্রেট নয়):
+
+| Variable | মান কোথায় পাবেন (Firebase Console) |
+|---|---|
+| `FIREBASE_API_KEY` | Project Settings → General → Web API Key (`AIza...`) |
+| `FIREBASE_APP_ID` | Project Settings → আপনার Android অ্যাপ (`1:123...:android:abc...`) |
+| `FIREBASE_PROJECT_ID` | Project Settings → General → Project ID |
+| `FIREBASE_SENDER_ID` | Project Settings → Cloud Messaging → Sender ID |
+
+যাচাই: `https://<আপনার-সাইট>/api/push/config` → `"enabled":true` দেখালেই তৈরি।
+
 ### ৪. ডিপ্লয়
 
 ```bash

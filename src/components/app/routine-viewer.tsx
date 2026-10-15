@@ -44,6 +44,7 @@ import {
   getBangladeshDayOfWeek,
 } from "@/lib/constants";
 import { RoutineItem } from "@/components/app/today-routine-modal";
+import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 
 function parseTimeToMinutes(timeStr: string): number | null {
   if (!timeStr) return null;
@@ -140,6 +141,48 @@ export function RoutineViewer({
   const isTeacher = role === "TEACHER";
   const isDirector = role === "DIRECTOR";
   const isAdmin = role === "ADMIN";
+
+  // Daily Topic modal state
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
+  const [selectedRoutineForTopic, setSelectedRoutineForTopic] = useState<RoutineItem | null>(null);
+
+  const canEditTopic = (r: RoutineItem) => {
+    if (isAdmin || isDirector) return true;
+    if (!isTeacher) return false;
+    if (userContext?.teacherId && r.teacher_id === userContext.teacherId) return true;
+    if (userContext?.userName && r.teacher_name && r.teacher_name.toLowerCase().includes(userContext.userName.toLowerCase())) return true;
+    if (userContext?.teacherShortName && (r.teacher_short_name === userContext.teacherShortName || r.teacher_name === userContext.teacherShortName)) return true;
+    return false;
+  };
+
+  const openTopicModal = (r: RoutineItem) => {
+    setSelectedRoutineForTopic(r);
+    setTopicModalOpen(true);
+  };
+
+  const handleTopicSaved = (data: {
+    routineId: number;
+    date: string;
+    chapterName: string | null;
+    topicName: string;
+    objectives: string | null;
+    isDeleted?: boolean;
+  }) => {
+    setRoutines((prev) =>
+      prev.map((item) => {
+        if (item.id === data.routineId) {
+          return {
+            ...item,
+            today_chapter: data.isDeleted ? null : data.chapterName,
+            today_topic: data.isDeleted ? null : data.topicName,
+            today_objectives: data.isDeleted ? null : data.objectives,
+            topic_date: data.date,
+          };
+        }
+        return item;
+      })
+    );
+  };
 
   // Target day number for filtering
   const activeDayNumber =
@@ -734,6 +777,47 @@ export function RoutineViewer({
                       )}
                     </div>
                   </div>
+
+                  {/* Today's Lesson / Topic (অধ্যায় ও বিষয়বস্তু) */}
+                  {(r.today_topic || r.today_chapter) ? (
+                    <div className="mt-3 p-3 rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-50/90 to-teal-50/80 space-y-1.5 shadow-2xs">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-900">
+                          <BookOpen className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
+                          আজকের পাঠ / ক্লাসের টপিক
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-200">
+                          শিক্ষকের আপডেট
+                        </span>
+                      </div>
+                      {r.today_chapter && (
+                        <p className="text-xs font-black text-emerald-950 flex items-baseline gap-1.5">
+                          <span className="text-[11px] font-bold text-emerald-700 shrink-0">অধ্যায়:</span>
+                          <span>{r.today_chapter}</span>
+                        </p>
+                      )}
+                      {r.today_topic && (
+                        <p className="text-xs font-semibold text-slate-800 flex items-baseline gap-1.5">
+                          <span className="text-[11px] font-bold text-teal-700 shrink-0">টপিক:</span>
+                          <span className="text-slate-900 font-bold">{r.today_topic}</span>
+                        </p>
+                      )}
+                      {r.today_objectives && (
+                        <div className="text-[11px] text-emerald-950 bg-white/90 p-2 rounded-lg border border-emerald-100 mt-1 flex items-start gap-1.5 leading-relaxed">
+                          <span className="shrink-0 font-bold text-xs">📝</span>
+                          <span className="italic">{r.today_objectives}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-3 px-3 py-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 text-[11px] text-slate-500 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <BookOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span>আজকের পাঠ:</span>
+                        <span className="text-slate-400 italic">টপিক এখনও নির্ধারিত হয়নি</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer: Teacher, Room and Notes */}
@@ -775,12 +859,51 @@ export function RoutineViewer({
                       💡 {r.note}
                     </p>
                   )}
+
+                  {/* Teacher Action: Set/Edit Today's Lesson Topic */}
+                  {canEditTopic(r) && (
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => openTopicModal(r)}
+                        className={`w-full h-8 text-xs font-bold gap-1.5 transition ${
+                          r.today_topic || r.today_chapter
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                            : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
+                        }`}
+                      >
+                        {r.today_topic || r.today_chapter ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />
+                            আজকের পাঠ / টপিক এডিট করুন
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5 text-emerald-700" />
+                            আজকের পাঠ / টপিক লিখুন
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Routine Lesson Topic Modal */}
+      <RoutineTopicModal
+        isOpen={topicModalOpen}
+        onClose={() => {
+          setTopicModalOpen(false);
+          setSelectedRoutineForTopic(null);
+        }}
+        routine={selectedRoutineForTopic}
+        onSaved={handleTopicSaved}
+      />
     </div>
   );
 }

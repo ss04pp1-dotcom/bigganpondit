@@ -355,6 +355,23 @@ CREATE INDEX IF NOT EXISTS idx_routines_day_class ON routines(day_of_week, class
 CREATE INDEX IF NOT EXISTS idx_routines_teacher ON routines(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_routines_batch ON routines(batch_id);
 
+CREATE TABLE IF NOT EXISTS routine_daily_topics (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  routine_id   INTEGER NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+  date         TEXT NOT NULL,
+  chapter_name TEXT,
+  topic_name   TEXT NOT NULL,
+  objectives   TEXT,
+  teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+  teacher_name TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(routine_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_rdt_routine_date ON routine_daily_topics(routine_id, date);
+CREATE INDEX IF NOT EXISTS idx_rdt_date ON routine_daily_topics(date);
+CREATE INDEX IF NOT EXISTS idx_rdt_teacher ON routine_daily_topics(teacher_id);
+
 CREATE TABLE IF NOT EXISTS student_monthly_comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id  INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,

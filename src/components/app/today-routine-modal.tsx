@@ -47,6 +47,7 @@ import {
   getBangladeshDayOfWeek,
 } from "@/lib/constants";
 import Link from "next/link";
+import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 
 export interface RoutineItem {
   id: number;
@@ -68,6 +69,12 @@ export interface RoutineItem {
   room_no: string | null;
   note: string | null;
   is_active: number;
+  daily_topic_id?: number | null;
+  today_chapter?: string | null;
+  today_topic?: string | null;
+  today_objectives?: string | null;
+  topic_date?: string | null;
+  topic_updated_at?: string | null;
 }
 
 interface RoutineApiResponse {
@@ -130,6 +137,58 @@ export function TodayRoutineModal({
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const todayDayOfWeek = data?.todayDayOfWeek ?? getBangladeshDayOfWeek();
   const todayDayName = data?.todayDayName ?? getDayNameBn(todayDayOfWeek);
+
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
+  const [selectedRoutineForTopic, setSelectedRoutineForTopic] = useState<RoutineItem | null>(null);
+
+  const userRole = data?.userContext?.role;
+  const isAdmin = userRole === "ADMIN";
+  const isDirector = userRole === "DIRECTOR";
+  const isTeacher = userRole === "TEACHER";
+  const isStudent = userRole === "STUDENT";
+
+  const canEditTopic = (r: RoutineItem) => {
+    if (isAdmin || isDirector) return true;
+    if (!isTeacher) return false;
+    const ctx = data?.userContext;
+    if (ctx?.teacherId && r.teacher_id === ctx.teacherId) return true;
+    if (ctx?.userName && r.teacher_name && r.teacher_name.toLowerCase().includes(ctx.userName.toLowerCase())) return true;
+    if (ctx?.teacherShortName && (r.teacher_short_name === ctx.teacherShortName || r.teacher_name === ctx.teacherShortName)) return true;
+    return false;
+  };
+
+  const openTopicModal = (r: RoutineItem) => {
+    setSelectedRoutineForTopic(r);
+    setTopicModalOpen(true);
+  };
+
+  const handleTopicSaved = (saved: {
+    routineId: number;
+    date: string;
+    chapterName: string | null;
+    topicName: string;
+    objectives: string | null;
+    isDeleted?: boolean;
+  }) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        routines: prev.routines.map((r) => {
+          if (r.id === saved.routineId) {
+            return {
+              ...r,
+              today_chapter: saved.isDeleted ? null : saved.chapterName,
+              today_topic: saved.isDeleted ? null : saved.topicName,
+              today_objectives: saved.isDeleted ? null : saved.objectives,
+              topic_date: saved.date,
+            };
+          }
+          return r;
+        }),
+      };
+    });
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -195,12 +254,6 @@ export function TodayRoutineModal({
     }
     if (onClose) onClose();
   };
-
-  const userRole = data?.userContext?.role;
-  const isStudent = userRole === "STUDENT";
-  const isTeacher = userRole === "TEACHER";
-  const isAdmin = userRole === "ADMIN";
-  const isDirector = userRole === "DIRECTOR";
 
   // Filter today's classes
   const todayRoutines = useMemo(() => {
@@ -557,6 +610,30 @@ export function TodayRoutineModal({
                                   </span>
                                 )}
                               </div>
+
+                              {/* Lesson / Topic (অধ্যায় ও বিষয়বস্তু) */}
+                              {(routine.today_topic || routine.today_chapter) ? (
+                                <div className="mt-2 p-2 rounded-lg border border-emerald-200 bg-emerald-50/80 text-xs">
+                                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                    <span>আজকের পাঠ:</span>
+                                    {routine.today_chapter && (
+                                      <span className="font-semibold text-emerald-800">{routine.today_chapter} — </span>
+                                    )}
+                                    <span className="text-slate-900 font-bold">{routine.today_topic}</span>
+                                  </div>
+                                  {routine.today_objectives && (
+                                    <p className="mt-0.5 text-[11px] text-emerald-800 italic pl-5">
+                                      📝 {routine.today_objectives}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="mt-1 text-[11px] text-slate-400 italic flex items-center gap-1">
+                                  <BookOpen className="h-3 w-3 text-slate-300 shrink-0" />
+                                  <span>আজকের পাঠের বিষয়বস্তু এখনো নির্ধারণ করা হয়নি</span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -565,6 +642,19 @@ export function TodayRoutineModal({
                               <Clock className="h-3.5 w-3.5 text-slate-400" />
                               {routine.start_time} – {routine.end_time}
                             </div>
+
+                            {canEditTopic(routine) && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openTopicModal(routine)}
+                                className="h-7 text-[11px] font-bold text-emerald-800 border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100 gap-1 px-2.5 mt-1"
+                              >
+                                <Sparkles className="h-3 w-3 text-emerald-600" />
+                                {routine.today_topic || routine.today_chapter ? "টপিক পরিবর্তন" : "টপিক লিখুন"}
+                              </Button>
+                            )}
 
                             {isRunning && (
                               <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
@@ -744,6 +834,16 @@ export function TodayRoutineModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      <RoutineTopicModal
+        isOpen={topicModalOpen}
+        onClose={() => {
+          setTopicModalOpen(false);
+          setSelectedRoutineForTopic(null);
+        }}
+        routine={selectedRoutineForTopic}
+        onSaved={handleTopicSaved}
+      />
     </>
   );
 }

@@ -46,6 +46,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { CLASS_NUMBERS, DAYS_OF_WEEK, bn, classLabel, getDayNameBn, getBangladeshDayOfWeek } from "@/lib/constants";
 import { RoutineItem } from "@/components/app/today-routine-modal";
+import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 
 const TIME_PRESETS = [
   { start: "09:00 AM", end: "10:00 AM" },
@@ -114,6 +115,39 @@ export function AdminRoutineManager() {
   const [newTeacherUsername, setNewTeacherUsername] = useState<string>("");
   const [newTeacherPassword, setNewTeacherPassword] = useState<string>("");
   const [addingTeacher, setAddingTeacher] = useState<boolean>(false);
+
+  // Daily Topic modal state
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
+  const [selectedRoutineForTopic, setSelectedRoutineForTopic] = useState<RoutineItem | null>(null);
+
+  const openTopicModal = (r: RoutineItem) => {
+    setSelectedRoutineForTopic(r);
+    setTopicModalOpen(true);
+  };
+
+  const handleTopicSaved = (saved: {
+    routineId: number;
+    date: string;
+    chapterName: string | null;
+    topicName: string;
+    objectives: string | null;
+    isDeleted?: boolean;
+  }) => {
+    setRoutines((prev) =>
+      prev.map((r) => {
+        if (r.id === saved.routineId) {
+          return {
+            ...r,
+            today_chapter: saved.isDeleted ? null : saved.chapterName,
+            today_topic: saved.isDeleted ? null : saved.topicName,
+            today_objectives: saved.isDeleted ? null : saved.objectives,
+            topic_date: saved.date,
+          };
+        }
+        return r;
+      })
+    );
+  };
 
   const { toast } = useToast();
 
@@ -710,6 +744,14 @@ export function AdminRoutineManager() {
                           <BookOpen className="h-3.5 w-3.5 text-emerald-600" />
                           <span>{r.subject_name}</span>
                         </div>
+                        {(r.today_topic || r.today_chapter) ? (
+                          <div className="text-[10px] font-normal text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 mt-1 flex items-center gap-1 max-w-[200px]">
+                            <Sparkles className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                            <span className="truncate">
+                              {r.today_chapter ? `${r.today_chapter}: ` : ""}{r.today_topic}
+                            </span>
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -747,6 +789,16 @@ export function AdminRoutineManager() {
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openTopicModal(r)}
+                            className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            title="আজকের পাঠ / টপিক নির্ধারণ"
+                          >
+                            <BookOpen className="h-3.5 w-3.5" />
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
@@ -837,6 +889,14 @@ export function AdminRoutineManager() {
                               </span>
                             )}
                           </div>
+                          {(r.today_topic || r.today_chapter) ? (
+                            <div className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 truncate flex items-center gap-1">
+                              <Sparkles className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                              <span className="truncate">
+                                {r.today_chapter ? `${r.today_chapter}: ` : ""}{r.today_topic}
+                              </span>
+                            </div>
+                          ) : null}
                           <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-100">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {r.teacher_photo_key ? (
@@ -853,6 +913,14 @@ export function AdminRoutineManager() {
                               <span className="font-medium truncate">{r.teacher_name}</span>
                             </div>
                             <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openTopicModal(r)}
+                                className="text-emerald-500 hover:text-emerald-700 p-0.5"
+                                title="আজকের পাঠ / টপিক"
+                              >
+                                <BookOpen className="h-3 w-3" />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => openEditModal(r)}
@@ -1418,6 +1486,17 @@ export function AdminRoutineManager() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Routine Lesson Topic Modal */}
+      <RoutineTopicModal
+        isOpen={topicModalOpen}
+        onClose={() => {
+          setTopicModalOpen(false);
+          setSelectedRoutineForTopic(null);
+        }}
+        routine={selectedRoutineForTopic}
+        onSaved={handleTopicSaved}
+      />
     </div>
   );
 }

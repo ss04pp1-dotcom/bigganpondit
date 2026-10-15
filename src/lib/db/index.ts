@@ -251,6 +251,29 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_smc_lookup ON student_monthly_comments(student_id, month, year, mode)").run().catch(() => null);
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_smc_teacher ON student_monthly_comments(teacher_id)").run().catch(() => null);
 
+      // Ensure routine_daily_topics table exists (teachers setting today's chapter & lesson topic)
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS routine_daily_topics (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            routine_id   INTEGER NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+            date         TEXT NOT NULL,
+            chapter_name TEXT,
+            topic_name   TEXT NOT NULL,
+            objectives   TEXT,
+            teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+            teacher_name TEXT,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(routine_id, date)
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_rdt_routine_date ON routine_daily_topics(routine_id, date)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_rdt_date ON routine_daily_topics(date)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_rdt_teacher ON routine_daily_topics(teacher_id)").run().catch(() => null);
+
       // Ensure fee_items, fee_payments, fee_notifications exist in fast-path (Cloudflare Workers)
       await db
         .prepare(
@@ -876,6 +899,30 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       CREATE INDEX IF NOT EXISTS idx_smc_teacher ON student_monthly_comments(teacher_id);
     `,
     "student_monthly_comments"
+  );
+
+  // Routine daily topics (teachers specify today's chapter & lesson topic)
+  await execSchemaStep(
+    db,
+    `
+      CREATE TABLE IF NOT EXISTS routine_daily_topics (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        routine_id   INTEGER NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
+        date         TEXT NOT NULL,
+        chapter_name TEXT,
+        topic_name   TEXT NOT NULL,
+        objectives   TEXT,
+        teacher_id   INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+        teacher_name TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(routine_id, date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_rdt_routine_date ON routine_daily_topics(routine_id, date);
+      CREATE INDEX IF NOT EXISTS idx_rdt_date ON routine_daily_topics(date);
+      CREATE INDEX IF NOT EXISTS idx_rdt_teacher ON routine_daily_topics(teacher_id);
+    `,
+    "routine_daily_topics"
   );
 
   // Fees, Automated Absent/Fail Fines, Payments & Notifications

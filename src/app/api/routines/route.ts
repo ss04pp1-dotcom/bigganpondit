@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { requireApiUser } from "@/lib/auth/guards";
 import { assertSameOrigin } from "@/lib/api";
-import { DAYS_OF_WEEK, getDayNameBn, getBangladeshDayOfWeek } from "@/lib/constants";
+import { DAYS_OF_WEEK, getDayNameBn, getBangladeshDayOfWeek, todayISODateDhaka } from "@/lib/constants";
 import { notifyRoutineChanged } from "@/lib/push-events";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,12 @@ export interface RoutineRow {
   is_active: number;
   created_at: string;
   updated_at: string;
+  daily_topic_id?: number | null;
+  today_chapter?: string | null;
+  today_topic?: string | null;
+  today_objectives?: string | null;
+  topic_date?: string | null;
+  topic_updated_at?: string | null;
 }
 
 // GET /api/routines
@@ -48,6 +54,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
 
+    const queryDate = searchParams.get("date") || todayISODateDhaka();
     const dayParam = searchParams.get("day");
     const todayOnly = searchParams.get("todayOnly") === "1" || searchParams.get("todayOnly") === "true";
 
@@ -153,12 +160,19 @@ export async function GET(req: NextRequest) {
     // Build SQL query
     let sql = `SELECT r.*,
                       t.photo_key as teacher_photo_key,
-                      t.short_name as teacher_short_name
+                      t.short_name as teacher_short_name,
+                      rdt.id as daily_topic_id,
+                      rdt.chapter_name as today_chapter,
+                      rdt.topic_name as today_topic,
+                      rdt.objectives as today_objectives,
+                      rdt.date as topic_date,
+                      rdt.updated_at as topic_updated_at
                FROM routines r
                LEFT JOIN teachers t ON (t.id = r.teacher_id OR (r.teacher_id IS NULL AND t.short_name = r.teacher_name))
                LEFT JOIN classes c ON c.name = r.class_name
+               LEFT JOIN routine_daily_topics rdt ON (rdt.routine_id = r.id AND rdt.date = ?)
                WHERE r.is_active = 1 AND COALESCE(c.is_active, 1) = 1`;
-    const params: (string | number)[] = [];
+    const params: (string | number)[] = [queryDate];
 
     // Filter by day
     if (targetDay !== null) {
@@ -311,6 +325,7 @@ export async function GET(req: NextRequest) {
       routines: rows || [],
       todayDayOfWeek,
       todayDayName: getDayNameBn(todayDayOfWeek),
+      queryDate,
       userContext: {
         role: user.role,
         userName: user.name,

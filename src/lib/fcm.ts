@@ -170,7 +170,10 @@ function buildMessage(payload: FcmMessagePayload, token: string) {
         priority: "HIGH" as const,
         notification: {
           channel_id: "push",
-          icon: "ic_notification",
+          // Must match a drawable resource inside the Android app
+          // (system tray only displays notification payloads when the app
+          // is backgrounded/closed, using this icon name).
+          icon: "ic_stat_notification",
           ...(payload.imageUrl ? { image: payload.imageUrl } : {}),
         },
       },
@@ -178,13 +181,16 @@ function buildMessage(payload: FcmMessagePayload, token: string) {
   };
 }
 
+// Error reasons that mean THIS token will never work again → deactivate it.
+// Note: QUOTA_EXCEEDED is deliberately NOT here — it is a project-level
+// rate limit, not a token problem; the queue retries it instead of
+// throwing away a healthy device registration.
 const INVALID_TOKEN_CODES = new Set([
   "UNREGISTERED",
   "INVALID_ARGUMENT",
   "INVALID_REGISTRATION_TOKEN",
   "SENDER_ID_MISMATCH",
-  "QUOTA_EXCEEDED",
-  "UNspecified",
+  "UNSPECIFIED",
 ]);
 
 /** Sends one message; classifies token-invalidating errors. */

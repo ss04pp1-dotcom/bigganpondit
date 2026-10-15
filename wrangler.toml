@@ -26,6 +26,16 @@ bucket_name = "academy-assets"
 
 [vars]
 APP_URL = "https://academy-marks-system.salman61902.workers.dev"
+# --- Firebase (FCM) PUBLIC client configuration -----------------------------
+# These are the same public values google-services.json ships inside every
+# APK (Google documents them as safe to expose). They are served by
+# GET /api/push/config for the Android app's fallback runtime-init path.
+# The SERVICE-ACCOUNT key that can actually SEND notifications is a secret
+# and is NOT here — see FCM_SERVICE_ACCOUNT below.
+FIREBASE_API_KEY = "AIzaSyDt-mL9kQTFfS5SmXKX242JOKwxrDgBVqI"
+FIREBASE_APP_ID = "1:904886174333:android:9212fdd0b0c7b8c73ee714"
+FIREBASE_PROJECT_ID = "bigganpondit"
+FIREBASE_SENDER_ID = "904886174333"
 # Set the real secret in production:
 #   bunx wrangler secret put AUTH_SECRET
 #   bunx wrangler secret put ADMIN_USERNAME
@@ -35,12 +45,21 @@ APP_URL = "https://academy-marks-system.salman61902.workers.dev"
 #   bunx wrangler secret put CRON_SECRET            # random string for the cron endpoint
 
 # ---- Cron Triggers: push-notification queue processor ----
-# Every 5 minutes the Worker's scheduled() handler (injected into
+# Every minute the Worker's scheduled() handler (injected into
 # .open-next/worker.js by scripts/patch-worker.mjs after build) calls
 # POST /api/cron/push with the CRON_SECRET. The processor is
 # claim-guarded and idempotent, so overlapping or missed ticks are safe.
+# Why every minute (was every 5):
+#   1. Scheduled notifications fire within ~1 minute of their due time
+#      instead of up to 5 minutes late.
+#   2. Each invocation resets Worker-isolate residency, so users rarely
+#      hit the ~5s cold start of the 8MB OpenNext bundle (measured:
+#      warm 0.05-0.18s vs cold ~5s). This is a keep-alive, not a cache —
+#      no response data is ever stored.
+#   3. Empty ticks cost one indexed D1 SELECT — negligible on the free
+#      plan (1440 invocations/day of the 100k limit).
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 # Preview environment — MUST use its own database & bucket.
 # Previously [env.preview] only overrode `name`, so it INHERITED the

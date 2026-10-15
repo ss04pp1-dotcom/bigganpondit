@@ -28,65 +28,57 @@
 | ক্রন প্রসেসর এন্ডপয়েন্ট (CRON_SECRET দিয়ে সুরক্ষিত) | `src/app/api/cron/push/route.ts` |
 | অ্যাডমিন API (compose/schedule/cancel/retry) | `src/app/api/admin/notifications/**` |
 | অ্যাডমিন প্যানেল UI | `src/app/admin/notifications/page.tsx` |
-| Cron Triggers (প্রতি ৫ মিনিট) | `wrangler.toml` `[triggers]` |
+| Cron Triggers (প্রতি মিনিট) | `wrangler.toml` `[triggers]` |
 | Worker `scheduled()` হ্যান্ডলার ইনজেকশন | `scripts/patch-worker.mjs` |
 
 ## সেটআপ ধাপ (একবারই করতে হয়)
 
-### ১. Firebase প্রজেক্ট
+### ১. Firebase প্রজেক্ট ✅ সম্পন্ন (v4.1.0)
 
 1. https://console.firebase.google.com → **Add project**
 2. Project settings → **Cloud Messaging** চালু আছে কিনা দেখুন
 3. **Android অ্যাপ যোগ করুন** — package name: `bd.bigganpondit.academy`
 4. `google-services.json` ডাউনলোড করুন
 
-### ২. Flutter অ্যাপ কনফিগার
+→ প্রজেক্ট `bigganpondit` তৈরি হয়েছে, Android অ্যাপ রেজিস্টার্ড, আর
+`google-services.json` এখন APK-র ভেতরেই বেকড (v4.1.0+)। এই ধাপ আর করতে
+হবে না।
 
-`lib/core/fcm_config.dart` ফাইলে `google-services.json`-এর ভ্যালু বসান:
+### ২. অ্যাপ কনফিগার ✅ সম্পন্ন (v4.1.0)
 
-```dart
-const bool kFcmEnabled = true;
+`google-services.json` অ্যাপের `app/` ফোল্ডারে বসানো হয়েছে +
+google-services Gradle প্লাগইন যোগ করা হয়েছে — APK বানানোর সময়ই
+classic Firebase ইনিশিয়ালাইজেশন হয় (নেটওয়ার্ক ছাড়াই, নির্ভরযোগ্য)।
+রানটাইম ফলব্যাক (`/api/push/config`) রক্ষণাবেক্ষণের জন্য রয়ে গেছে।
 
-const FirebaseOptions kAndroidFirebaseOptions = FirebaseOptions(
-  apiKey: 'AIza...',            // google-services.json → api_key.current_key
-  appId: '1:123:android:abc',   // client[0].mobilesdk_app_id
-  messagingSenderId: '123',     // project_info.project_number
-  projectId: 'your-project',    // project_info.project_id
-);
-```
-
-তারপর APK রিবিল্ড করুন। `kFcmEnabled = false` থাকলে অ্যাপ FCM ছাড়াই
-লোকাল নোটিফিকেশনে চলে (graceful degradation)।
-
-### ৩. সার্ভার সিক্রেট
+### ৩. সার্ভার সিক্রেট ⬅ এখন শুধু এটাই বাকি
 
 ```bash
 # Firebase Console → Project Settings → Service Accounts →
 # "Generate new private key" → JSON ফাইল নামান → পুরো JSON পেস্ট করুন:
 bunx wrangler secret put FCM_SERVICE_ACCOUNT
 
-# ক্রন এন্ডপয়েন্টের জন্য র‍্যান্ডম সিক্রেট:
+# ক্রন এন্ডপয়েন্টের জন্য র‍্যান্ডম সিক্রেট (একবার সেট থাকলে আর নয়):
 openssl rand -hex 24
 bunx wrangler secret put CRON_SECRET
 ```
 
-### ৩-খ। অ্যাপের জন্য পাবলিক Firebase ভ্যারিয়েবল (WebView APK-তে রিবিল্ড ছাড়াই FCM চালু)
+ফোন থেকেও করা যায় (wrangler ছাড়াই): **Cloudflare Dashboard →
+Workers → academy-marks-system → Settings → Variables and Secrets →
+Add → Type: Secret** → নাম `FCM_SERVICE_ACCOUNT`, ভ্যালুতে পুরো JSON
+পেস্ট → Save। `CRON_SECRET`-ও একইভাবে (Type: Secret)।
 
-Android WebView অ্যাপটি (bd.bigganpondit.academy) চালু হওয়ার সময়
-`GET /api/push/config` থেকে এই ৪টি **পাবলিক** ভ্যারিয়েবল পড়ে নিজে নিজে
-Firebase ইনিশিয়ালাইজ করে। ভ্যারিয়েবল সেট করার সাথে সাথেই (পরের লঞ্চ থেকে)
-পুশ চালু হয়ে যায় — **APK আবার বানানোর দরকার নেই।**
-Cloudflare Dashboard → Workers → academy-marks-system → Settings →
-Variables and Secrets → Add variable (Type: Text — এগুলো সিক্রেট নয়):
+দ্রুততম সমাধান: ফোনে Firebase Console (console.firebase.google.com) →
+Project Settings (⚙️) → Service Accounts → **Generate new private key** →
+ফাইলটি খুলে পুরো কনটেন্ট কপি → Cloudflare Dashboard-এ পেস্ট।
 
-| Variable | মান কোথায় পাবেন (Firebase Console) |
-|---|---|
-| `FIREBASE_API_KEY` | Project Settings → General → Web API Key (`AIza...`) |
-| `FIREBASE_APP_ID` | Project Settings → আপনার Android অ্যাপ (`1:123...:android:abc...`) |
-| `FIREBASE_PROJECT_ID` | Project Settings → General → Project ID |
-| `FIREBASE_SENDER_ID` | Project Settings → Cloud Messaging → Sender ID |
+### ৩-খ। পাবলিক Firebase ভ্যারিয়েবল ✅ সম্পন্ন (2026-10-15)
 
-যাচাই: `https://<আপনার-সাইট>/api/push/config` → `"enabled":true` দেখালেই তৈরি।
+চারটি **পাবলিক** ভ্যারিয়েবল (`FIREBASE_API_KEY`, `FIREBASE_APP_ID`,
+`FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`) এখন `wrangler.toml`-এর
+`[vars]`-এ সেট করা এবং প্রোডাকশনে ডিপ্লয় হয়ে গেছে —
+`/api/push/config` এখন `"enabled":true` দেখায়। ড্যাশবোর্ডে আর কিছু সেট
+করতে হবে না।
 
 ### ৪. ডিপ্লয়
 
@@ -108,7 +100,8 @@ bunx wrangler deploy      # cron trigger সহ ডিপ্লয় হবে
 ## নির্ভরযোগ্যতা নকশা
 
 - **কিউ D1-তে** — Worker রিস্টার্ট/ডিপ্লয়েও জমা থাকে, মেমোরিতে নয়
-- **Cron প্রতি ৫ মিনিটে** — নির্ধারিত সময়ের আগে-পরে হলেও overdue জব প্রসেস হয়
+- **Cron প্রতি মিনিটে** (v4.1.0 থেকে) — নির্ধারিত নোটিফিকেশন ~১ মিনিটের
+  মধ্যে যায় + Worker আইসোলেট উষ্ণ থাকে (কোল্ড-স্টার্ট ~৫সে → বিরল)
 - **Claim-guarded** — দুটি ওভারল্যাপিং ক্রন একই নোটিফিকেশন দুবার পাঠাতে পারে না
 - **Idempotency key** — নোটিশ/রুটিন/ফলাফল ইভেন্ট রিট্রাই হলেও ডুপ্লিকেট পুশ হয় না
 - **Retry + backoff** — ৩০সে × ২ⁿ, সর্বোচ্চ ৫ বার; তারপর terminal FAILED

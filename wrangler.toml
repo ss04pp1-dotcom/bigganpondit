@@ -1,0 +1,91 @@
+# Cloudflare Workers configuration — নম্বর সংগ্রহক ও রিপোর্ট সফটওয়্যার
+# Deploy: bunx @opennextjs/cloudflare build && bunx wrangler deploy
+# (see DEPLOY.md for the full production guide)
+
+name = "academy-marks-system"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Protect dashboard-defined variables/secrets from being wiped on deploy.
+# By default `wrangler deploy` REPLACES all plain-text vars with the ones in
+# this file — anything set only in the dashboard (e.g. FCM_SERVICE_ACCOUNT
+# added via Workers → Settings → Variables and Secrets) would be silently
+# DELETED on the next deploy, breaking push notifications. With
+# keep_vars = true, deploy merges: config vars still apply, and vars that
+# exist only on the Worker are preserved.
+keep_vars = true
+
+# OpenNext (Next.js on Cloudflare Workers) output
+main = ".open-next/worker.js"
+
+[assets]
+directory = ".open-next/assets"
+
+# ---- Cloudflare D1 (SQLite database) ----
+[[d1_databases]]
+binding = "DB"
+database_name = "academy-marks"
+database_id = "abcb9f52-a073-4103-af43-59e1ec825b0c"
+migrations_dir = "db/migrations"
+
+# ---- Cloudflare R2 (file storage: photos / logo / signatures / backups) ----
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "academy-assets"
+
+[vars]
+APP_URL = "https://academy-marks-system.salman61902.workers.dev"
+# --- Firebase (FCM) PUBLIC client configuration -----------------------------
+# These are the same public values google-services.json ships inside every
+# APK (Google documents them as safe to expose). They are served by
+# GET /api/push/config for the Android app's fallback runtime-init path.
+# The SERVICE-ACCOUNT key that can actually SEND notifications is a secret
+# and is NOT here — see FCM_SERVICE_ACCOUNT below.
+FIREBASE_API_KEY = "AIzaSyDt-mL9kQTFfS5SmXKX242JOKwxrDgBVqI"
+FIREBASE_APP_ID = "1:904886174333:android:9212fdd0b0c7b8c73ee714"
+FIREBASE_PROJECT_ID = "bigganpondit"
+FIREBASE_SENDER_ID = "904886174333"
+# Set the real secret in production:
+#   bunx wrangler secret put AUTH_SECRET
+#   bunx wrangler secret put ADMIN_USERNAME
+#   bunx wrangler secret put ADMIN_PASSWORD
+# Push notifications (FCM HTTP v1) + cron — see docs/FCM_SETUP.md:
+#   bunx wrangler secret put FCM_SERVICE_ACCOUNT   # full service-account JSON key
+#   bunx wrangler secret put CRON_SECRET            # random string for the cron endpoint
+
+# ---- Cron Triggers: push-notification queue processor ----
+# Every minute the Worker's scheduled() handler (injected into
+# .open-next/worker.js by scripts/patch-worker.mjs after build) calls
+# POST /api/cron/push with the CRON_SECRET. The processor is
+# claim-guarded and idempotent, so overlapping or missed ticks are safe.
+# Why every minute (was every 5):
+#   1. Scheduled notifications fire within ~1 minute of their due time
+#      instead of up to 5 minutes late.
+#   2. Each invocation resets Worker-isolate residency, so users rarely
+#      hit the ~5s cold start of the 8MB OpenNext bundle (measured:
+#      warm 0.05-0.18s vs cold ~5s). This is a keep-alive, not a cache —
+#      no response data is ever stored.
+#   3. Empty ticks cost one indexed D1 SELECT — negligible on the free
+#      plan (1440 invocations/day of the 100k limit).
+[triggers]
+crons = ["* * * * *"]
+
+# Preview environment — MUST use its own database & bucket.
+# Previously [env.preview] only overrode `name`, so it INHERITED the
+# production D1 database (academy-marks) and R2 bucket: deploying or testing
+# preview wrote directly to LIVE production data.
+# Create the preview resources once, then fill in the ids below:
+#   bunx wrangler d1 create academy-marks-preview
+#   bunx wrangler r2 bucket create academy-assets-preview
+[env.preview]
+name = "academy-marks-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "academy-marks-preview"
+database_id = "REPLACE_WITH_PREVIEW_D1_DATABASE_ID"
+migrations_dir = "db/migrations"
+
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "academy-assets-preview"

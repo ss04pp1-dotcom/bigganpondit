@@ -65,6 +65,11 @@ export function todayISODateDhaka(): string {
   }
 }
 
+/** Alias for todayISODateDhaka */
+export function todayYmdDhaka(): string {
+  return todayISODateDhaka();
+}
+
 // ---- Bangladesh phone-number helpers --------------------------------
 // (toEnDigits already exists below — Bangla->ASCII numeral conversion.)
 

@@ -14,7 +14,7 @@ import {
   divisionLabel,
   fmtNum,
   fmtPct,
-  todayYmdDhaka,
+  todayISODateDhaka,
   currentMonthDhaka,
   currentYearDhaka,
 } from "@/lib/constants";
@@ -134,7 +134,7 @@ export default async function StudentDashboard() {
   let currentMonthDue = 0;
   let nearestDueDate: string | null = null;
 
-  const todayStr = todayYmdDhaka();
+  const todayStr = todayISODateDhaka();
   for (const it of pendingItems) {
     const amt = Number(it.due_amount) || 0;
     let isOver = false;

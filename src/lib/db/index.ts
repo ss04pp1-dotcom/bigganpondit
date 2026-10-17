@@ -1094,7 +1094,7 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
     await seedDatabase(db, {
       adminUsername: String(env.ADMIN_USERNAME ?? "admin"),
       adminPassword: isWorkers ? adminPasswordEnv : (adminPasswordEnv ?? "admin123"),
-      seedDemo: String((env as Record<string, unknown>).SEED_DEMO_DATA ?? "") === "1" || !isWorkers,
+      seedDemo: false, // Production: strictly disabled
     });
   } catch (err) {
     console.warn("Seed execution notice:", err);

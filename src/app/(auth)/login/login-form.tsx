@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Loader2, User, Eye, EyeOff, GraduationCap, Fingerprint, Mail, Key, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Lock, Loader2, User, Eye, EyeOff, Fingerprint, Key, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,7 +27,6 @@ export function LoginForm({
   appTitle: string;
   demoHint: boolean;
 }) {
-  const [loginRole, setLoginRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
@@ -35,9 +34,6 @@ export function LoginForm({
   const router = useRouter();
   const { toast } = useToast();
 
-  // অ্যাপ ডিপ-লিংক সাপোর্ট: /login?next=/student/results আকারে আসলে
-  // লগইন-পরে সেই পেজেই ফেরত যাবে (সাধারণ ব্রাউজারে আগের মতোই রোল-হোম)।
-  // শুধু same-origin আপেক্ষিক পাথ গ্রহণযোগ্য — open-redirect ইনজেকশন আটকায়।
   const postLoginTarget = (fallback: string): string => {
     try {
       const n = new URLSearchParams(window.location.search).get("next");
@@ -56,55 +52,21 @@ export function LoginForm({
     return fallback;
   };
 
-  // Forgot password & Resend OTP state
+  // Forgot password -> Admin approval request state
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
   const [forgotUsername, setForgotUsername] = useState("");
-  const [forgotEmailMasked, setForgotEmailMasked] = useState("");
-  const [forgotOtp, setForgotOtp] = useState("");
   const [forgotNewPass, setForgotNewPass] = useState("");
   const [forgotConfirmPass, setForgotConfirmPass] = useState("");
+  const [forgotReason, setForgotReason] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
-  const [showForgotNewPass, setShowForgotNewPass] = useState(false);
+  const [showForgotPass, setShowForgotPass] = useState(false);
+  const [requestSuccess, setRequestSuccess] = useState(false);
 
-  async function handleSendOtp(e: React.FormEvent) {
+  async function handlePasswordChangeRequest(e: React.FormEvent) {
     e.preventDefault();
     const target = forgotUsername.trim() || username.trim();
     if (!target) {
       toast({ title: "ইউজারনেম বা আইডি লিখুন।", variant: "destructive" });
-      return;
-    }
-    setForgotBusy(true);
-    try {
-      const res = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usernameOrEmail: target }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        toast({ title: json.error ?? "ওটিপি পাঠানো যায়নি।", variant: "destructive" });
-        return;
-      }
-      setForgotEmailMasked(json.emailMasked);
-      setForgotStep("verify");
-      toast({ title: json.message });
-    } catch {
-      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
-    } finally {
-      setForgotBusy(false);
-    }
-  }
-
-  async function handleResetPassword(e: React.FormEvent) {
-    e.preventDefault();
-    const target = forgotUsername.trim() || username.trim();
-    if (!target) {
-      toast({ title: "ইউজারনেম বা আইডি লিখুন।", variant: "destructive" });
-      return;
-    }
-    if (!forgotOtp.trim()) {
-      toast({ title: "৬-সংখ্যার ওটিপি কোড লিখুন।", variant: "destructive" });
       return;
     }
     if (!forgotNewPass || forgotNewPass.length < 4) {
@@ -115,32 +77,27 @@ export function LoginForm({
       toast({ title: "নতুন পাসওয়ার্ড ও নিশ্চিতকরণ পাসওয়ার্ড মিলছে না।", variant: "destructive" });
       return;
     }
+
     setForgotBusy(true);
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await fetch("/api/auth/password-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: target,
-          otp: forgotOtp.trim(),
           newPassword: forgotNewPass.trim(),
+          reason: forgotReason.trim() || "পাসওয়ার্ড ভুলে গেছি — অ্যাডমিন অনুমোদনের অনুরোধ",
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        toast({ title: json.error ?? "পাসওয়ার্ড রিসেট করা যায়নি।", variant: "destructive" });
+        toast({ title: json.error ?? "অনুরোধ পাঠানো যায়নি। সঠিক ইউজারনেম দিন।", variant: "destructive" });
         return;
       }
-      toast({ title: json.message });
-      setForgotOpen(false);
-      setForgotStep("request");
-      if (forgotUsername) setUsername(forgotUsername);
-      setPassword("");
-      setForgotOtp("");
-      setForgotNewPass("");
-      setForgotConfirmPass("");
+      setRequestSuccess(true);
+      toast({ title: "অনুরোধ সফলভাবে পাঠানো হয়েছে!" });
     } catch {
-      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+      toast({ title: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
     } finally {
       setForgotBusy(false);
     }
@@ -164,7 +121,7 @@ export function LoginForm({
       if (json.mustChangePassword) {
         toast({
           title: "পাসওয়ার্ড পরিবর্তন করুন!",
-          description: "আপনি এখনো প্রাথমিক (ডিফল্ট) পাসওয়ার্ড ব্যবহার করছেন। নিরাপত্তার জন্য এখনই পাসওয়ার্ড বদলে ফেলুন।",
+          description: "আপনি এখনো প্রাথমিক পাসওয়ার্ড ব্যবহার করছেন। নিরাপত্তার জন্য এখনই পাসওয়ার্ড বদলে ফেলুন।",
           variant: "destructive",
         });
       }
@@ -172,7 +129,9 @@ export function LoginForm({
       window.location.href = postLoginTarget(json.redirect);
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।", variant: "destructive" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loginWithFingerprint() {
@@ -185,7 +144,6 @@ export function LoginForm({
       });
       return;
     }
-
     setBusy(true);
     try {
       const optUrl = username.trim()
@@ -197,10 +155,8 @@ export function LoginForm({
         toast({ title: optJson.error ?? "বায়োমেট্রিক প্রস্তুতি ব্যর্থ হয়েছে।", variant: "destructive" });
         return;
       }
-
       const { challenge, rpId, allowCredentials, userVerification, timeout } = optJson;
       const challengeBytes = fromBase64Url(challenge);
-
       const credential = (await navigator.credentials.get({
         publicKey: {
           challenge: challengeBytes as unknown as BufferSource,
@@ -221,8 +177,6 @@ export function LoginForm({
 
       const rawId = toBase64Url(new Uint8Array(credential.rawId));
       const clientDataJSON = new TextDecoder().decode(credential.response.clientDataJSON);
-      // authenticatorData + signature are REQUIRED for server-side
-      // cryptographic verification of the assertion.
       const authenticatorData = toBase64Url(new Uint8Array(credential.response.authenticatorData));
       const signature = toBase64Url(new Uint8Array(credential.response.signature));
 
@@ -236,13 +190,11 @@ export function LoginForm({
           signature,
         }),
       });
-
       const verifyJson = await verifyRes.json();
       if (!verifyRes.ok || !verifyJson.ok) {
         toast({ title: verifyJson.error ?? "ফিঙ্গারপ্রিন্ট দিয়ে লগইন ব্যর্থ হয়েছে।", variant: "destructive" });
         return;
       }
-
       toast({ title: `স্বাগতম, ${verifyJson.name}! বায়োমেট্রিক লগইন সফল।` });
       window.location.href = postLoginTarget(verifyJson.redirect);
     } catch (err: any) {
@@ -258,7 +210,7 @@ export function LoginForm({
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#022851] via-[#07366b] to-[#e8eef6] flex flex-col items-center justify-between px-4 py-8">
-      {/* Top Header Branding — exactly matching reference screen */}
+      {/* Top Header Branding */}
       <header className="w-full max-w-lg text-center text-white pt-2 pb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
           নম্বর সংগ্রাহক ও রিপোর্ট সফটওয়্যার
@@ -274,85 +226,58 @@ export function LoginForm({
         </p>
       </header>
 
-      {/* Main Login Card */}
+      {/* Main Single Unified Login Card — Exactly one login option */}
       <main className="w-full max-w-[420px]">
         <div className="w-full rounded-[28px] border border-white/60 bg-white p-7 sm:p-8 shadow-[0_16px_45px_rgba(2,40,81,0.18)]">
-          <div className="mb-5 text-center">
+          <div className="mb-6 text-center">
             <div className="mx-auto mb-3.5 flex h-20 w-20 items-center justify-center rounded-full bg-[#e8f1fc] border border-blue-100 p-2 shadow-inner overflow-hidden">
               {logoUrl ? (
                 <img src={logoUrl} alt={academyName} className="h-full w-full object-contain rounded-full" />
               ) : (
-                <img src="/logo.png" alt={academyName} onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} className="h-full w-full object-contain rounded-full" />
+                <img
+                  src="/logo.png"
+                  alt={academyName}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                  className="h-full w-full object-contain rounded-full"
+                />
               )}
             </div>
-            <h2 className="text-[20px] font-bold text-[#142942]">অ্যাকাউন্ট লগইন</h2>
-            <p className="mt-1 text-[12px] text-slate-500">বিজ্ঞান পণ্ডিত একাডেমি ম্যানেজমেন্ট</p>
-
-            {/* Role Tab Switcher — Exactly matching reference mockup */}
-            <div className="mt-4 flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setLoginRole("STUDENT")}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  loginRole === "STUDENT"
-                    ? "bg-[#0d6efd] text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <GraduationCap className="h-3.5 w-3.5" />
-                <span>শিক্ষার্থী</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLoginRole("TEACHER")}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  loginRole === "TEACHER"
-                    ? "bg-[#0d6efd] text-white shadow-sm"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <User className="h-3.5 w-3.5" />
-                <span>শিক্ষক / স্টাফ</span>
-              </button>
-            </div>
+            <h2 className="text-[22px] font-bold text-[#142942]">অ্যাকাউন্ট লগইন</h2>
+            <p className="mt-1 text-[12px] text-slate-500">পরিচালক • শিক্ষক • শিক্ষার্থী • অ্যাডমিন</p>
           </div>
 
           <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-1">
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  placeholder={loginRole === "STUDENT" ? "শিক্ষার্থী ইউজারনেম (যেমন: student01)" : "ইউজারনেম (RI / MH / Admin)"}
-                  className="h-11 pl-10 rounded-lg border-[#cfdbe8] bg-white text-[13px] focus-visible:ring-[#0d6efd]"
-                  autoComplete="username"
-                  required
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 px-1">
-                {loginRole === "STUDENT"
-                  ? "আপনার শিক্ষার্থী ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন করুন"
-                  : "শিক্ষক বা অফিসিয়াল ইউজারনেম দিয়ে লগইন করুন"}
-              </p>
+            <div className="relative">
+              <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="ইউজারনেম (আইডি / রোল / শিক্ষক / অ্যাডমিন)"
+                className="h-11 pl-10 rounded-lg border-[#cfdbe8] bg-white text-[13px] focus-visible:ring-[#0d6efd]"
+                autoComplete="username"
+                required
+              />
             </div>
+
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="password"
                 type={show ? "text" : "password"}
                 value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="পাসওয়ার্ড"
                 className="h-11 pl-10 pr-10 rounded-lg border-[#cfdbe8] bg-white text-[13px] focus-visible:ring-[#0d6efd]"
                 autoComplete="current-password"
                 required
               />
               <button
                 type="button"
-                onClick={() => setShow(v => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                onClick={() => setShow((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 aria-label="পাসওয়ার্ড দেখান/লুকান"
               >
                 {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -364,10 +289,10 @@ export function LoginForm({
                 type="button"
                 onClick={() => {
                   setForgotUsername(username);
-                  setForgotStep("request");
+                  setRequestSuccess(false);
                   setForgotOpen(true);
                 }}
-                className="text-[12px] font-medium text-[#0d6efd] hover:text-[#0b5ed7] hover:underline"
+                className="text-[12px] font-medium text-[#0d6efd] hover:text-[#0b5ed7] hover:underline cursor-pointer"
               >
                 পাসওয়ার্ড ভুলে গেছেন?
               </button>
@@ -375,77 +300,79 @@ export function LoginForm({
 
             <Button
               type="submit"
-              className="h-11 w-full rounded-lg bg-[#0d6efd] text-[14px] font-semibold text-white shadow-md hover:bg-[#0b5ed7] transition-all cursor-pointer"
+              className="h-11 w-full rounded-lg bg-[#0d6efd] text-[15px] font-semibold text-white shadow-md hover:bg-[#0b5ed7] transition-all cursor-pointer"
               disabled={busy}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} লগইন
             </Button>
 
-            {/* Biometric login is available strictly for Teachers and Staff, not students */}
-            {loginRole === "TEACHER" && (
-              <>
-                <div className="relative my-3 flex items-center justify-center">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-slate-200" />
-                  </div>
-                  <span className="relative bg-white px-2 text-[11px] text-slate-400">
-                    অথবা বায়োমেট্রিক
-                  </span>
-                </div>
+            <div className="relative my-3 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-slate-200" />
+              </div>
+              <span className="relative bg-white px-2 text-[11px] text-slate-400">অথবা বায়োমেট্রিক</span>
+            </div>
 
-                <Button
-                  type="button"
-                  onClick={loginWithFingerprint}
-                  disabled={busy}
-                  className="h-11 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
-                >
-                  <Fingerprint className="h-5 w-5 text-emerald-100" />
-                  <span>আঙুলের ছাপ (Fingerprint) দিয়ে লগইন</span>
-                </Button>
-              </>
-            )}
+            <Button
+              type="button"
+              onClick={loginWithFingerprint}
+              disabled={busy}
+              className="h-11 w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold shadow-sm flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <Fingerprint className="h-5 w-5 text-emerald-100" />
+              <span>আঙুলের ছাপ (Fingerprint) দিয়ে লগইন</span>
+            </Button>
           </form>
 
-          {demoHint && (
-            <div className="mt-5 rounded-lg border border-dashed border-[#c6d7ea] bg-[#f8fbff] p-3 text-[11px] leading-relaxed text-slate-600">
-              {loginRole === "STUDENT" ? (
-                <div>
-                  শিক্ষার্থী ডেমো: <b>student01 / 1234</b>
-                </div>
-              ) : (
-                <div>
-                  শিক্ষক ডেমো: <b>rakibul / 0092</b> · <b>mehedi / 2732</b> · অ্যাডমিন: <b>admin / admin123</b>
-                </div>
-              )}
-            </div>
-          )}
-          <p className="mt-5 text-center text-[11px] text-slate-400 font-medium">সঠিক মূল্যায়ন, উজ্জ্বল ভবিষ্যৎ</p>
+          <p className="mt-6 text-center text-[11px] text-slate-400 font-medium">সঠিক মূল্যায়ন, উজ্জ্বল ভবিষ্যৎ</p>
 
-          {/* Forgot Password & Resend OTP Dialog */}
+          {/* Forgot Password Request to Admin Dialog */}
           <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-[17px] text-slate-900">
                   <ShieldCheck className="h-5 w-5 text-blue-600" />
-                  {forgotStep === "request" ? "পাসওয়ার্ড রিসেট ও ওটিপি" : "ওটিপি যাচাই ও নতুন পাসওয়ার্ড"}
+                  পাসওয়ার্ড রিসেট অনুরোধ (অ্যাডমিন অনুমোদন)
                 </DialogTitle>
                 <DialogDescription className="text-[12px] text-slate-500">
-                  {forgotStep === "request"
-                    ? "আপনার ইউজারনেম দিন। অ্যাকাউন্টে যুক্ত রিকভারি ইমেইলে Resend-এর মাধ্যমে একটি ৬-সংখ্যার ওটিপি কোড পাঠানো হবে।"
-                    : `${forgotEmailMasked || "ইমেইলে"} পাঠানো ৬-সংখ্যার ওটিপি কোডটি লিখুন এবং নতুন পাসওয়ার্ড সেট করুন।`}
+                  আপনার ইউজারনেম এবং কাঙ্ক্ষিত নতুন পাসওয়ার্ড দিন। অনুরোধটি অ্যাডমিনের কাছে অনুমোদনের জন্য যাবে। অ্যাডমিন Accept করলেই আপনার নতুন পাসওয়ার্ড কার্যকর হবে।
                 </DialogDescription>
               </DialogHeader>
 
-              {forgotStep === "request" ? (
-                <form onSubmit={handleSendOtp} className="space-y-4 pt-2">
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-medium text-slate-700">ইউজারনেম (লগইন আইডি)</label>
+              {requestSuccess ? (
+                <div className="space-y-4 pt-3 text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                    <CheckCircle2 className="h-7 w-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-slate-800">অনুরোধ সফলভাবে গৃহীত হয়েছে!</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      আপনার পাসওয়ার্ড পরিবর্তনের অনুরোধটি অ্যাডমিন প্যানেলে পাঠানো হয়েছে। অ্যাডমিন অনুমোদন (Accept) করার পর আপনি নতুন পাসওয়ার্ড দিয়ে লগইন করতে পারবেন।
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setForgotOpen(false);
+                      setRequestSuccess(false);
+                      setForgotNewPass("");
+                      setForgotConfirmPass("");
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    ঠিক আছে
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handlePasswordChangeRequest} className="space-y-3.5 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-[12px] font-medium text-slate-700">ইউজারনেম (আইডি / রোল)</label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                       <Input
                         value={forgotUsername}
                         onChange={(e) => setForgotUsername(e.target.value)}
-                        placeholder="যেমন: admin"
+                        placeholder="যেমন: student01 বা আপনার ইউজারনেম"
                         className="pl-9 h-10 text-[13px]"
                         required
                         autoFocus
@@ -453,9 +380,52 @@ export function LoginForm({
                     </div>
                   </div>
 
-                  <div className="rounded-lg bg-blue-50/60 p-3 border border-blue-100 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
-                    <Mail className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                    <span>অ্যাকাউন্টে যুক্ত রিকভারি ইমেইলে ওটিপি যাবে। ওটিপিটির মেয়াদ ১০ মিনিট থাকবে।</span>
+                  <div className="space-y-1">
+                    <label className="text-[12px] font-medium text-slate-700">নতুন পাসওয়ার্ড</label>
+                    <div className="relative">
+                      <Input
+                        type={showForgotPass ? "text" : "password"}
+                        value={forgotNewPass}
+                        onChange={(e) => setForgotNewPass(e.target.value)}
+                        placeholder="কমপক্ষে ৪ অক্ষর"
+                        className="h-10 pr-9 text-[13px]"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPass(!showForgotPass)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showForgotPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[12px] font-medium text-slate-700">নতুন পাসওয়ার্ড পুনরায় লিখুন</label>
+                    <Input
+                      type="password"
+                      value={forgotConfirmPass}
+                      onChange={(e) => setForgotConfirmPass(e.target.value)}
+                      placeholder="একই পাসওয়ার্ড লিখুন"
+                      className="h-10 text-[13px]"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[12px] font-medium text-slate-700">কারণ (ঐচ্ছিক)</label>
+                    <Input
+                      type="text"
+                      value={forgotReason}
+                      onChange={(e) => setForgotReason(e.target.value)}
+                      placeholder="যেমন: পাসওয়ার্ড ভুলে গেছি"
+                      className="h-9 text-[12px]"
+                    />
+                  </div>
+
+                  <div className="rounded-lg bg-blue-50/70 p-2.5 border border-blue-100 text-[11px] text-slate-600 leading-relaxed">
+                    ℹ️ কোনো ওটিপি বা ইমেইল কোডের প্রয়োজন নেই। অনুরোধটি সরাসরি অ্যাডমিনের কাছে যাবে।
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
@@ -472,92 +442,15 @@ export function LoginForm({
                       disabled={forgotBusy}
                       className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
                     >
-                      {forgotBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                      ওটিপি পাঠান
+                      {forgotBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Key className="h-4 w-4" />}
+                      অনুরোধ পাঠান
                     </Button>
-                  </div>
-                </form>
-              ) : (
-                <form onSubmit={handleResetPassword} className="space-y-4 pt-2">
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-medium text-slate-700">৬-সংখ্যার ওটিপি কোড (OTP)</label>
-                    <Input
-                      value={forgotOtp}
-                      onChange={(e) => setForgotOtp(e.target.value)}
-                      placeholder="যেমন: 123456"
-                      className="h-11 text-center font-mono tracking-widest text-lg font-bold"
-                      maxLength={6}
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-medium text-slate-700">নতুন পাসওয়ার্ড</label>
-                    <div className="relative">
-                      <Input
-                        type={showForgotNewPass ? "text" : "password"}
-                        value={forgotNewPass}
-                        onChange={(e) => setForgotNewPass(e.target.value)}
-                        placeholder="কমপক্ষে ৪ অক্ষর"
-                        className="h-10 pr-9 text-[13px]"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowForgotNewPass(!showForgotNewPass)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                      >
-                        {showForgotNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-medium text-slate-700">নতুন পাসওয়ার্ড পুনরায় লিখুন</label>
-                    <Input
-                      type="password"
-                      value={forgotConfirmPass}
-                      onChange={(e) => setForgotConfirmPass(e.target.value)}
-                      placeholder="একই পাসওয়ার্ড লিখুন"
-                      className="h-10 text-[13px]"
-                      required
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setForgotStep("request")}
-                      className="text-[12px] text-slate-500 hover:text-slate-700 flex items-center gap-1"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" /> পুনরায় কোড পাঠান
-                    </button>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setForgotOpen(false)}
-                        disabled={forgotBusy}
-                      >
-                        বাতিল
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={forgotBusy}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                      >
-                        {forgotBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Key className="h-4 w-4" />}
-                        পাসওয়ার্ড রিসেট করুন
-                      </Button>
-                    </div>
                   </div>
                 </form>
               )}
             </DialogContent>
           </Dialog>
         </div>
-
       </main>
 
       {/* Developer Signature & Branding Footer */}

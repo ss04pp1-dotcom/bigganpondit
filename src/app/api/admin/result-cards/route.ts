@@ -94,10 +94,10 @@ export async function GET(req: Request) {
         `SELECT st.id, st.name, st.roll, st.division, st.section
          FROM students st
          JOIN classes c ON c.id = st.class_id
-         WHERE c.name = ? AND COALESCE(st.division, '') = COALESCE(?, '')
+         WHERE c.name = ? AND (st.division IS NULL OR st.division = '' OR ? IS NULL OR ? = 'ALL' OR ? = '' OR st.division = ?)
          ORDER BY st.roll ASC`
       )
-      .bind(className, division)
+      .bind(className, division, division, division, division)
       .all<{ id: number; name: string; roll: number; division: string | null; section: string | null }>();
 
     const students = studentsRes?.results ?? [];

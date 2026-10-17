@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Wallet,
   Receipt,
@@ -621,17 +621,50 @@ export function AdminFeesManager() {
     return students.find((st) => String(st.id) === ledgerStudentId) || null;
   }, [students, ledgerStudentId]);
 
+  // Dedicated fetch for selected student ledger to guarantee all records show even if filtered out globally
+  const [dedicatedLedgerItems, setDedicatedLedgerItems] = useState<any[] | null>(null);
+  const [dedicatedLedgerPayments, setDedicatedLedgerPayments] = useState<any[] | null>(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+
+  const fetchDedicatedStudentLedger = useCallback(async (stId: string) => {
+    if (!stId) return;
+    try {
+      setLoadingLedger(true);
+      const res = await fetch(`/api/admin/fees?studentId=${stId}`);
+      const data = await res.json();
+      if (data?.ok) {
+        setDedicatedLedgerItems(data.items || []);
+        setDedicatedLedgerPayments(data.payments || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingLedger(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ledgerStudentId) {
+      setDedicatedLedgerItems(null);
+      setDedicatedLedgerPayments(null);
+      return;
+    }
+    fetchDedicatedStudentLedger(ledgerStudentId);
+  }, [ledgerStudentId, fetchDedicatedStudentLedger]);
+
   // All fee items for this selected student
   const studentLedgerItems = useMemo(() => {
     if (!ledgerStudentId) return [];
+    if (dedicatedLedgerItems !== null) return dedicatedLedgerItems;
     return items.filter((it) => String(it.student_id) === ledgerStudentId);
-  }, [items, ledgerStudentId]);
+  }, [items, ledgerStudentId, dedicatedLedgerItems]);
 
   // All payments for this selected student
   const studentLedgerPayments = useMemo(() => {
     if (!ledgerStudentId) return [];
+    if (dedicatedLedgerPayments !== null) return dedicatedLedgerPayments;
     return payments.filter((p) => String(p.student_id) === ledgerStudentId);
-  }, [payments, ledgerStudentId]);
+  }, [payments, ledgerStudentId, dedicatedLedgerPayments]);
 
   const studentPendingDues = useMemo(() => {
     return studentLedgerItems.filter((it) => it.due_amount > 0);
@@ -809,6 +842,7 @@ export function AdminFeesManager() {
         setLedgerPayTrxId("");
         setLedgerPayNote("");
         fetchData();
+        if (ledgerStudentId) fetchDedicatedStudentLedger(ledgerStudentId);
       } else {
         toast({ title: "পেমেন্ট ব্যর্থ", description: data.error, variant: "destructive" });
       }

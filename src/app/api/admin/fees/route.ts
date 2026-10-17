@@ -67,19 +67,33 @@ export async function GET(req: Request) {
       params.push(Number(month));
     }
     if (year && year !== "all") {
-      itemsSql += ` AND fi.year = ?`;
+      itemsSql += ` AND (fi.year = ? OR fi.year IS NULL)`;
       params.push(Number(year));
     }
     if (status && status !== "all") {
-      itemsSql += ` AND fi.status = ?`;
-      params.push(status);
+      if (status === "CURRENT") {
+        const todayStr = todayISODateDhaka();
+        itemsSql += ` AND fi.status IN ('PENDING', 'PARTIAL') AND fi.due_amount > 0 AND (fi.due_date IS NULL OR fi.due_date >= ?)`;
+        params.push(todayStr);
+      } else if (status === "OVERDUE") {
+        const todayStr = todayISODateDhaka();
+        const curY = currentYearDhaka();
+        const curM = currentMonthDhaka();
+        itemsSql += ` AND fi.status IN ('PENDING', 'PARTIAL') AND fi.due_amount > 0 AND ((fi.due_date IS NOT NULL AND fi.due_date < ?) OR (fi.year IS NOT NULL AND fi.year < ?) OR (fi.year = ? AND fi.month IS NOT NULL AND fi.month < ?))`;
+        params.push(todayStr, curY, curY, curM);
+      } else if (status === "UNPAID" || status === "DUE") {
+        itemsSql += ` AND fi.status IN ('PENDING', 'PARTIAL') AND fi.due_amount > 0`;
+      } else {
+        itemsSql += ` AND fi.status = ?`;
+        params.push(status);
+      }
     }
     if (query) {
       itemsSql += ` AND (LOWER(s.name) LIKE ? OR CAST(s.roll AS TEXT) LIKE ? OR LOWER(fi.title) LIKE ?)`;
       params.push(`%${query}%`, `%${query}%`, `%${query}%`);
     }
 
-    itemsSql += ` ORDER BY fi.created_at DESC LIMIT 300`;
+    itemsSql += ` ORDER BY fi.created_at DESC ${studentId ? "LIMIT 1000" : "LIMIT 400"}`;
 
     const rawItems = (await db.prepare(itemsSql).bind(...params).all<any>()).results || [];
 
@@ -97,7 +111,7 @@ export async function GET(req: Request) {
       };
     });
 
-    // 2. Fetch Payments (Filtered by student if requested, otherwise recent 100)
+    // 2. Fetch Payments (Filtered by student, class, batch or recent)
     let paymentsSql = `
       SELECT fp.*, s.name as student_name, s.roll as student_roll, s.photo_key, c.name as class_name
       FROM fee_payments fp
@@ -110,7 +124,15 @@ export async function GET(req: Request) {
       paymentsSql += ` AND fp.student_id = ?`;
       payParams.push(studentId);
     }
-    paymentsSql += ` ORDER BY fp.payment_date DESC LIMIT 100`;
+    if (classId && classId !== "all") {
+      paymentsSql += ` AND s.class_id = ?`;
+      payParams.push(classId);
+    }
+    if (batchId && batchId !== "all") {
+      paymentsSql += ` AND s.batch_id = ?`;
+      payParams.push(batchId);
+    }
+    paymentsSql += ` ORDER BY fp.payment_date DESC ${studentId ? "LIMIT 500" : "LIMIT 200"}`;
 
     const payments = (
       await db

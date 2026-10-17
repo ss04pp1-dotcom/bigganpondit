@@ -321,17 +321,7 @@ export function AppShell({
                 </span>
               </div>
 
-              {/* Prominent Header Logout Button — always visible on both mobile and desktop */}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={logout}
-                className="flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200/80 rounded-lg transition-colors cursor-pointer shadow-xs"
-                title="লগআউট"
-              >
-                <LogOut className="h-3.5 w-3.5 text-rose-500" />
-                <span className="hidden xs:inline sm:inline">লগআউট</span>
-              </Button>
+
             </div>
           </div>
         </header>
@@ -592,17 +582,7 @@ export function AppShell({
             </span>
             <span>প্রোফাইল</span>
           </Link>
-          <button
-            type="button"
-            onClick={logout}
-            className="flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 text-[11px] font-semibold text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
-            title="লগআউট"
-          >
-            <span className="flex h-5 w-5 items-center justify-center">
-              <LogOut className="h-4 w-4" />
-            </span>
-            <span>লগআউট</span>
-          </button>
+
         </div>
       )}
     </div>

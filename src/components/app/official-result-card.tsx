@@ -501,15 +501,16 @@ export function OfficialResultCard({
               __html: `
                 @media print {
                   @page {
-                    size: 297mm 210mm !important;
-                    margin: 0mm !important;
+                    size: 297mm 210mm;
+                    margin: 0;
                   }
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
                     width: 297mm !important;
                     min-width: 297mm !important;
-                    height: 100% !important;
+                    height: auto !important;
+                    min-height: 0 !important;
                     background: #ffffff !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
@@ -519,6 +520,7 @@ export function OfficialResultCard({
                   .app-topbar,
                   header,
                   nav,
+                  footer,
                   .no-print,
                   .notice-ticker,
                   [class*="NoticeTicker"],
@@ -534,11 +536,13 @@ export function OfficialResultCard({
                     max-width: none !important;
                     width: 297mm !important;
                     display: block !important;
+                    height: auto !important;
+                    min-height: 0 !important;
                   }
                   .rc-slot {
                     width: 297mm !important;
-                    height: 209.5mm !important;
-                    max-height: 209.5mm !important;
+                    height: 208mm !important;
+                    max-height: 208mm !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     border: none !important;
@@ -560,8 +564,8 @@ export function OfficialResultCard({
                   }
                   .rc-slot-sheet.rc-last,
                   .rc-slot.rc-last {
-                    break-after: auto !important;
-                    page-break-after: auto !important;
+                    break-after: avoid !important;
+                    page-break-after: avoid !important;
                   }
                   .rc-page {
                     transform: scale(0.998) !important;

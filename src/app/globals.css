@@ -186,9 +186,21 @@
 
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 6mm 8mm;
+    size: auto;
+    margin: 4mm 6mm;
   }
+
+  /* 1. Global Reset: Eliminate dark smudges, box-shadows, and black blur across all elements */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
   html,
   body {
     background: #ffffff !important;
@@ -199,8 +211,10 @@
     padding: 0 !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     overflow: visible !important;
   }
+
   .no-print,
   .no-print *,
   .app-sidebar,
@@ -215,28 +229,36 @@
   .marquee-container {
     display: none !important;
   }
+
   .print-only {
     display: block !important;
   }
 
-  /* Hide Radix overlay backdrop in print */
-  [data-radix-dialog-overlay],
-  div[data-state="open"] > .fixed.inset-0.bg-black\/80 {
+  /* 2. Fix কালো আবছা (Black blur / translucent dark overlay) from Dialog backdrops */
+  [data-radix-portal] > div[data-state],
+  [data-radix-portal] > div.fixed.inset-0,
+  div[class*="bg-black/80"],
+  div[class*="bg-black/"],
+  div[class*="backdrop-blur"],
+  [data-state="open"].fixed.inset-0 {
     display: none !important;
+    background: transparent !important;
+    opacity: 0 !important;
   }
 
-  /* When printing from inside a Dialog (e.g. Money Receipt modal),
-     hide the background app-shell entirely so only the modal prints */
+  /* 3. When printing from inside a Dialog (Money Receipt modal), hide app-shell completely */
   body:has([role="dialog"]) .app-shell,
   body:has(#printable-receipt) .app-shell {
     display: none !important;
   }
 
-  [role="dialog"] {
+  /* 4. Fix রশিদ কেটে গেছে (Receipt cut off) & positioning */
+  [role="dialog"],
+  div[data-state="open"][role="dialog"] {
     position: static !important;
     display: block !important;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 152mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     border: none !important;
@@ -244,6 +266,59 @@
     background: #ffffff !important;
     overflow: visible !important;
     transform: none !important;
+    translate: none !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  #printable-receipt {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 6px !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 5. Flatten the app shell so reports flow without 100vh offset causing extra blank pages */
+  .app-shell,
+  .app-shell > *,
+  .app-main,
+  .app-main > *,
+  main,
+  main > * {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    inset: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 
   /* When printing designated documents (Routine, Ledger, Marks, Print Area),
@@ -259,8 +334,6 @@
     display: none !important;
   }
 
-  /* Marks-sheet print (admin/director ফলাফল page): hide filters + exam
-     list; only the selected exam's marks card prints with its A4 header */
   body:has(#printable-marks):not(:has([role="dialog"])) main > *:not(:has(#printable-marks)):not(#printable-marks),
   body:has(#printable-marks):not(:has([role="dialog"])) #printable-marks > *:not(.print-marks-wrapper) {
     display: none !important;
@@ -270,8 +343,13 @@
     box-shadow: none !important;
   }
 
+  /* When printing Attendance sheet (.print-area), hide all sibling controls inside main */
+  body:has(.print-area):not(:has([role="dialog"])) main > *:not(:has(.print-area)):not(.print-area),
+  body:has(.print-area):not(:has([role="dialog"])) main > * > *:not(:has(.print-area)):not(.print-area) {
+    display: none !important;
+  }
+
   .print-area,
-  #printable-receipt,
   #printable-routine,
   #printable-ledger {
     display: block !important;

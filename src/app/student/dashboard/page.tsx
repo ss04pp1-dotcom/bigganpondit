@@ -314,11 +314,7 @@ export default async function StudentDashboard() {
             </div>
           </div>
 
-          <div className="sm:self-center">
-            <LogoutButton
-              className="border-[#cfdbe8] bg-[#f8fafd] text-[#0d6efd] hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
-            />
-          </div>
+
         </div>
       </div>
 

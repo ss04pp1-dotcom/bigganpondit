@@ -79,21 +79,14 @@ export default async function ProfilePage() {
           <h1 className="text-xl font-bold">আমার প্রোফাইল</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">আপনার ব্যক্তিগত তথ্য — শুধু আপনি দেখতে পারেন।</p>
         </div>
-        <LogoutButton
-          className="self-start sm:self-auto border-rose-200 bg-rose-50/50 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
-          label="অ্যাকাউন্ট লগআউট"
-        />
+
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="border-b border-border pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-[16px]">ব্যক্তিগত তথ্য</CardTitle>
-            <LogoutButton
-              size="sm"
-              variant="ghost"
-              className="text-xs text-rose-600 hover:bg-rose-50"
-            />
+
           </CardHeader>
           <CardContent className="pt-4">
             <div className="flex items-center gap-4 rounded-xl bg-muted/50 p-4">
@@ -111,13 +104,7 @@ export default async function ProfilePage() {
                 </div>
               ))}
             </dl>
-            <div className="mt-4 pt-3 border-t border-border flex justify-end">
-              <LogoutButton
-                variant="destructive"
-                className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white"
-                label="লগআউট করুন"
-              />
-            </div>
+
           </CardContent>
         </Card>
 

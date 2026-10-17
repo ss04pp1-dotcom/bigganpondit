@@ -200,15 +200,15 @@ export async function getMonthlyClassData(
       .prepare(
         `SELECT st.id as student_id, st.name, st.roll, st.division, st.section, st.photo_key, c.name as class_name
          FROM students st JOIN classes c ON c.id = st.class_id
-         WHERE st.class_id = ? AND COALESCE(st.division, '') = COALESCE(?, '')
+         WHERE st.class_id = ? AND (st.division IS NULL OR st.division = '' OR ? IS NULL OR ? = 'ALL' OR ? = '' OR st.division = ?)
          ORDER BY st.roll`
       )
-      .bind(classId, division)
+      .bind(classId, division, division, division, division)
       .all<StudentInfo & { student_id: number; class_name: string; photo_key: string | null }>()
   ).results;
 
-  const clauses = ["e.class_id = ?", "COALESCE(e.division, '') = COALESCE(?, '')", "e.month = ?", "e.year = ?"];
-  const params: unknown[] = [classId, division, month, year];
+  const clauses = ["e.class_id = ?", "(e.division IS NULL OR e.division = '' OR ? IS NULL OR ? = 'ALL' OR ? = '' OR e.division = ?)", "e.month = ?", "(e.year = ? OR e.year IS NULL)"];
+  const params: unknown[] = [classId, division, division, division, division, month, year];
   if (publishedOnly) {
     clauses.push("COALESCE(e.is_published, 0) = 1");
   }

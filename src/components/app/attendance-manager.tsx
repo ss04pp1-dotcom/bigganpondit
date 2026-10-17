@@ -655,7 +655,7 @@ export function AttendanceManager({
               এই মাসে কোনো শিক্ষার্থীর তথ্য পাওয়া যায়নি।
             </div>
           ) : (
-            <div className="print-area rounded-xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+            <div className="print-area rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs space-y-3.5 print:p-0 print:border-none print:shadow-none print:space-y-2">
               {/* Sheet Header */}
               <div className="text-center space-y-1 border-b pb-3 border-slate-200">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900">
@@ -668,7 +668,7 @@ export function AttendanceManager({
 
               {/* Day-by-Day Grid Table */}
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-slate-300 text-[11px]">
+                <table className="w-full border-collapse border border-slate-300 text-[11px] print:text-[9.5px] print:leading-tight">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700">
                       <th className="border border-slate-300 px-2 py-1 text-center w-10">রোল</th>
@@ -742,7 +742,7 @@ export function AttendanceManager({
               </div>
 
               {/* Automatic Director Signature Section for Print — Point 08 */}
-              <div className="print-avoid-break pt-8 flex items-end justify-between border-t border-slate-200 mt-6">
+              <div className="print-avoid-break pt-6 print:pt-2 flex items-end justify-between border-t border-slate-200 mt-4 print:mt-2">
                 <div className="text-center text-[12px] text-slate-500 w-48">
                   <div className="h-10" />
                   <p className="border-t border-slate-400 pt-1">শ্রেণি শিক্ষকের স্বাক্ষর</p>

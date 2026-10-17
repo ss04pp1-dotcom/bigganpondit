@@ -125,6 +125,16 @@ export function TodayRoutineModal({
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<RoutineApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+
+  useEffect(() => {
+    fetch("/api/classes")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+      })
+      .catch(() => {});
+  }, []);
 
   const [activeTab, setActiveTab] = useState<"TODAY" | "WEEK">("TODAY");
   const [selectedClass, setSelectedClass] = useState<string>("all");
@@ -489,11 +499,17 @@ export function TodayRoutineModal({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">সকল শ্রেণি</SelectItem>
-                      {CLASS_NUMBERS.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {classLabel(c)}
-                        </SelectItem>
-                      ))}
+                      {classesList.length > 0
+                        ? classesList.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                            </SelectItem>
+                          ))
+                        : CLASS_NUMBERS.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {classLabel(c)}
+                            </SelectItem>
+                          ))}
                     </SelectContent>
                   </Select>
                 </div>

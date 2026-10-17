@@ -11,8 +11,9 @@ export async function GET(req: Request) {
     const db = await getDb();
     const url = new URL(req.url);
     const classIdParam = url.searchParams.get("class_id");
+    const classNameParam = url.searchParams.get("class_name");
+    const activeOnly = url.searchParams.get("active_only") === "true" || url.searchParams.get("active") === "1";
     const q = url.searchParams.get("q")?.trim() ?? "";
-
     const clauses: string[] = ["1=1"];
     const params: unknown[] = [];
 
@@ -20,7 +21,13 @@ export async function GET(req: Request) {
       clauses.push("b.class_id = ?");
       params.push(Number(classIdParam));
     }
-
+    if (classNameParam && classNameParam.trim()) {
+      clauses.push("c.name = ?");
+      params.push(classNameParam.trim());
+    }
+    if (activeOnly) {
+      clauses.push("COALESCE(b.is_active, 1) = 1 AND COALESCE(c.is_active, 1) = 1");
+    }
     if (q) {
       clauses.push("(b.name LIKE ? OR c.name LIKE ? OR b.time_slot LIKE ?)");
       params.push(`%${q}%`, `%${q}%`, `%${q}%`);

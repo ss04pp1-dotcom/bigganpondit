@@ -74,7 +74,8 @@ export function AdminRoutineManager() {
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
   const [teachers, setTeachers] = useState<{ id: number; name: string; short_name: string }[]>([]);
   const [subjects, setSubjects] = useState<{ id: number; name: string; class_name: string; division: string | null }[]>([]);
-  const [batches, setBatches] = useState<{ id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null }[]>([]);
+  const [batches, setBatches] = useState<{ id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null; is_active?: number }[]>([]);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"TABLE" | "GRID">("TABLE");
 
@@ -158,9 +159,16 @@ export function AdminRoutineManager() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/routines");
-      const json = await res.json();
-      if (json.ok) {
+      const [res, clsRes] = await Promise.all([
+        fetch("/api/routines").catch(() => null),
+        fetch("/api/classes").catch(() => null),
+      ]);
+      const json = await res?.json().catch(() => null);
+      const clsJson = await clsRes?.json().catch(() => null);
+      if (clsJson?.ok && Array.isArray(clsJson.classes)) {
+        setClassesList(clsJson.classes);
+      }
+      if (json?.ok) {
         setRoutines(json.routines || []);
         setTeachers(json.teachers || []);
         setSubjects(json.subjects || []);
@@ -185,12 +193,13 @@ export function AdminRoutineManager() {
   }, []);
 
   const availableBatchesForForm = useMemo(() => {
-    return batches.filter((b) => b.class_name === formClass);
+    return batches.filter((b) => b.class_name === formClass && b.is_active !== 0);
   }, [batches, formClass]);
 
   const availableBatchesForFilter = useMemo(() => {
-    if (filterClass === "all") return batches;
-    return batches.filter((b) => b.class_name === filterClass);
+    const list = batches.filter((b) => b.is_active !== 0);
+    if (filterClass === "all") return list;
+    return list.filter((b) => b.class_name === filterClass);
   }, [batches, filterClass]);
 
   const openAddModal = () => {
@@ -526,7 +535,7 @@ export function AdminRoutineManager() {
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
           <span className="text-xs font-medium text-slate-500">অন্তর্ভুক্ত শ্রেণী</span>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{bn(CLASS_NUMBERS.length)}</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{bn(classesList.filter((c) => c.is_active !== 0).length || CLASS_NUMBERS.length)}</p>
         </div>
       </div>
 
@@ -567,11 +576,17 @@ export function AdminRoutineManager() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">সকল শ্রেণী</SelectItem>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {classLabel(c)}
-                    </SelectItem>
-                  ))}
+                  {classesList.length > 0
+                    ? classesList.map((c) => (
+                        <SelectItem key={c.id} value={c.name}>
+                          {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                        </SelectItem>
+                      ))
+                    : CLASS_NUMBERS.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {classLabel(c)}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1086,11 +1101,17 @@ export function AdminRoutineManager() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CLASS_NUMBERS.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {classLabel(c)}
-                      </SelectItem>
-                    ))}
+                    {classesList.length > 0
+                      ? classesList.map((c) => (
+                          <SelectItem key={c.id} value={c.name} disabled={c.is_active === 0}>
+                            {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয় - রুটিন বন্ধ)" : ""}
+                          </SelectItem>
+                        ))
+                      : CLASS_NUMBERS.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {classLabel(c)}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>

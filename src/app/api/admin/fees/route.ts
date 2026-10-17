@@ -207,7 +207,7 @@ export async function GET(req: Request) {
     const batches = (
       await db
         .prepare(
-          `SELECT b.id, b.name, b.class_id, c.name as class_name FROM batches b JOIN classes c ON c.id = b.class_id WHERE b.is_active = 1 ORDER BY b.id ASC`
+          `SELECT b.id, b.name, b.class_id, c.name as class_name FROM batches b JOIN classes c ON c.id = b.class_id WHERE b.is_active = 1 AND c.is_active = 1 ORDER BY b.id ASC`
         )
         .all<any>()
     ).results || [];
@@ -219,7 +219,7 @@ export async function GET(req: Request) {
            FROM students s
            LEFT JOIN classes c ON c.id = s.class_id
            LEFT JOIN batches b ON b.id = s.batch_id
-           WHERE c.is_active = 1 OR c.id IS NULL
+           WHERE (c.is_active = 1 OR c.id IS NULL)
            ORDER BY c.id ASC, s.roll ASC`
         )
         .all<any>()

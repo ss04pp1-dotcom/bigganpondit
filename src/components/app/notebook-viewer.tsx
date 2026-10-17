@@ -77,7 +77,7 @@ export function NotebookViewer({
   const [uploadDownloadAllowed, setUploadDownloadAllowed] = useState(false);
 
   // Class & subject list
-  const [classesList, setClassesList] = useState<Array<{ id: number; name: string }>>([]);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
   const [subjectsList, setSubjectsList] = useState<Array<{ id: number; name: string }>>([]);
 
   // Publication branding info
@@ -112,6 +112,15 @@ export function NotebookViewer({
 
   useEffect(() => {
     loadNotebooks();
+    // Load classes
+    fetch("/api/classes")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok && Array.isArray(json.classes)) {
+          setClassesList(json.classes);
+        }
+      })
+      .catch(() => {});
     // Load subjects
     fetch("/api/admin/subjects")
       .then((res) => res.json())
@@ -328,16 +337,16 @@ export function NotebookViewer({
           >
             সব শ্রেণি
           </button>
-          {CLASS_NUMBERS.map((cls) => (
+          {(classesList.length > 0 ? classesList : CLASS_NUMBERS.map(c => ({ id: Number(c), name: c, is_active: 1 }))).map((cls) => (
             <button
-              key={cls}
-              onClick={() => setFilterClass(cls)}
+              key={cls.name}
+              onClick={() => setFilterClass(cls.name)}
               className={cn(
                 "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
-                filterClass === cls ? "bg-cyan-600 text-white font-bold shadow-2xs" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                filterClass === cls.name ? "bg-cyan-600 text-white font-bold shadow-2xs" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               )}
             >
-              {classLabel(cls)}
+              {classLabel(cls.name)} {cls.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
             </button>
           ))}
         </div>
@@ -528,11 +537,17 @@ export function NotebookViewer({
                     <SelectValue placeholder="শ্রেণি নির্বাচন" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CLASS_NUMBERS.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">
-                        {classLabel(c)}
-                      </SelectItem>
-                    ))}
+                    {classesList.length > 0
+                      ? classesList.map((c) => (
+                          <SelectItem key={c.id} value={c.name} disabled={c.is_active === 0} className="text-xs">
+                            {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                          </SelectItem>
+                        ))
+                      : CLASS_NUMBERS.map((c) => (
+                          <SelectItem key={c} value={c} className="text-xs">
+                            {classLabel(c)}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>

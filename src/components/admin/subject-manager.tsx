@@ -39,6 +39,16 @@ export function SubjectManager() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+
+  useEffect(() => {
+    fetch("/api/classes")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+      })
+      .catch(() => {});
+  }, []);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -193,9 +203,17 @@ export function SubjectManager() {
                 <Select value={form.className} onValueChange={(v) => setForm({ ...form, className: v })}>
                   <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CLASS_NUMBERS.map((c) => (
-                      <SelectItem key={c} value={c}>{classLabel(c)}</SelectItem>
-                    ))}
+                    {classesList.length > 0
+                      ? classesList.map((c) => (
+                          <SelectItem key={c.id} value={c.name} disabled={c.is_active === 0}>
+                            {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                          </SelectItem>
+                        ))
+                      : CLASS_NUMBERS.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {classLabel(c)}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
                 {form.id && <p className="text-[11px] text-amber-600">শ্রেণি পরিবর্তন করলে বিষয়টি নতুন শ্রেণিতে চলে যাবে।</p>}

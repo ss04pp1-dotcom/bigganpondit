@@ -603,11 +603,17 @@ export function AttendanceManager({
                       <SelectValue placeholder="শ্রেণি" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CLASS_NUMBERS.map((c) => (
-                        <SelectItem key={c} value={c} className="text-xs">
-                          {classLabel(c)}
-                        </SelectItem>
-                      ))}
+                      {classes.length > 0
+                        ? classes.map((c) => (
+                            <SelectItem key={c.name} value={c.name} className="text-xs">
+                              {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                            </SelectItem>
+                          ))
+                        : CLASS_NUMBERS.map((c) => (
+                            <SelectItem key={c} value={c} className="text-xs">
+                              {classLabel(c)}
+                            </SelectItem>
+                          ))}
                     </SelectContent>
                   </Select>
                 </div>

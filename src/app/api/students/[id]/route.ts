@@ -129,8 +129,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
       studentCols.push("batch_id = ?");
       studentVals.push(body.batchId ?? null);
       if (body.batchId) {
-        const b = await db.prepare("SELECT name FROM batches WHERE id = ?").bind(body.batchId).first<{ name: string }>().catch(() => null);
+        const b = await db.prepare("SELECT name, COALESCE(is_active, 1) as is_active FROM batches WHERE id = ?").bind(body.batchId).first<{ name: string; is_active: number }>().catch(() => null);
         if (b) {
+          if (b.is_active === 0) {
+            throw new ApiError(400, `'${b.name}' ব্যাচটি বর্তমানে নিষ্ক্রিয় রয়েছে — শিক্ষার্থী এই ব্যাচে স্থানান্তর করা যাবে না।`);
+          }
           studentCols.push("batch_name = ?");
           studentVals.push(b.name);
         }

@@ -356,11 +356,17 @@ export function StudentPromotionModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c} className="text-xs">
-                      {classLabel(c)}
-                    </SelectItem>
-                  ))}
+                  {availableClasses.length > 0
+                    ? availableClasses.map((c) => (
+                        <SelectItem key={c.id} value={c.name} className="text-xs">
+                          {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                        </SelectItem>
+                      ))
+                    : CLASS_NUMBERS.map((c) => (
+                        <SelectItem key={c} value={c} className="text-xs">
+                          {classLabel(c)}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
               {(fromClass === "9" || fromClass === "10") && (
@@ -397,15 +403,20 @@ export function StudentPromotionModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLASS_NUMBERS.map((c) => {
-                    const clsObj = availableClasses.find((ac) => ac.name === c);
-                    const isInactive = clsObj?.is_active === 0;
-                    return (
-                      <SelectItem key={c} value={c} disabled={isInactive} className="text-xs">
-                        {classLabel(c)} {isInactive ? " (নিষ্ক্রিয়)" : ""}
-                      </SelectItem>
-                    );
-                  })}
+                  {availableClasses.length > 0
+                    ? availableClasses.map((c) => {
+                        const isInactive = c.is_active === 0;
+                        return (
+                          <SelectItem key={c.id} value={c.name} disabled={isInactive} className="text-xs">
+                            {classLabel(c.name)} {isInactive ? " (নিষ্ক্রিয়)" : ""}
+                          </SelectItem>
+                        );
+                      })
+                    : CLASS_NUMBERS.map((c) => (
+                        <SelectItem key={c} value={c} className="text-xs">
+                          {classLabel(c)}
+                        </SelectItem>
+                      ))}
                   <SelectItem value="ALUMNI" className="text-xs font-bold text-purple-700">
                     🎓 উত্তীর্ণ / প্রাক্তন শিক্ষার্থী (Alumni / Passed Out)
                   </SelectItem>

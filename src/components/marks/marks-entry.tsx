@@ -829,9 +829,17 @@ export function MarksEntry({
             <Select value={className} onValueChange={setClassName}>
               <SelectTrigger className="h-10 text-[13px] bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CLASS_NUMBERS.map((c) => (
-                  <SelectItem key={c} value={c}>{bn(c)} শ্রেণি</SelectItem>
-                ))}
+                {classesList.length > 0
+                  ? classesList.map((c) => (
+                      <SelectItem key={c.id} value={c.name} disabled={c.is_active === 0}>
+                        {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                      </SelectItem>
+                    ))
+                  : CLASS_NUMBERS.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {classLabel(c)}
+                      </SelectItem>
+                    ))}
               </SelectContent>
             </Select>
           </div>

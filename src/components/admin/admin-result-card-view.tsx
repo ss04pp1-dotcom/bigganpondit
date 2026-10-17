@@ -70,6 +70,16 @@ export function AdminResultCardView() {
   const [loading, setLoading] = useState(false);
   const [studentsList, setStudentsList] = useState<StudentOption[]>([]);
   const [cards, setCards] = useState<CardData[]>([]);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+
+  useEffect(() => {
+    fetch("/api/classes")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+      })
+      .catch(() => {});
+  }, []);
   const [availableDirectors, setAvailableDirectors] = useState<DirectorOption[]>([]);
   const [selectedDirectorId, setSelectedDirectorId] = useState<number | "BOTH">(1);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -212,9 +222,17 @@ export function AdminResultCardView() {
               <Select value={className} onValueChange={setClassName}>
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c}>{classLabel(c)}</SelectItem>
-                  ))}
+                  {classesList.length > 0
+                    ? classesList.map((c) => (
+                        <SelectItem key={c.id} value={c.name}>
+                          {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                        </SelectItem>
+                      ))
+                    : CLASS_NUMBERS.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {classLabel(c)}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>

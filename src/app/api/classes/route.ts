@@ -4,7 +4,9 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { parseJson, classCreateSchema } from "@/lib/validation";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const activeOnly = url.searchParams.get("active_only") === "true" || url.searchParams.get("active") === "1";
   try {
     await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER", "STUDENT"]);
     const db = await getDb();
@@ -16,6 +18,7 @@ export async function GET() {
                   (SELECT COUNT(*) FROM batches b WHERE b.class_id = c.id) as batch_count,
                   (SELECT COUNT(*) FROM subjects sub WHERE sub.class_id = c.id) as subject_count
            FROM classes c
+           ${activeOnly ? "WHERE COALESCE(c.is_active, 1) = 1" : ""}
            ORDER BY c.sort_order DESC, c.id ASC`
         )
         .all<{

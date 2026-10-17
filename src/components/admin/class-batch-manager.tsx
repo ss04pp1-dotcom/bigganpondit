@@ -261,6 +261,37 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
     }
   }
 
+  // Handle Toggle Batch Active / Inactive
+  async function handleToggleBatchActive(b: BatchRow) {
+    if (isReadOnly) return;
+    const currentActive = b.is_active ?? 1;
+    const nextActive = currentActive === 1 ? 0 : 1;
+    try {
+      const res = await fetch(`/api/batches/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive === 1 }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? "ব্যর্থ হয়েছে");
+      }
+      toast({
+        title:
+          nextActive === 1
+            ? `'${b.name}' ব্যাচ সফলভাবে সক্রিয় করা হয়েছে।`
+            : `'${b.name}' ব্যাচ নিষ্ক্রিয় করা হয়েছে।`,
+      });
+      await loadData();
+    } catch (err: any) {
+      toast({
+        title: "স্ট্যাটাস পরিবর্তন করা যায়নি",
+        description: err?.message || "নেটওয়ার্ক ত্রুটি",
+        variant: "destructive",
+      });
+    }
+  }
+
   // Handle Toggle Class Active / Inactive
   async function handleToggleClassActive(cls: ClassRow) {
     if (isReadOnly) return;
@@ -1004,6 +1035,20 @@ export function ClassBatchManager({ role = "ADMIN" }: { role?: "ADMIN" | "DIRECT
 
                       {!isReadOnly && (
                         <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggleBatchActive(b)}
+                            className={`h-7 px-2 text-[11px] font-semibold rounded-lg gap-1 transition-all shadow-2xs ${
+                              b.is_active === 0
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                            }`}
+                            title={b.is_active === 0 ? "ব্যাচটি সক্রিয় করতে ক্লিক করুন" : "ব্যাচটি নিষ্ক্রিয় করতে ক্লিক করুন"}
+                          >
+                            <Power className={`h-3 w-3 ${b.is_active === 0 ? "text-emerald-600" : "text-slate-400"}`} />
+                            <span>{b.is_active === 0 ? "সক্রিয়" : "নিষ্ক্রিয়"}</span>
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"

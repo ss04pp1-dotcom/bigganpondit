@@ -178,22 +178,28 @@ export async function POST(req: Request) {
 
     if (resolvedBatchId) {
       const bRow = await db
-        .prepare("SELECT id, name FROM batches WHERE id = ?")
+        .prepare("SELECT id, name, COALESCE(is_active, 1) as is_active FROM batches WHERE id = ?")
         .bind(resolvedBatchId)
-        .first<{ id: number; name: string }>()
+        .first<{ id: number; name: string; is_active: number }>()
         .catch(() => null);
       if (bRow) {
+        if (bRow.is_active === 0) {
+          throw new ApiError(400, `'${bRow.name}' ব্যাচটি বর্তমানে নিষ্ক্রিয় রয়েছে — শিক্ষার্থী এই ব্যাচে যুক্ত করা যাবে না।`);
+        }
         resolvedBatchName = bRow.name;
       } else {
         resolvedBatchId = null;
       }
     } else if (resolvedBatchName) {
       const bRow = await db
-        .prepare("SELECT id, name FROM batches WHERE class_id = ? AND name = ?")
+        .prepare("SELECT id, name, COALESCE(is_active, 1) as is_active FROM batches WHERE class_id = ? AND name = ?")
         .bind(classRow.id, resolvedBatchName)
-        .first<{ id: number; name: string }>()
+        .first<{ id: number; name: string; is_active: number }>()
         .catch(() => null);
       if (bRow) {
+        if (bRow.is_active === 0) {
+          throw new ApiError(400, `'${bRow.name}' ব্যাচটি বর্তমানে নিষ্ক্রিয় রয়েছে — শিক্ষার্থী এই ব্যাচে যুক্ত করা যাবে না।`);
+        }
         resolvedBatchId = bRow.id;
       }
     }

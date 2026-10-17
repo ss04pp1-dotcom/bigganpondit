@@ -182,22 +182,11 @@ const emptyForm: FormState = {
   hidePhotoFromStudents: false,
 };
 
-type Filter = "ALL" | "10-SCIENCE" | "10-HUMANITIES" | "9-SCIENCE" | "9-HUMANITIES" | "8" | "7" | "6";
+type Filter = string;
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "ALL", label: "সবাই" },
-  { key: "10-SCIENCE", label: "১০ম বিজ্ঞান" },
-  { key: "10-HUMANITIES", label: "১০ম মানবিক" },
-  { key: "9-SCIENCE", label: "৯ম বিজ্ঞান" },
-  { key: "9-HUMANITIES", label: "৯ম মানবিক" },
-  { key: "8", label: "৮ম" },
-  { key: "7", label: "৭ম" },
-  { key: "6", label: "৬ষ্ঠ" },
-];
-
-function matches(row: Row, f: Filter): boolean {
+function matches(row: Row, f: string): boolean {
   if (f === "ALL") return true;
-  if (f === "8" || f === "7" || f === "6") return row.class_name === f;
+  if (!f.includes("-")) return row.class_name === f;
   const [cls, div] = f.split("-");
   return row.class_name === cls && row.division === div;
 }
@@ -222,6 +211,39 @@ export function StudentManager({
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("ALL");
+
+  const dynamicFilters = useMemo(() => {
+    const list: { key: string; label: string }[] = [{ key: "ALL", label: "সবাই" }];
+    const sourceClasses = allClasses.length > 0
+      ? allClasses
+      : [
+          { id: 10, name: "10", sort_order: 10, is_active: 1 },
+          { id: 9, name: "9", sort_order: 9, is_active: 1 },
+          { id: 8, name: "8", sort_order: 8, is_active: 1 },
+          { id: 7, name: "7", sort_order: 7, is_active: 1 },
+          { id: 6, name: "6", sort_order: 6, is_active: 1 },
+        ];
+
+    sourceClasses.forEach((c) => {
+      const isInactive = c.is_active === 0;
+      if (c.name === "9" || c.name === "10") {
+        list.push({
+          key: `${c.name}-SCIENCE`,
+          label: `${classLabel(c.name)} বিজ্ঞান${isInactive ? " (নিষ্ক্রিয়)" : ""}`,
+        });
+        list.push({
+          key: `${c.name}-HUMANITIES`,
+          label: `${classLabel(c.name)} মানবিক${isInactive ? " (নিষ্ক্রিয়)" : ""}`,
+        });
+      } else {
+        list.push({
+          key: c.name,
+          label: `${classLabel(c.name)}${isInactive ? " (নিষ্ক্রিয়)" : ""}`,
+        });
+      }
+    });
+    return list;
+  }, [allClasses]);
   const [q, setQ] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -465,6 +487,29 @@ export function StudentManager({
       toast({ title: "সব ঘর পূরণ করুন।", variant: "destructive" });
       return;
     }
+
+    const chosenCls = allClasses.find((c) => c.name === form.className);
+    if (!form.id && chosenCls?.is_active === 0) {
+      toast({
+        title: `'${classLabel(form.className)}' শ্রেণিটি বর্তমানে নিষ্ক্রিয় রয়েছে`,
+        description: "নিষ্ক্রিয় শ্রেণিতে নতুন শিক্ষার্থী ভর্তি করা যাবে না।",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (form.batchId) {
+      const chosenBatch = allBatches.find((b: any) => String(b.id) === form.batchId);
+      if (chosenBatch && (chosenBatch as any).is_active === 0) {
+        toast({
+          title: "নির্বাচিত ব্যাচটি নিষ্ক্রিয় রয়েছে",
+          description: "অনুগ্রহ করে সক্রিয় ব্যাচ নির্বাচন করুন অথবা সাধারণ রাখুন।",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const res = await fetch(form.id ? `/api/students/${form.id}` : "/api/students", {
@@ -694,19 +739,23 @@ export function StudentManager({
                 )}
               </div>
 
-              {allBatches.length > 0 && (
+              {allBatches.filter((b: any) => b.is_active !== 0).length > 0 && (
                 <div className="w-full sm:w-[200px]">
                   <Select value={batchFilter} onValueChange={setBatchFilter}>
                     <SelectTrigger className="h-10 text-xs bg-slate-50 border-slate-200">
                       <SelectValue placeholder="সকল ব্যাচ" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">সকল ব্যাচ ({bn(allBatches.length)})</SelectItem>
-                      {allBatches.map((b) => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          {b.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="ALL">
+                        সকল ব্যাচ ({bn(allBatches.filter((b: any) => b.is_active !== 0).length)})
+                      </SelectItem>
+                      {allBatches
+                        .filter((b: any) => b.is_active !== 0)
+                        .map((b: any) => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            {b.name} {b.class_name ? `(${classLabel(b.class_name)})` : ""}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -716,7 +765,7 @@ export function StudentManager({
 
           {/* filter tabs */}
           <div className="app-scroll -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scroll-smooth">
-            {FILTERS.map((f) => (
+            {dynamicFilters.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
@@ -1650,9 +1699,9 @@ export function StudentManager({
                       <SelectContent>
                         <SelectItem value="NONE">কোনো ব্যাচ নেই / সাধারণ</SelectItem>
                         {allBatches
-                          .filter((b) => {
+                          .filter((b: any) => {
                             const curCls = allClasses.find((c) => c.name === form.className);
-                            return !curCls || b.class_id === curCls.id;
+                            return (!curCls || b.class_id === curCls.id) && b.is_active !== 0;
                           })
                           .map((b) => (
                             <SelectItem key={b.id} value={String(b.id)}>
@@ -1704,9 +1753,9 @@ export function StudentManager({
                       <SelectContent>
                         <SelectItem value="NONE">কোনো ব্যাচ নেই / সাধারণ</SelectItem>
                         {allBatches
-                          .filter((b) => {
+                          .filter((b: any) => {
                             const curCls = allClasses.find((c) => c.name === form.className);
-                            return !curCls || b.class_id === curCls.id;
+                            return (!curCls || b.class_id === curCls.id) && b.is_active !== 0;
                           })
                           .map((b) => (
                             <SelectItem key={b.id} value={String(b.id)}>
@@ -2177,11 +2226,19 @@ export function StudentManager({
                   <SelectValue placeholder="শ্রেণি" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLASS_NUMBERS.map((c) => (
-                    <SelectItem key={c} value={c} className="text-xs">
-                      {classLabel(c)}
-                    </SelectItem>
-                  ))}
+                  {allClasses.length > 0
+                    ? allClasses
+                        .filter((c) => c.is_active !== 0)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.name} className="text-xs">
+                            {classLabel(c.name)}
+                          </SelectItem>
+                        ))
+                    : CLASS_NUMBERS.map((c) => (
+                        <SelectItem key={c} value={c} className="text-xs">
+                          {classLabel(c)}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             </div>

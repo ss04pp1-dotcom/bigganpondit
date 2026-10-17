@@ -170,13 +170,14 @@ export async function GET(req: NextRequest) {
                FROM routines r
                LEFT JOIN teachers t ON (t.id = r.teacher_id OR (r.teacher_id IS NULL AND t.short_name = r.teacher_name))
                LEFT JOIN classes c ON c.name = r.class_name
+               LEFT JOIN batches b ON (b.id = r.batch_id OR (r.batch_id IS NULL AND b.class_id = c.id AND b.name = r.batch_name))
                LEFT JOIN routine_daily_topics rdt ON rdt.id = (
                  SELECT id FROM routine_daily_topics
                  WHERE routine_id = r.id
                  ORDER BY CASE WHEN date = ? THEN 0 WHEN date >= ? THEN 1 ELSE 2 END, date ASC, updated_at DESC
                  LIMIT 1
                )
-               WHERE r.is_active = 1 AND COALESCE(c.is_active, 1) = 1`;
+               WHERE r.is_active = 1 AND COALESCE(c.is_active, 1) = 1 AND (r.batch_id IS NULL OR COALESCE(b.is_active, 1) = 1)`;
     const params: (string | number)[] = [queryDate, queryDate];
 
     // Filter by day
@@ -275,7 +276,7 @@ export async function GET(req: NextRequest) {
           `SELECT b.id, b.name, b.class_id, c.name as class_name, b.division, b.time_slot, b.room_no
            FROM batches b
            JOIN classes c ON c.id = b.class_id
-           WHERE b.is_active = 1
+           WHERE b.is_active = 1 AND c.is_active = 1
            ORDER BY c.sort_order DESC, b.name ASC`
         )
         .all<{
@@ -439,11 +440,19 @@ export async function POST(req: NextRequest) {
 
     if (finalBatchId && !finalBatchName) {
       const bRow = await db
-        .prepare("SELECT name FROM batches WHERE id = ?")
+        .prepare("SELECT name, COALESCE(is_active, 1) as is_active FROM batches WHERE id = ?")
         .bind(finalBatchId)
-        .first<{ name: string }>()
+        .first<{ name: string; is_active: number }>()
         .catch(() => null);
-      if (bRow) finalBatchName = bRow.name;
+      if (bRow) {
+        if (bRow.is_active === 0) {
+          return NextResponse.json(
+            { ok: false, error: `'${bRow.name}' ব্যাচটি বর্তমানে নিষ্ক্রিয় রয়েছে — নিষ্ক্রিয় ব্যাচে রুটিন তৈরি করা যাবে না।` },
+            { status: 400 }
+          );
+        }
+        finalBatchName = bRow.name;
+      }
     } else if (!finalBatchId && finalBatchName) {
       const bRow = await db
         .prepare("SELECT b.id FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = ? AND b.name = ? LIMIT 1")
@@ -570,11 +579,19 @@ export async function PUT(req: NextRequest) {
 
     if (finalBatchId && !finalBatchName) {
       const bRow = await db
-        .prepare("SELECT name FROM batches WHERE id = ?")
+        .prepare("SELECT name, COALESCE(is_active, 1) as is_active FROM batches WHERE id = ?")
         .bind(finalBatchId)
-        .first<{ name: string }>()
+        .first<{ name: string; is_active: number }>()
         .catch(() => null);
-      if (bRow) finalBatchName = bRow.name;
+      if (bRow) {
+        if (bRow.is_active === 0) {
+          return NextResponse.json(
+            { ok: false, error: `'${bRow.name}' ব্যাচটি বর্তমানে নিষ্ক্রিয় রয়েছে — নিষ্ক্রিয় ব্যাচে রুটিন তৈরি করা যাবে না।` },
+            { status: 400 }
+          );
+        }
+        finalBatchName = bRow.name;
+      }
     } else if (!finalBatchId && finalBatchName) {
       const bRow = await db
         .prepare("SELECT b.id FROM batches b JOIN classes c ON c.id = b.class_id WHERE c.name = ? AND b.name = ? LIMIT 1")

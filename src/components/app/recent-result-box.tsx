@@ -100,7 +100,17 @@ export function RecentResultBox({
   const [data, setData] = useState<RecentResultData | null>(null);
   const [availableSubjects, setAvailableSubjects] = useState<RecentSubject[]>([]);
   const [availableExams, setAvailableExams] = useState<RecentExamOption[]>([]);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/classes")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadRecent = useCallback(
     async (clsOverride?: string, subOverride?: string, examOverride?: string) => {
@@ -235,11 +245,17 @@ export function RecentResultBox({
                   <SelectItem value="AUTO" className="text-xs font-bold text-indigo-700 bg-indigo-50/50">
                     ✨ অটো (রিসেন্ট রেজাল্ট)
                   </SelectItem>
-                  {CLASS_NUMBERS.map((n) => (
-                    <SelectItem key={n} value={n} className="text-xs">
-                      {classLabel(n)} {(!hasUserManuallySelectedClass && data?.exam?.className === n) ? " (রিসেন্ট)" : ""}
-                    </SelectItem>
-                  ))}
+                  {classesList.length > 0
+                    ? classesList.map((c) => (
+                        <SelectItem key={c.id} value={c.name} className="text-xs">
+                          {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}{(!hasUserManuallySelectedClass && data?.exam?.className === c.name) ? " (রিসেন্ট)" : ""}
+                        </SelectItem>
+                      ))
+                    : CLASS_NUMBERS.map((n) => (
+                        <SelectItem key={n} value={n} className="text-xs">
+                          {classLabel(n)} {(!hasUserManuallySelectedClass && data?.exam?.className === n) ? " (রিসেন্ট)" : ""}
+                        </SelectItem>
+                      ))}
                 </SelectContent>
               </Select>
             ) : (

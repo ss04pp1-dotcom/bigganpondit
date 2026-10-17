@@ -75,6 +75,7 @@ export function RoutineViewer({
     { id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -118,6 +119,12 @@ export function RoutineViewer({
           setRoutines(json.routines || []);
           setTeachers(json.teachers || []);
           setUserContext(json.userContext || null);
+          fetch("/api/classes")
+            .then((r) => r.json())
+            .then((j) => {
+              if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+            })
+            .catch(() => {});
           if (json.batches) {
             setBatches(json.batches);
           } else {
@@ -196,10 +203,11 @@ export function RoutineViewer({
       ? null
       : parseInt(selectedDay, 10);
 
-  // Batches available under selected class
+  // Batches available under selected class (only active batches)
   const availableBatches = useMemo(() => {
-    if (selectedClass === "all") return batches;
-    return batches.filter((b) => b.class_name === selectedClass);
+    const active = batches.filter((b: any) => b.is_active !== 0);
+    if (selectedClass === "all") return active;
+    return active.filter((b) => b.class_name === selectedClass);
   }, [batches, selectedClass]);
 
   // Class filtering logic
@@ -614,11 +622,17 @@ export function RoutineViewer({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">সকল শ্রেণি</SelectItem>
-                    {CLASS_NUMBERS.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {classLabel(c)}
-                      </SelectItem>
-                    ))}
+                    {classesList.length > 0
+                      ? classesList.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {classLabel(c.name)} {c.is_active === 0 ? " (নিষ্ক্রিয়)" : ""}
+                          </SelectItem>
+                        ))
+                      : CLASS_NUMBERS.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {classLabel(c)}
+                          </SelectItem>
+                        ))}
                   </SelectContent>
                 </Select>
               </div>

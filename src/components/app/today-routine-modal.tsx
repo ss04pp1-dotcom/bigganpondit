@@ -265,30 +265,55 @@ export function TodayRoutineModal({
     if (onClose) onClose();
   };
 
+  const matchesStudentRoutine = (r: RoutineItem) => {
+    const ctx = data?.userContext;
+    if (!ctx) return true;
+    const rBatchId = r.batch_id && Number(r.batch_id) > 0 ? Number(r.batch_id) : null;
+    const rBatchName =
+      r.batch_name &&
+      r.batch_name.trim() !== "" &&
+      r.batch_name.trim() !== "all" &&
+      r.batch_name.trim() !== "NONE"
+        ? r.batch_name.trim()
+        : null;
+    const isBatchRoutine = Boolean(rBatchId || rBatchName);
+
+    if (isBatchRoutine) {
+      const matchById = Boolean(ctx.studentBatchId && rBatchId && Number(ctx.studentBatchId) === rBatchId);
+      const matchByName = Boolean(
+        ctx.studentBatchName &&
+        rBatchName &&
+        ctx.studentBatchName.trim().toLowerCase() === rBatchName.toLowerCase()
+      );
+      return matchById || matchByName;
+    }
+
+    if (ctx.studentClass && String(r.class_name).trim() !== String(ctx.studentClass).trim()) {
+      return false;
+    }
+    const rDiv =
+      r.division && !["NONE", "ALL", "GENERAL", "-"].includes(r.division.trim().toUpperCase())
+        ? r.division.trim().toUpperCase()
+        : null;
+    const sDiv =
+      ctx.studentDivision && !["NONE", "ALL", "GENERAL", "-"].includes(ctx.studentDivision.trim().toUpperCase())
+        ? ctx.studentDivision.trim().toUpperCase()
+        : null;
+    if (rDiv && sDiv && rDiv !== sDiv) {
+      return false;
+    }
+    return true;
+  };
+
   // Filter today's classes
   const todayRoutines = useMemo(() => {
     if (!data?.routines) return [];
     return data.routines.filter((r) => {
       if (r.day_of_week !== todayDayOfWeek) return false;
 
-      // Student scoping (strictly locked to student's class)
+      // Student scoping (strictly locked to student's class & batch)
       if (isStudent) {
-        if (data.userContext?.studentClass && r.class_name !== data.userContext.studentClass) return false;
-        if (
-          data.userContext?.studentDivision &&
-          r.division &&
-          r.division !== data.userContext.studentDivision
-        ) {
-          return false;
-        }
-        if (
-          data.userContext?.studentSection &&
-          r.section &&
-          r.section !== data.userContext.studentSection
-        ) {
-          return false;
-        }
-        return true;
+        return matchesStudentRoutine(r);
       }
 
       // Teacher scoping (strictly locked to teacher's own teaching schedule)
@@ -339,24 +364,9 @@ export function TodayRoutineModal({
     return data.routines.filter((r) => {
       if (r.day_of_week !== selectedDay) return false;
 
-      // Student scoping (strictly locked to student's class)
+      // Student scoping (strictly locked to student's class & batch)
       if (isStudent) {
-        if (data.userContext?.studentClass && r.class_name !== data.userContext.studentClass) return false;
-        if (
-          data.userContext?.studentDivision &&
-          r.division &&
-          r.division !== data.userContext.studentDivision
-        ) {
-          return false;
-        }
-        if (
-          data.userContext?.studentSection &&
-          r.section &&
-          r.section !== data.userContext.studentSection
-        ) {
-          return false;
-        }
-        return true;
+        return matchesStudentRoutine(r);
       }
 
       // Teacher scoping (strictly locked to teacher's own teaching schedule)
@@ -452,7 +462,7 @@ export function TodayRoutineModal({
                 {isStudent && data?.userContext?.studentClass
                   ? `শ্রেণি: ${classLabel(data.userContext.studentClass)}${
                       data.userContext.studentDivision ? ` (${divisionLabel(data.userContext.studentDivision)})` : ""
-                    } — আজকের ও সাপ্তাহিক পাঠদান সূচি`
+                    }${data.userContext.studentBatchName ? ` • ব্যাচ: ${data.userContext.studentBatchName}` : ""} — আজকের ও সাপ্তাহিক পাঠদান সূচি`
                   : isTeacher && data?.userContext?.userName
                   ? `শিক্ষক: ${data.userContext.userName} — আজকের ক্লাস তালিকা`
                   : "বিজ্ঞান পণ্ডিত একাডেমি — প্রতিদিনের একাডেমিক ক্লাস শিডিউল"}
@@ -477,10 +487,15 @@ export function TodayRoutineModal({
             </Tabs>
 
             {/* Role indicator & Admin controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {isStudent && data?.userContext?.studentClass && (
                 <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[11px] px-2.5 py-1">
                   শ্রেণি: {classLabel(data.userContext.studentClass)}
+                </Badge>
+              )}
+              {isStudent && data?.userContext?.studentBatchName && (
+                <Badge className="bg-violet-100 text-violet-800 border-violet-300 font-bold text-[11px] px-2.5 py-1">
+                  ব্যাচ: {data.userContext.studentBatchName}
                 </Badge>
               )}
 

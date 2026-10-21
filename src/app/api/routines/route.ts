@@ -80,11 +80,18 @@ export async function GET(req: NextRequest) {
     let teacherShortName: string | null = null;
 
     if (user.role === "STUDENT") {
-      const st = await db
+      let st = await db
         .prepare(
-          `SELECT s.id, c.name as class_name, s.division, s.section, s.roll, s.batch_id, s.batch_name
+          `SELECT s.id, COALESCE(c.name, CAST(s.class_id AS TEXT)) as class_name,
+                  s.division, s.section, s.roll,
+                  COALESCE(s.batch_id, b.id) as batch_id,
+                  COALESCE(b.name, s.batch_name) as batch_name
            FROM students s
-           JOIN classes c ON c.id = s.class_id
+           LEFT JOIN classes c ON c.id = s.class_id
+           LEFT JOIN batches b ON (
+             (s.batch_id IS NOT NULL AND s.batch_id > 0 AND b.id = s.batch_id)
+             OR ((s.batch_id IS NULL OR s.batch_id = 0) AND s.batch_name IS NOT NULL AND TRIM(s.batch_name) != '' AND b.class_id = s.class_id AND TRIM(b.name) = TRIM(s.batch_name))
+           )
            WHERE s.user_id = ?`
         )
         .bind(user.id)
@@ -99,13 +106,33 @@ export async function GET(req: NextRequest) {
         }>()
         .catch(() => null);
 
+      if (!st && user.studentId) {
+        st = await db
+          .prepare(
+            `SELECT s.id, COALESCE(c.name, CAST(s.class_id AS TEXT)) as class_name,
+                    s.division, s.section, s.roll,
+                    COALESCE(s.batch_id, b.id) as batch_id,
+                    COALESCE(b.name, s.batch_name) as batch_name
+             FROM students s
+             LEFT JOIN classes c ON c.id = s.class_id
+             LEFT JOIN batches b ON (
+               (s.batch_id IS NOT NULL AND s.batch_id > 0 AND b.id = s.batch_id)
+               OR ((s.batch_id IS NULL OR s.batch_id = 0) AND s.batch_name IS NOT NULL AND TRIM(s.batch_name) != '' AND b.class_id = s.class_id AND TRIM(b.name) = TRIM(s.batch_name))
+             )
+             WHERE s.id = ?`
+          )
+          .bind(user.studentId)
+          .first()
+          .catch(() => null);
+      }
+
       if (st) {
-        studentClass = st.class_name;
-        studentDivision = st.division;
-        studentSection = st.section;
+        studentClass = st.class_name ? String(st.class_name).trim() : null;
+        studentDivision = st.division ? String(st.division).trim() : null;
+        studentSection = st.section ? String(st.section).trim() : null;
         studentRoll = st.roll;
-        studentBatchId = st.batch_id;
-        studentBatchName = st.batch_name;
+        studentBatchId = st.batch_id && Number(st.batch_id) > 0 ? Number(st.batch_id) : null;
+        studentBatchName = st.batch_name && String(st.batch_name).trim() !== "" ? String(st.batch_name).trim() : null;
       } else {
         // Student has no assigned class: return empty routine
         return NextResponse.json({
@@ -159,6 +186,8 @@ export async function GET(req: NextRequest) {
 
     // Build SQL query
     let sql = `SELECT r.*,
+                      COALESCE(r.batch_id, b.id) as resolved_batch_id,
+                      COALESCE(b.name, r.batch_name) as resolved_batch_name,
                       t.photo_key as teacher_photo_key,
                       t.short_name as teacher_short_name,
                       rdt.id as daily_topic_id,
@@ -169,8 +198,11 @@ export async function GET(req: NextRequest) {
                       rdt.updated_at as topic_updated_at
                FROM routines r
                LEFT JOIN teachers t ON (t.id = r.teacher_id OR (r.teacher_id IS NULL AND t.short_name = r.teacher_name))
-               LEFT JOIN classes c ON c.name = r.class_name
-               LEFT JOIN batches b ON (b.id = r.batch_id OR (r.batch_id IS NULL AND b.class_id = c.id AND b.name = r.batch_name))
+               LEFT JOIN classes c ON TRIM(c.name) = TRIM(r.class_name)
+               LEFT JOIN batches b ON (
+                 (r.batch_id IS NOT NULL AND r.batch_id > 0 AND b.id = r.batch_id)
+                 OR ((r.batch_id IS NULL OR r.batch_id = 0) AND r.batch_name IS NOT NULL AND TRIM(r.batch_name) != '' AND b.class_id = c.id AND TRIM(b.name) = TRIM(r.batch_name))
+               )
                LEFT JOIN routine_daily_topics rdt ON rdt.id = (
                  SELECT id FROM routine_daily_topics
                  WHERE routine_id = r.id
@@ -189,20 +221,22 @@ export async function GET(req: NextRequest) {
     // STRICT ROLE SCOPING:
     // 1. Student can NEVER see other students/classes routines
     if (user.role === "STUDENT") {
-      sql += ` AND r.class_name = ?`;
-      params.push(studentClass!);
-
-      if (studentDivision) {
-        sql += ` AND (r.division IS NULL OR r.division = '' OR r.division = ?)`;
-        params.push(studentDivision);
-      }
-      if (studentSection) {
-        sql += ` AND (r.section IS NULL OR r.section = '' OR r.section = ?)`;
-        params.push(studentSection);
-      }
       if (studentBatchId || studentBatchName) {
-        sql += ` AND (r.batch_id IS NULL OR r.batch_id = 0 OR r.batch_id = ? OR r.batch_name IS NULL OR r.batch_name = '' OR r.batch_name = ?)`;
-        params.push(studentBatchId || 0, studentBatchName || "");
+        sql += ` AND (
+          TRIM(r.class_name) = TRIM(?)
+          OR (? > 0 AND COALESCE(r.batch_id, b.id) = ?)
+          OR (? != '' AND LOWER(TRIM(COALESCE(b.name, r.batch_name, ''))) = LOWER(TRIM(?)))
+        )`;
+        params.push(
+          studentClass!,
+          studentBatchId || 0,
+          studentBatchId || 0,
+          studentBatchName || "",
+          studentBatchName || ""
+        );
+      } else {
+        sql += ` AND TRIM(r.class_name) = TRIM(?)`;
+        params.push(studentClass!);
       }
     }
     // 2. Teacher can NEVER see other teachers' routines
@@ -238,11 +272,11 @@ export async function GET(req: NextRequest) {
       if (batchIdParam && batchIdParam !== "all") {
         const bid = parseInt(batchIdParam, 10);
         if (!isNaN(bid) && bid > 0) {
-          sql += ` AND r.batch_id = ?`;
+          sql += ` AND COALESCE(r.batch_id, b.id) = ?`;
           params.push(bid);
         }
       } else if (batchParam && batchParam !== "all") {
-        sql += ` AND (r.batch_name = ? OR r.batch_id = ?)`;
+        sql += ` AND (COALESCE(b.name, r.batch_name) = ? OR COALESCE(r.batch_id, b.id) = ?)`;
         params.push(batchParam, isNaN(Number(batchParam)) ? -1 : Number(batchParam));
       }
 
@@ -260,9 +294,70 @@ export async function GET(req: NextRequest) {
     sql += ` ORDER BY r.day_of_week ASC, r.start_time ASC, r.class_name ASC`;
 
     const stmt = db.prepare(sql);
-    const rows = params.length > 0
-      ? (await stmt.bind(...params).all<RoutineRow>()).results
-      : (await stmt.all<RoutineRow>()).results;
+    const rawRows = params.length > 0
+      ? (await stmt.bind(...params).all<RoutineRow & { resolved_batch_id?: number | null; resolved_batch_name?: string | null }>()).results
+      : (await stmt.all<RoutineRow & { resolved_batch_id?: number | null; resolved_batch_name?: string | null }>()).results;
+
+    const normalizedRows: RoutineRow[] = (rawRows || []).map((r) => {
+      const resolvedBatchId = r.resolved_batch_id ?? r.batch_id ?? null;
+      const resolvedBatchName = r.resolved_batch_name ?? r.batch_name ?? null;
+      return {
+        ...r,
+        batch_id: resolvedBatchId && Number(resolvedBatchId) > 0 ? Number(resolvedBatchId) : null,
+        batch_name:
+          resolvedBatchName &&
+          String(resolvedBatchName).trim() !== "" &&
+          String(resolvedBatchName).trim() !== "all" &&
+          String(resolvedBatchName).trim() !== "NONE"
+            ? String(resolvedBatchName).trim()
+            : null,
+      };
+    });
+
+    // Apply exact student batch & class filtering in memory
+    const rows =
+      user.role === "STUDENT"
+        ? normalizedRows.filter((r) => {
+            const rBatchId = r.batch_id && Number(r.batch_id) > 0 ? Number(r.batch_id) : null;
+            const rBatchName =
+              r.batch_name &&
+              r.batch_name.trim() !== "" &&
+              r.batch_name.trim() !== "all" &&
+              r.batch_name.trim() !== "NONE"
+                ? r.batch_name.trim()
+                : null;
+            const isBatchRoutine = Boolean(rBatchId || rBatchName);
+
+            if (isBatchRoutine) {
+              // Routine is assigned to a specific batch: show ONLY to students of that batch
+              // (regardless of section or division defaults on the routine)
+              const matchById = Boolean(studentBatchId && rBatchId && Number(studentBatchId) === rBatchId);
+              const matchByName = Boolean(
+                studentBatchName &&
+                rBatchName &&
+                studentBatchName.trim().toLowerCase() === rBatchName.toLowerCase()
+              );
+              return matchById || matchByName;
+            }
+
+            // Open/general routine ("সকল ব্যাচ"): must match student's class & division
+            if (studentClass && String(r.class_name).trim() !== String(studentClass).trim()) {
+              return false;
+            }
+            const rDiv =
+              r.division && !["NONE", "ALL", "GENERAL", "-"].includes(r.division.trim().toUpperCase())
+                ? r.division.trim().toUpperCase()
+                : null;
+            const sDiv =
+              studentDivision && !["NONE", "ALL", "GENERAL", "-"].includes(studentDivision.trim().toUpperCase())
+                ? studentDivision.trim().toUpperCase()
+                : null;
+            if (rDiv && sDiv && rDiv !== sDiv) {
+              return false;
+            }
+            return true;
+          })
+        : normalizedRows;
 
     // Teachers, subjects & batches directory
     let teachersList: any[] = [];

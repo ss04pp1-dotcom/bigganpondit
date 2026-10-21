@@ -97,7 +97,7 @@ export function AdminRoutineManager() {
   const [formDays, setFormDays] = useState<number[]>([6]); // Multiple days selection for add
   const [formClass, setFormClass] = useState<string>("10");
   const [formDivision, setFormDivision] = useState<string>("SCIENCE");
-  const [formSection, setFormSection] = useState<string>("ক");
+  const [formSection, setFormSection] = useState<string>("");
   const [formBatchId, setFormBatchId] = useState<string>("all");
   const [formBatchName, setFormBatchName] = useState<string>("");
   const [formSubjectName, setFormSubjectName] = useState<string>("");
@@ -208,7 +208,7 @@ export function AdminRoutineManager() {
     setFormDays([6]);
     setFormClass("10");
     setFormDivision("SCIENCE");
-    setFormSection("ক");
+    setFormSection("");
     setFormBatchId("all");
     setFormBatchName("");
     setFormSubjectName("");
@@ -1093,6 +1093,7 @@ export function AdminRoutineManager() {
                   value={formClass}
                   onValueChange={(val) => {
                     setFormClass(val);
+                    setFormDivision(val === "9" || val === "10" ? "SCIENCE" : "NONE");
                     setFormBatchId("all");
                     setFormBatchName("");
                   }}
@@ -1165,6 +1166,9 @@ export function AdminRoutineManager() {
                   } else {
                     const found = batches.find((b) => String(b.id) === val);
                     setFormBatchName(found ? found.name : "");
+                    if (found?.division) {
+                      setFormDivision(found.division);
+                    }
                   }
                 }}
               >

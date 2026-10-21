@@ -309,7 +309,8 @@ export default async function StudentDashboard() {
               <p className="mt-1 text-[13px] font-semibold text-slate-600">
                 শ্রেণি: {classLabel(user.className ?? "")}
                 {user.division ? ` | ${divisionLabel(user.division)}` : ""}
-                {user.section ? ` | শাখা: ${user.section}` : ""} | রোল: {bn(user.roll ?? 0)}
+                {user.batchName ? ` | ব্যাচ: ${user.batchName}` : ""}
+                {user.section && user.section !== "-" ? ` | শাখা: ${user.section}` : ""} | রোল: {bn(user.roll ?? 0)}
               </p>
             </div>
           </div>

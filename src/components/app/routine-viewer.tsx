@@ -220,29 +220,41 @@ export function RoutineViewer({
 
       // 2. Student Role scoping (strictly locked to student's class and batch)
       if (isStudent) {
-        if (userContext?.studentClass && r.class_name !== userContext.studentClass) {
+        const rBatchId = r.batch_id && Number(r.batch_id) > 0 ? Number(r.batch_id) : null;
+        const rBatchName =
+          r.batch_name &&
+          r.batch_name.trim() !== "" &&
+          r.batch_name.trim() !== "all" &&
+          r.batch_name.trim() !== "NONE"
+            ? r.batch_name.trim()
+            : null;
+        const isBatchRoutine = Boolean(rBatchId || rBatchName);
+
+        if (isBatchRoutine) {
+          const matchById = Boolean(
+            userContext?.studentBatchId && rBatchId && Number(userContext.studentBatchId) === rBatchId
+          );
+          const matchByName = Boolean(
+            userContext?.studentBatchName &&
+            rBatchName &&
+            userContext.studentBatchName.trim().toLowerCase() === rBatchName.toLowerCase()
+          );
+          return matchById || matchByName;
+        }
+
+        if (userContext?.studentClass && String(r.class_name).trim() !== String(userContext.studentClass).trim()) {
           return false;
         }
-        if (
-          userContext?.studentDivision &&
-          r.division &&
-          r.division !== userContext.studentDivision
-        ) {
+        const rDiv =
+          r.division && !["NONE", "ALL", "GENERAL", "-"].includes(r.division.trim().toUpperCase())
+            ? r.division.trim().toUpperCase()
+            : null;
+        const sDiv =
+          userContext?.studentDivision && !["NONE", "ALL", "GENERAL", "-"].includes(userContext.studentDivision.trim().toUpperCase())
+            ? userContext.studentDivision.trim().toUpperCase()
+            : null;
+        if (rDiv && sDiv && rDiv !== sDiv) {
           return false;
-        }
-        if (
-          userContext?.studentSection &&
-          r.section &&
-          r.section !== userContext.studentSection
-        ) {
-          return false;
-        }
-        if (userContext?.studentBatchId || userContext?.studentBatchName) {
-          const isCommon = !r.batch_id && !r.batch_name;
-          const isMyBatch =
-            (r.batch_id && r.batch_id === userContext.studentBatchId) ||
-            (r.batch_name && r.batch_name === userContext.studentBatchName);
-          if (!isCommon && !isMyBatch) return false;
         }
         return true;
       }

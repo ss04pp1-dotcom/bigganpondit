@@ -130,10 +130,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
       )
       .run();
 
-    // If batch name changed, also update batch_name in students
+    // If batch name changed, also update batch_name in students and routines
     if (newName !== current.name) {
       await db
         .prepare("UPDATE students SET batch_name = ? WHERE batch_id = ?")
+        .bind(newName, id)
+        .run()
+        .catch(() => null);
+      await db
+        .prepare("UPDATE routines SET batch_name = ? WHERE batch_id = ?")
         .bind(newName, id)
         .run()
         .catch(() => null);

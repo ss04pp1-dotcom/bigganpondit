@@ -19,6 +19,8 @@ export interface CurrentUser {
   studentId?: number;
   classId?: number;
   className?: string;
+  batchId?: number | null;
+  batchName?: string | null;
   division?: string | null;
   section?: string | null;
   roll?: number;
@@ -132,34 +134,48 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
   } else if (user.role === "STUDENT") {
     let s = await db
       .prepare(
-        `SELECT st.*, COALESCE(c.name, CAST(st.class_id AS TEXT)) as class_name
+        `SELECT st.*, COALESCE(c.name, CAST(st.class_id AS TEXT)) as class_name,
+                COALESCE(st.batch_id, b.id) as resolved_batch_id,
+                COALESCE(b.name, st.batch_name) as resolved_batch_name
          FROM students st
          LEFT JOIN classes c ON c.id = st.class_id
+         LEFT JOIN batches b ON (
+           (st.batch_id IS NOT NULL AND st.batch_id > 0 AND b.id = st.batch_id)
+           OR ((st.batch_id IS NULL OR st.batch_id = 0) AND st.batch_name IS NOT NULL AND TRIM(st.batch_name) != '' AND b.class_id = st.class_id AND TRIM(b.name) = TRIM(st.batch_name))
+         )
          WHERE st.user_id = ?`
       )
       .bind(user.id)
-      .first<StudentRow & { class_name: string }>()
+      .first<StudentRow & { class_name: string; resolved_batch_id?: number | null; resolved_batch_name?: string | null }>()
       .catch(() => null);
 
     if (!s) {
       // Fallback: match by student name if user_id was not populated yet
       s = await db
         .prepare(
-          `SELECT st.*, COALESCE(c.name, CAST(st.class_id AS TEXT)) as class_name
+          `SELECT st.*, COALESCE(c.name, CAST(st.class_id AS TEXT)) as class_name,
+                  COALESCE(st.batch_id, b.id) as resolved_batch_id,
+                  COALESCE(b.name, st.batch_name) as resolved_batch_name
            FROM students st
            LEFT JOIN classes c ON c.id = st.class_id
+           LEFT JOIN batches b ON (
+             (st.batch_id IS NOT NULL AND st.batch_id > 0 AND b.id = st.batch_id)
+             OR ((st.batch_id IS NULL OR st.batch_id = 0) AND st.batch_name IS NOT NULL AND TRIM(st.batch_name) != '' AND b.class_id = st.class_id AND TRIM(b.name) = TRIM(st.batch_name))
+           )
            WHERE st.name = ?
            LIMIT 1`
         )
         .bind(user.name)
-        .first<StudentRow & { class_name: string }>()
+        .first<StudentRow & { class_name: string; resolved_batch_id?: number | null; resolved_batch_name?: string | null }>()
         .catch(() => null);
     }
 
     if (s) {
       out.studentId = s.id;
       out.classId = s.class_id;
-      out.className = (s as unknown as { class_name: string }).class_name;
+      out.className = s.class_name;
+      out.batchId = s.resolved_batch_id ?? s.batch_id ?? null;
+      out.batchName = s.resolved_batch_name ?? s.batch_name ?? null;
       out.division = s.division;
       out.section = s.section;
       out.roll = s.roll;

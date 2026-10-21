@@ -32,16 +32,16 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-      { url: "/api/logo", sizes: "any" },
+      { url: "/favicon.ico?v=4", sizes: "any" },
+      { url: "/favicon-32x32.png?v=4", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png?v=4", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192.png?v=4", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png?v=4", sizes: "512x512", type: "image/png" },
+      { url: "/api/logo?v=4", sizes: "any" },
     ],
-    shortcut: "/icons/icon-192.png",
+    shortcut: "/icons/icon-192.png?v=4",
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png?v=4", sizes: "180x180", type: "image/png" },
     ],
   },
 };
@@ -60,12 +60,12 @@ export default function RootLayout({
   return (
     <html lang="bn" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.webmanifest" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="manifest" href="/manifest.webmanifest?v=4" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=4" />
+        <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png?v=4" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=4" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=4" />
+        <link rel="shortcut icon" href="/favicon.ico?v=4" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

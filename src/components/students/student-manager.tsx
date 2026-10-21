@@ -4,7 +4,7 @@
 // Teachers submit student registrations as requests requiring admin approval.
 // Admins review and approve/reject teacher requests or add students directly.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Eye,
   Pencil,
@@ -27,6 +27,11 @@ import {
   Send,
   Fingerprint,
   GraduationCap,
+  Smartphone,
+  Globe,
+  Copy,
+  RotateCcw,
+  Settings2,
 } from "lucide-react";
 import { BiometricPasswordDialog } from "./biometric-password-dialog";
 import { StudentPromotionModal } from "./student-promotion-modal";
@@ -56,6 +61,7 @@ import { StudentAvatar } from "@/components/app/student-avatar";
 import { ImageUpload } from "@/components/app/image-upload";
 import { cn } from "@/lib/utils";
 import {
+  BD_PHONE_RE,
   CLASS_NUMBERS,
   DIVISIONS,
   MONTHS_BN,
@@ -65,8 +71,43 @@ import {
   divisionLabel,
   fmtNum,
   groupLabel,
+  normalizeBdPhone,
   toEnDigits,
 } from "@/lib/constants";
+
+function buildSmsUri(phones: string[], text: string): string {
+  const clean = phones.filter(Boolean);
+  if (clean.length === 0) return "#";
+  const encodedBody = encodeURIComponent(text);
+  if (typeof navigator !== "undefined" && /iPad|iPhone|iPod/i.test(navigator.userAgent)) {
+    return `sms:/open?addresses=${clean.join(",")}&body=${encodedBody}`;
+  }
+  return `sms:${clean.join(",")}?body=${encodedBody}`;
+}
+
+function triggerSmsApp(phones: string[], text: string) {
+  const uri = buildSmsUri(phones, text);
+  if (uri === "#") return;
+  const a = document.createElement("a");
+  a.href = uri;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try {
+      document.body.removeChild(a);
+    } catch {
+      // ignore
+    }
+  }, 200);
+}
+
+interface SmsGroupItem {
+  groupIndex: number;
+  phones: string[];
+  recipients: { id: number; name: string; roll: number; phone: string }[];
+  sent: boolean;
+}
 
 interface Row {
   id: number;
@@ -269,11 +310,24 @@ export function StudentManager({
 
   // SMS Modal state
   const [smsOpen, setSmsOpen] = useState(false);
-  const [smsScope, setSmsScope] = useState<"ALL" | "CLASS" | "SELECTED">("ALL");
+  const [smsScope, setSmsScope] = useState<"ALL" | "CLASS" | "BATCH" | "SELECTED">("ALL");
   const [smsClass, setSmsClass] = useState("10");
+  const [smsBatchId, setSmsBatchId] = useState<string>("");
   const [smsMessage, setSmsMessage] = useState("");
   const [smsSending, setSmsSending] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(new Set());
+  const [smsMode, setSmsMode] = useState<"PHONE_APP" | "GATEWAY">("PHONE_APP");
+  const [smsGroupSize, setSmsGroupSize] = useState<number>(20);
+  const [autoNextGroup, setAutoNextGroup] = useState<boolean>(true);
+  const [smsQueue, setSmsQueue] = useState<SmsGroupItem[] | null>(null);
+  const lastSmsLaunchRef = useRef<number>(0);
+
+  // Optional SMS Gateway API state
+  const [hasGatewayKey, setHasGatewayKey] = useState<boolean>(false);
+  const [gatewayUrlInput, setGatewayUrlInput] = useState<string>("https://api.greenweb.com.bd/api.php");
+  const [gatewayKeyInput, setGatewayKeyInput] = useState<string>("");
+  const [showGatewayConfig, setShowGatewayConfig] = useState<boolean>(false);
+  const [savingGateway, setSavingGateway] = useState<boolean>(false);
 
   // Biometric fingerprint password reveal state for Admin
   const [bioStudent, setBioStudent] = useState<Row | null>(null);
@@ -317,36 +371,219 @@ export function StudentManager({
 
   const { toast } = useToast();
 
+  // Load optional gateway status when SMS modal opens
+  useEffect(() => {
+    if (!smsOpen || role !== "ADMIN") return;
+    fetch("/api/admin/sms")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok) {
+          setHasGatewayKey(Boolean(j.hasGatewayKey));
+          if (j.gatewayUrl) setGatewayUrlInput(j.gatewayUrl);
+        }
+      })
+      .catch(() => {});
+  }, [smsOpen, role]);
+
+  // Live recipient & group preview for currently selected SMS scope
+  const smsPreview = useMemo(() => {
+    let filtered = rows;
+    if (smsScope === "CLASS") {
+      filtered = rows.filter((r) => String(r.class_name) === String(smsClass));
+    } else if (smsScope === "BATCH") {
+      filtered = smsBatchId
+        ? rows.filter((r) => String(r.batch_id || "") === String(smsBatchId))
+        : [];
+    } else if (smsScope === "SELECTED") {
+      filtered = rows.filter((r) => selectedStudentIds.has(r.id));
+    }
+
+    const seen = new Set<string>();
+    const recipients: { id: number; name: string; roll: number; phone: string }[] = [];
+    let skippedCount = 0;
+
+    for (const s of filtered) {
+      if (!s.phone || !s.phone.trim()) {
+        skippedCount++;
+        continue;
+      }
+      const p = normalizeBdPhone(s.phone);
+      if (BD_PHONE_RE.test(p)) {
+        if (!seen.has(p)) {
+          seen.add(p);
+          recipients.push({ id: s.id, name: s.name, roll: s.roll, phone: p });
+        }
+      } else {
+        skippedCount++;
+      }
+    }
+
+    const chunkSize = Math.min(100, Math.max(5, smsGroupSize || 20));
+    const groups: SmsGroupItem[] = [];
+    for (let i = 0; i < recipients.length; i += chunkSize) {
+      const slice = recipients.slice(i, i + chunkSize);
+      groups.push({
+        groupIndex: groups.length,
+        phones: slice.map((x) => x.phone),
+        recipients: slice,
+        sent: false,
+      });
+    }
+
+    return {
+      totalMatchedStudents: filtered.length,
+      validCount: recipients.length,
+      skippedCount,
+      groups,
+    };
+  }, [rows, smsScope, smsClass, smsBatchId, selectedStudentIds, smsGroupSize]);
+
+  // Auto-advance to the next unsent SMS group when returning from the phone's SMS app
+  useEffect(() => {
+    if (!smsOpen || !smsQueue || !autoNextGroup || smsMode !== "PHONE_APP") return;
+
+    const handleReturnToApp = () => {
+      if (document.visibilityState !== "visible") return;
+      const elapsed = Date.now() - lastSmsLaunchRef.current;
+      // Only auto-trigger if the admin was away in the SMS app for at least 1.4 seconds
+      if (elapsed < 1400 || lastSmsLaunchRef.current === 0) return;
+
+      setSmsQueue((prev) => {
+        if (!prev) return null;
+        const nextIdx = prev.findIndex((g) => !g.sent);
+        if (nextIdx === -1) {
+          lastSmsLaunchRef.current = 0;
+          return prev;
+        }
+        const targetGroup = prev[nextIdx];
+        lastSmsLaunchRef.current = Date.now();
+        setTimeout(() => {
+          triggerSmsApp(targetGroup.phones, smsMessage.trim());
+          toast({
+            title: `গ্রুপ ${bn(nextIdx + 1)}/${bn(prev.length)} ওপেন হয়েছে`,
+            description: `${bn(targetGroup.phones.length)} জন শিক্ষার্থীর নম্বর ফোনের SMS অ্যাপে পাঠানো হয়েছে।`,
+          });
+        }, 250);
+        return prev.map((g, idx) => (idx === nextIdx ? { ...g, sent: true } : g));
+      });
+    };
+
+    document.addEventListener("visibilitychange", handleReturnToApp);
+    window.addEventListener("focus", handleReturnToApp);
+    return () => {
+      document.removeEventListener("visibilitychange", handleReturnToApp);
+      window.removeEventListener("focus", handleReturnToApp);
+    };
+  }, [smsOpen, smsQueue, autoNextGroup, smsMode, smsMessage, toast]);
+
+  function launchGroupByIndex(idx: number, queueSource?: SmsGroupItem[]) {
+    const list = queueSource ?? smsQueue;
+    if (!list || !list[idx]) return;
+    const grp = list[idx];
+    lastSmsLaunchRef.current = Date.now();
+    triggerSmsApp(grp.phones, smsMessage.trim());
+    setSmsQueue((prev) =>
+      (prev ?? list).map((g, i) => (i === idx ? { ...g, sent: true } : g))
+    );
+  }
+
+  async function handleSaveGatewayConfig() {
+    setSavingGateway(true);
+    try {
+      const res = await fetch("/api/admin/sms", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: gatewayKeyInput.trim(),
+          gatewayUrl: gatewayUrlInput.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        toast({ title: json.error ?? "সংরক্ষণ করা যায়নি।", variant: "destructive" });
+        return;
+      }
+      setHasGatewayKey(Boolean(json.hasGatewayKey));
+      setGatewayKeyInput("");
+      setShowGatewayConfig(false);
+      toast({ title: json.message });
+    } catch {
+      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+    } finally {
+      setSavingGateway(false);
+    }
+  }
+
   async function handleSendSms(e: React.FormEvent) {
     e.preventDefault();
-    if (!smsMessage.trim()) {
+    const text = smsMessage.trim();
+    if (!text) {
       toast({ title: "এসএমএস বার্তা লিখুন।", variant: "destructive" });
       return;
     }
+
+    // 1. PHONE SMS APP MODE (No API key needed — opens native SMS app directly, grouped if many students)
+    if (smsMode === "PHONE_APP") {
+      if (!q && smsPreview.groups.length > 0) {
+        const initialQueue = smsPreview.groups.map((g, idx) => ({
+          ...g,
+          sent: idx === 0,
+        }));
+        setSmsQueue(initialQueue);
+        lastSmsLaunchRef.current = Date.now();
+        // Trigger first group synchronously inside user gesture
+        triggerSmsApp(initialQueue[0].phones, text);
+
+        if (initialQueue.length === 1) {
+          toast({
+            title: "ফোনের SMS অ্যাপ খোলা হচ্ছে",
+            description: `মোট ${bn(initialQueue[0].phones.length)} টি নম্বরে বার্তা প্রেরণের জন্য SMS অ্যাপ ওপেন হয়েছে।`,
+          });
+        } else {
+          toast({
+            title: `গ্রুপ ১/${bn(initialQueue.length)} ফোনের SMS অ্যাপে খোলা হয়েছে`,
+            description: `মোট ${bn(smsPreview.validCount)} জনকে ${bn(initialQueue.length)} টি গ্রুপে ভাগ করা হয়েছে। ১ম গ্রুপ পাঠানোর পর অ্যাপে ফিরলে পরের গ্রুপ ওপেন হবে।`,
+          });
+        }
+        return;
+      }
+    }
+
+    // 2. Server-side resolution (for GATEWAY mode or when search filter `q` was active)
     setSmsSending(true);
     try {
-      // FIX: resolve the class ID from /api/classes (the previous code read
-      // `clsRes.classes` from /api/admin/teachers — an endpoint that returns
-      // NO classes key, so classIdNum was always undefined and "নির্দিষ্ট শ্রেণি"
-      // SMS silently went to the ENTIRE school).
       let classIdNum: number | undefined = undefined;
       if (smsScope === "CLASS") {
-        const clsRes = await fetch("/api/classes").then((r) => r.json()).catch(() => null);
-        const clsObj = (clsRes?.classes ?? []).find((c: any) => String(c.name) === String(smsClass));
-        classIdNum = clsObj?.id;
+        const clsObj = allClasses.find((c: any) => String(c.name) === String(smsClass));
+        if (clsObj?.id) {
+          classIdNum = clsObj.id;
+        } else {
+          const clsRes = await fetch("/api/classes").then((r) => r.json()).catch(() => null);
+          const fetchedObj = (clsRes?.classes ?? []).find((c: any) => String(c.name) === String(smsClass));
+          classIdNum = fetchedObj?.id;
+        }
         if (!classIdNum) {
           toast({ title: "শ্রেণি খুঁজে পাওয়া যায়নি — আবার চেষ্টা করুন।", variant: "destructive" });
           return;
         }
       }
+
+      if (smsScope === "BATCH" && !smsBatchId) {
+        toast({ title: "অনুগ্রহ করে একটি ব্যাচ নির্বাচন করুন।", variant: "destructive" });
+        return;
+      }
+
       const res = await fetch("/api/admin/sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scope: smsScope,
           classId: classIdNum,
+          batchId: smsScope === "BATCH" ? Number(smsBatchId) : undefined,
           studentIds: smsScope === "SELECTED" ? Array.from(selectedStudentIds) : undefined,
-          message: smsMessage.trim(),
+          message: text,
+          mode: smsMode,
+          groupSize: smsGroupSize,
         }),
       });
       const json = await res.json();
@@ -354,9 +591,31 @@ export function StudentManager({
         toast({ title: json.error ?? "এসএমএস প্রেরণ করা যায়নি।", variant: "destructive" });
         return;
       }
+
+      if (json.mode === "PHONE_APP" && Array.isArray(json.groups) && json.groups.length > 0) {
+        const builtQueue: SmsGroupItem[] = json.groups.map((phones: string[], idx: number) => ({
+          groupIndex: idx,
+          phones,
+          recipients: json.recipientGroups?.[idx] ?? phones.map((p, i) => ({ id: i, name: "", roll: 0, phone: p })),
+          sent: idx === 0,
+        }));
+        setSmsQueue(builtQueue);
+        lastSmsLaunchRef.current = Date.now();
+        triggerSmsApp(builtQueue[0].phones, text);
+        toast({
+          title:
+            builtQueue.length > 1
+              ? `গ্রুপ ১/${bn(builtQueue.length)} ফোনের SMS অ্যাপে খোলা হয়েছে`
+              : "ফোনের SMS অ্যাপ খোলা হচ্ছে",
+          description: json.message,
+        });
+        return;
+      }
+
       toast({ title: "এসএমএস সফল", description: json.message });
       setSmsOpen(false);
       setSmsMessage("");
+      setSmsQueue(null);
     } catch {
       toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
     } finally {
@@ -2166,141 +2425,538 @@ export function StudentManager({
         student={bioStudent}
       />
 
-      {/* SMS MODAL FOR ADMIN — Point 05 */}
-    <Dialog open={smsOpen} onOpenChange={setSmsOpen}>
-      <DialogContent className="w-[95vw] sm:max-w-[480px] p-4 sm:p-6 rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
-            <MessageSquare className="h-5 w-5 text-emerald-600" />
-            শিক্ষার্থীদের এসএমএস (SMS) প্রেরণ করুন
-          </DialogTitle>
-        </DialogHeader>
+      {/* SMS MODAL FOR ADMIN — Phone SMS App (Grouped Auto-Send) + Optional SMS Gateway */}
+      <Dialog
+        open={smsOpen}
+        onOpenChange={(open) => {
+          setSmsOpen(open);
+          if (!open) {
+            setSmsQueue(null);
+            lastSmsLaunchRef.current = 0;
+          }
+        }}
+      >
+        <DialogContent className="w-[95vw] sm:max-w-[540px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[16px] text-slate-900">
+              <MessageSquare className="h-5 w-5 text-emerald-600" />
+              শিক্ষার্থীদের এসএমএস (SMS) প্রেরণ করুন
+            </DialogTitle>
+          </DialogHeader>
 
-        <form onSubmit={handleSendSms} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">প্রাপক নির্বাচন (Scope)</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setSmsScope("ALL")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "ALL"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                সকল শ্রেণি
-              </button>
-              <button
-                type="button"
-                onClick={() => setSmsScope("CLASS")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "CLASS"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                নির্দিষ্ট শ্রেণি
-              </button>
-              <button
-                type="button"
-                onClick={() => setSmsScope("SELECTED")}
-                className={cn(
-                  "rounded-lg border p-2 text-xs font-semibold transition-all",
-                  smsScope === "SELECTED"
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                বাছাইকৃত
-              </button>
-            </div>
-          </div>
-
-          {smsScope === "CLASS" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">শ্রেণি নির্বাচন করুন</Label>
-              <Select value={smsClass} onValueChange={setSmsClass}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="শ্রেণি" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allClasses.length > 0
-                    ? allClasses
-                        .filter((c) => c.is_active !== 0)
-                        .map((c) => (
-                          <SelectItem key={c.id} value={c.name} className="text-xs">
-                            {classLabel(c.name)}
-                          </SelectItem>
-                        ))
-                    : CLASS_NUMBERS.map((c) => (
-                        <SelectItem key={c} value={c} className="text-xs">
-                          {classLabel(c)}
-                        </SelectItem>
-                      ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {smsScope === "SELECTED" && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-medium text-amber-800">
-              {selectedStudentIds.size > 0
-                ? `তালিকা থেকে ${bn(selectedStudentIds.size)} জন শিক্ষার্থী নির্বাচন করা হয়েছে।`
-                : "তালিকা থেকে চেকবক্স (✓) দিয়ে অন্তত একজন শিক্ষার্থী নির্বাচন করুন।"}
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">বার্তার বিবরণ (SMS Text) *</Label>
-              <span className="text-[11px] text-slate-400">
-                অক্ষর: {bn(smsMessage.length)} (১ এসএমএস ≈ ১৬০/৭০)
-              </span>
-            </div>
-            <Textarea
-              placeholder="অভিভাবকদের জন্য বার্তা লিখুন... যেমন: সম্মানিত অভিভাবক, আগামীকাল বিশেষ ক্লাস পরীক্ষা অনুষ্ঠিত হবে।"
-              value={smsMessage}
-              onChange={(e) => setSmsMessage(e.target.value)}
-              rows={4}
-              required
-              className="text-xs resize-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-            <Button
+          {/* Sending Mode Switcher: Phone SMS App (Default) vs Optional Gateway API */}
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+            <button
               type="button"
-              variant="outline"
-              onClick={() => setSmsOpen(false)}
-              disabled={smsSending}
-              className="text-xs h-8"
-            >
-              বাতিল
-            </Button>
-            <Button
-              type="submit"
-              disabled={smsSending}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs h-8 font-semibold shadow-xs"
-            >
-              {smsSending ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  প্রেরণ হচ্ছে...
-                </>
-              ) : (
-                <>
-                  <Send className="h-3.5 w-3.5" />
-                  এসএমএস পাঠান
-                </>
+              onClick={() => {
+                setSmsMode("PHONE_APP");
+                setSmsQueue(null);
+              }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg py-2 px-2.5 transition-all",
+                smsMode === "PHONE_APP"
+                  ? "bg-white text-emerald-700 shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
               )}
-            </Button>
+            >
+              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              <span>ফোনের SMS অ্যাপ (সিম)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSmsMode("GATEWAY");
+                setSmsQueue(null);
+              }}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg py-2 px-2.5 transition-all",
+                smsMode === "GATEWAY"
+                  ? "bg-white text-blue-700 shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Globe className="h-3.5 w-3.5 shrink-0" />
+              <span>SMS API গেটওয়ে (ঐচ্ছিক)</span>
+            </button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+
+          {/* VIEW A: ACTIVE GROUP QUEUE (When Phone SMS App sending has started) */}
+          {smsQueue && smsMode === "PHONE_APP" ? (
+            <div className="space-y-3.5 pt-1">
+              {(() => {
+                const sentGroupsCount = smsQueue.filter((g) => g.sent).length;
+                const nextUnsentIdx = smsQueue.findIndex((g) => !g.sent);
+                const nextGroup = nextUnsentIdx !== -1 ? smsQueue[nextUnsentIdx] : null;
+                const totalNumbers = smsQueue.reduce((acc, g) => acc + g.phones.length, 0);
+
+                return (
+                  <>
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-emerald-900">
+                          গ্রুপ প্রেরণ অগ্রগতি: {bn(sentGroupsCount)} / {bn(smsQueue.length)} টি গ্রুপ
+                        </span>
+                        <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                          মোট {bn(totalNumbers)} জন
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-200/70">
+                        <div
+                          className="h-full bg-emerald-600 transition-all duration-300"
+                          style={{
+                            width: `${Math.round((sentGroupsCount / smsQueue.length) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">
+                        {nextGroup
+                          ? `ফোনের SMS অ্যাপে বার্তা পাঠিয়ে অ্যাপে ফিরে এলে পরবর্তী গ্রুপ (গ্রুপ ${bn(nextUnsentIdx + 1)}) স্বয়ংক্রিয়ভাবে ওপেন হবে, অথবা নিচের সবুজ বাটনে ট্যাপ করুন।`
+                          : "সকল গ্রুপ ফোনের SMS অ্যাপে ওপেন করা সম্পন্ন হয়েছে! প্রয়োজনে যেকোনো গ্রুপে পুনরায় পাঠাতে পারবেন।"}
+                      </p>
+                    </div>
+
+                    {/* Prominent Next Group Action Button */}
+                    {nextGroup && (
+                      <a
+                        href={buildSmsUri(nextGroup.phones, smsMessage.trim())}
+                        onClick={() => {
+                          lastSmsLaunchRef.current = Date.now();
+                          setSmsQueue((prev) =>
+                            (prev ?? []).map((g, i) =>
+                              i === nextUnsentIdx ? { ...g, sent: true } : g
+                            )
+                          );
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 animate-pulse"
+                      >
+                        <Send className="h-4 w-4" />
+                        পরবর্তী গ্রুপ পাঠান: গ্রুপ {bn(nextUnsentIdx + 1)} ({bn(nextGroup.phones.length)} জন)
+                      </a>
+                    )}
+
+                    {/* List of all groups */}
+                    <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+                      {smsQueue.map((grp, idx) => (
+                        <div
+                          key={grp.groupIndex}
+                          className={cn(
+                            "flex items-center justify-between gap-2 rounded-xl border p-2.5 text-xs transition-all",
+                            grp.sent
+                              ? "border-emerald-200 bg-emerald-50/40"
+                              : idx === nextUnsentIdx
+                                ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200"
+                                : "border-slate-200 bg-white"
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-900">
+                                গ্রুপ {bn(idx + 1)}
+                              </span>
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {bn(grp.phones.length)} টি নম্বর
+                              </span>
+                              {grp.sent ? (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                  <Check className="h-3 w-3" /> খোলা হয়েছে
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                  অপেক্ষমাণ
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                              {grp.recipients
+                                .slice(0, 4)
+                                .map((r) => (r.name ? `${r.name} (${bn(r.roll)})` : bn(r.phone)))
+                                .join(", ")}
+                              {grp.recipients.length > 4
+                                ? ` + আরও ${bn(grp.recipients.length - 4)} জন`
+                                : ""}
+                            </p>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(grp.phones.join(","));
+                                toast({
+                                  title: `গ্রুপ ${bn(idx + 1)}-এর ${bn(grp.phones.length)} টি নম্বর কপি করা হয়েছে`,
+                                });
+                              }}
+                              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
+                              title="নম্বরগুলো কপি করুন"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <a
+                              href={buildSmsUri(grp.phones, smsMessage.trim())}
+                              onClick={() => {
+                                lastSmsLaunchRef.current = Date.now();
+                                setSmsQueue((prev) =>
+                                  (prev ?? []).map((g, i) =>
+                                    i === idx ? { ...g, sent: true } : g
+                                  )
+                                );
+                              }}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-2xs transition-colors",
+                                grp.sent
+                                  ? "border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
+                                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+                              )}
+                            >
+                              {grp.sent ? (
+                                <>
+                                  <RotateCcw className="h-3 w-3" /> আবার খুলুন
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="h-3 w-3" /> SMS অ্যাপে পাঠান
+                                </>
+                              )}
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setSmsQueue(null);
+                          lastSmsLaunchRef.current = 0;
+                        }}
+                        className="h-8 text-xs"
+                      >
+                        ← বার্তা সম্পাদনায় ফিরুন
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setSmsQueue(null);
+                          setSmsOpen(false);
+                          setSmsMessage("");
+                          lastSmsLaunchRef.current = 0;
+                        }}
+                        className="h-8 bg-slate-900 text-xs font-semibold text-white hover:bg-slate-800"
+                      >
+                        সম্পন্ন ও বন্ধ করুন
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          ) : (
+            /* VIEW B: SMS CONFIGURATION & COMPOSE FORM */
+            <form onSubmit={handleSendSms} className="space-y-3.5 pt-1">
+              {/* Optional Gateway API Key Configuration Banner (Only shown when GATEWAY mode is selected) */}
+              {smsMode === "GATEWAY" && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                      <Globe className="h-4 w-4 text-blue-600" />
+                      <span>বাল্ক SMS Gateway API (ঐচ্ছিক)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                          hasGatewayKey
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-800"
+                        )}
+                      >
+                        {hasGatewayKey ? "✓ API Key সংযুক্ত" : "API Key সেট করা নেই"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowGatewayConfig((v) => !v)}
+                        className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                      >
+                        <Settings2 className="h-3 w-3" />
+                        {showGatewayConfig ? "বন্ধ করুন" : "কনফিগার"}
+                      </button>
+                    </div>
+                  </div>
+                  {!hasGatewayKey && !showGatewayConfig && (
+                    <p className="text-[11px] text-slate-600">
+                      গেটওয়ে API Key সম্পূর্ণ ঐচ্ছিক। API ছাড়া সরাসরি সিম দিয়ে পাঠাতে উপরে{" "}
+                      <button
+                        type="button"
+                        onClick={() => setSmsMode("PHONE_APP")}
+                        className="font-bold text-emerald-700 underline"
+                      >
+                        ফোনের SMS অ্যাপ (সিম)
+                      </button>{" "}
+                      নির্বাচন করুন।
+                    </p>
+                  )}
+                  {showGatewayConfig && (
+                    <div className="space-y-2 border-t border-blue-200/60 pt-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-slate-700">
+                          SMS Gateway API Key / Token (ঐচ্ছিক)
+                        </Label>
+                        <Input
+                          type="password"
+                          value={gatewayKeyInput}
+                          onChange={(e) => setGatewayKeyInput(e.target.value)}
+                          placeholder={
+                            hasGatewayKey
+                              ? " নতুন কী দিন অথবা মুছতে খালি রেখে সেভ করুন"
+                              : "আপনার SMS Gateway Token লিখুন..."
+                          }
+                          className="h-8 bg-white text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] font-semibold text-slate-700">
+                          Gateway URL
+                        </Label>
+                        <Input
+                          value={gatewayUrlInput}
+                          onChange={(e) => setGatewayUrlInput(e.target.value)}
+                          placeholder="https://api.greenweb.com.bd/api.php"
+                          className="h-8 bg-white text-xs"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleSaveGatewayConfig}
+                          disabled={savingGateway}
+                          className="h-7 bg-blue-600 text-[11px] text-white hover:bg-blue-700"
+                        >
+                          {savingGateway ? "সেভ হচ্ছে..." : "গেটওয়ে সেভ করুন"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Scope Selection */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">প্রাপক নির্বাচন (Scope)</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSmsScope("ALL")}
+                    className={cn(
+                      "rounded-lg border p-2 text-xs font-semibold transition-all",
+                      smsScope === "ALL"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    সকল শ্রেণি
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSmsScope("CLASS")}
+                    className={cn(
+                      "rounded-lg border p-2 text-xs font-semibold transition-all",
+                      smsScope === "CLASS"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    নির্দিষ্ট শ্রেণি
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSmsScope("BATCH")}
+                    className={cn(
+                      "rounded-lg border p-2 text-xs font-semibold transition-all",
+                      smsScope === "BATCH"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    নির্দিষ্ট ব্যাচ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSmsScope("SELECTED")}
+                    className={cn(
+                      "rounded-lg border p-2 text-xs font-semibold transition-all",
+                      smsScope === "SELECTED"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    বাছাইকৃত
+                  </button>
+                </div>
+              </div>
+
+              {smsScope === "CLASS" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">শ্রেণি নির্বাচন করুন</Label>
+                  <Select value={smsClass} onValueChange={setSmsClass}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="শ্রেণি" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allClasses.length > 0
+                        ? allClasses
+                            .filter((c) => c.is_active !== 0)
+                            .map((c) => (
+                              <SelectItem key={c.id} value={c.name} className="text-xs">
+                                {classLabel(c.name)}
+                              </SelectItem>
+                            ))
+                        : CLASS_NUMBERS.map((c) => (
+                            <SelectItem key={c} value={c} className="text-xs">
+                              {classLabel(c)}
+                            </SelectItem>
+                          ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {smsScope === "BATCH" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">ব্যাচ নির্বাচন করুন</Label>
+                  <Select value={smsBatchId} onValueChange={setSmsBatchId}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="ব্যাচ নির্বাচন করুন" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allBatches
+                        .filter((b: any) => b.is_active !== 0)
+                        .map((b: any) => (
+                          <SelectItem key={b.id} value={String(b.id)} className="text-xs">
+                            {b.name} {b.class_name ? `(${classLabel(b.class_name)})` : ""}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {smsScope === "SELECTED" && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-medium text-amber-800">
+                  {selectedStudentIds.size > 0
+                    ? `তালিকা থেকে ${bn(selectedStudentIds.size)} জন শিক্ষার্থী নির্বাচন করা হয়েছে।`
+                    : "তালিকা থেকে চেকবক্স (✓) দিয়ে অন্তত একজন শিক্ষার্থী নির্বাচন করুন।"}
+                </div>
+              )}
+
+              {/* Group Size & Auto-Send Configuration for Phone SMS App */}
+              {smsMode === "PHONE_APP" && (
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-950">
+                        গ্রুপভিত্তিক অটো এসএমএস (অনেক শিক্ষার্থী হলে)
+                      </p>
+                      <p className="text-[11px] text-emerald-800">
+                        বৈধ নম্বর:{" "}
+                        <strong>{bn(smsPreview.validCount)} টি</strong> •{" "}
+                        {smsPreview.groups.length <= 1
+                          ? "এক ক্লিকেই সব নম্বরে SMS অ্যাপ ওপেন হবে"
+                          : `মোট ${bn(smsPreview.groups.length)} টি গ্রুপে অটোমেটিক ভাগ হয়ে যাবে`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[11px] font-semibold text-slate-700">প্রতি গ্রুপে:</span>
+                      <Select
+                        value={String(smsGroupSize)}
+                        onValueChange={(v) => setSmsGroupSize(Number(v))}
+                      >
+                        <SelectTrigger className="h-7 w-24 bg-white text-xs font-semibold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[10, 15, 20, 25, 30, 50].map((sz) => (
+                            <SelectItem key={sz} value={String(sz)} className="text-xs">
+                              {bn(sz)} জন
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {smsPreview.groups.length > 1 && (
+                    <div className="flex items-center justify-between gap-2 border-t border-emerald-200/60 pt-2">
+                      <span className="text-[11px] font-medium text-emerald-900">
+                        ১ম গ্রুপ পাঠানোর পর ফিরে এলে স্বয়ংক্রিয়ভাবে পরের গ্রুপ ওপেন হবে
+                      </span>
+                      <Switch
+                        checked={autoNextGroup}
+                        onCheckedChange={setAutoNextGroup}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">বার্তার বিবরণ (SMS Text) *</Label>
+                  <span className="text-[11px] text-slate-400">
+                    অক্ষর: {bn(smsMessage.length)} (১ এসএমএস ≈ ১৬০/৭০)
+                  </span>
+                </div>
+                <Textarea
+                  placeholder="অভিভাবকদের জন্য বার্তা লিখুন... যেমন: সম্মানিত অভিভাবক, আগামীকাল বিশেষ ক্লাস পরীক্ষা অনুষ্ঠিত হবে।"
+                  value={smsMessage}
+                  onChange={(e) => setSmsMessage(e.target.value)}
+                  rows={4}
+                  required
+                  className="text-xs resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSmsOpen(false)}
+                  disabled={smsSending}
+                  className="text-xs h-9"
+                >
+                  বাতিল
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={smsSending || (smsMode === "PHONE_APP" && !q && smsPreview.validCount === 0)}
+                  className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 text-xs h-9 font-semibold shadow-xs"
+                >
+                  {smsSending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      প্রেরণ হচ্ছে...
+                    </>
+                  ) : smsMode === "PHONE_APP" ? (
+                    <>
+                      <Smartphone className="h-3.5 w-3.5" />
+                      {smsPreview.groups.length > 1
+                        ? `গ্রুপ করে SMS অ্যাপে পাঠান (${bn(smsPreview.groups.length)} গ্রুপ • ${bn(smsPreview.validCount)} জন)`
+                        : `ফোনের SMS অ্যাপে পাঠান (${bn(smsPreview.validCount)} জন)`}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      গেটওয়েতে এসএমএস পাঠান
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
     {/* Student Class Promotion Modal for Admin */}
     {role === "ADMIN" && (

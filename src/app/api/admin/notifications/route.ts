@@ -13,7 +13,12 @@ import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { parseJson } from "@/lib/validation";
-import { enqueueNotification, dhakaToUtcSql, getServerEnv } from "@/lib/push-service";
+import {
+  enqueueNotification,
+  dhakaToUtcSql,
+  getEffectiveFcmServiceAccount,
+  getEffectiveFirebaseClientConfig,
+} from "@/lib/push-service";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -88,7 +93,10 @@ export async function GET(req: Request) {
       .all<{ id: number; name: string; student_count: number }>()
       .catch(() => ({ results: [] }));
 
-    const env = await getServerEnv();
+    const [effSa, fbConfig] = await Promise.all([
+      getEffectiveFcmServiceAccount(db),
+      getEffectiveFirebaseClientConfig(db),
+    ]);
 
     return ok({
       notifications: rows.results ?? [],
@@ -99,6 +107,11 @@ export async function GET(req: Request) {
       },
       classes: classes.results ?? [],
       fcmConfigured: true,
+      fcmServiceAccountConfigured: effSa.parsed !== null,
+      fcmSource: effSa.source,
+      fcmProjectId: effSa.parsed?.project_id ?? (fbConfig.projectId || "bigganpondit"),
+      fcmClientEmail: effSa.parsed?.client_email ?? null,
+      firebaseConfig: fbConfig,
     });
   } catch (e) {
     return handleError(e);

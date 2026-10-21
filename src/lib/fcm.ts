@@ -43,7 +43,11 @@ const FCM_ENDPOINT = (projectId: string) =>
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
 /** Module-scope access-token cache (survives across requests in an isolate). */
-let cachedToken: { token: string; expiresAt: number } | null = null;
+let cachedToken: { email: string; token: string; expiresAt: number } | null = null;
+
+export function clearFcmTokenCache() {
+  cachedToken = null;
+}
 
 function b64urlEncode(bytes: Uint8Array): string {
   let s = "";
@@ -71,8 +75,8 @@ export function parseServiceAccount(raw: string | undefined | null): FcmServiceA
     const j = JSON.parse(raw) as Partial<FcmServiceAccount>;
     if (j.project_id && j.client_email && j.private_key) {
       return {
-        project_id: j.project_id,
-        client_email: j.client_email,
+        project_id: j.project_id.trim(),
+        client_email: j.client_email.trim(),
         private_key: j.private_key,
       };
     }
@@ -85,7 +89,7 @@ export function parseServiceAccount(raw: string | undefined | null): FcmServiceA
 /** Mint (or reuse) a Google OAuth2 access token for the FCM scope. */
 async function getAccessToken(sa: FcmServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  if (cachedToken && cachedToken.expiresAt - 300 > now) {
+  if (cachedToken && cachedToken.email === sa.client_email && cachedToken.expiresAt - 300 > now) {
     return cachedToken.token;
   }
 
@@ -134,6 +138,7 @@ async function getAccessToken(sa: FcmServiceAccount): Promise<string> {
   }
   const data = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = {
+    email: sa.client_email,
     token: data.access_token,
     expiresAt: now + (data.expires_in || 3600),
   };
@@ -150,13 +155,31 @@ export interface FcmMessagePayload {
   notificationId?: number;
 }
 
+function resolveFcmWebPath(deepLink?: string | null): string {
+  switch (deepLink) {
+    case "notices":
+      return "/notices";
+    case "routine":
+      return "/routines";
+    case "results":
+      return "/results";
+    case "profile":
+      return "/profile";
+    case "home":
+      return "/dashboard";
+    default:
+      if (deepLink && deepLink.startsWith("/")) return deepLink;
+      return "/dashboard";
+  }
+}
+
 function buildMessage(payload: FcmMessagePayload, token: string) {
   const data: Record<string, string> = { ...(payload.data || {}) };
   if (payload.deepLink) data.route = payload.deepLink;
   if (payload.notificationId != null) data.notificationId = String(payload.notificationId);
+  const webLink = resolveFcmWebPath(payload.deepLink);
 
-  // androidChannelId maps to the channel created by the Flutter app so
-  // system notifications get the right importance/sound.
+  // Supports both Android native app (android block) and installed PWA / Web (webpush block).
   return {
     message: {
       token,
@@ -170,11 +193,24 @@ function buildMessage(payload: FcmMessagePayload, token: string) {
         priority: "HIGH" as const,
         notification: {
           channel_id: "push",
-          // Must match a drawable resource inside the Android app
-          // (system tray only displays notification payloads when the app
-          // is backgrounded/closed, using this icon name).
           icon: "ic_stat_notification",
           ...(payload.imageUrl ? { image: payload.imageUrl } : {}),
+        },
+      },
+      webpush: {
+        headers: {
+          Urgency: "high",
+          TTL: "86400",
+        },
+        notification: {
+          title: payload.title,
+          body: payload.body,
+          icon: "/icons/icon-192.png?v=5",
+          badge: "/icons/icon-192.png?v=5",
+          ...(payload.imageUrl ? { image: payload.imageUrl } : {}),
+        },
+        fcm_options: {
+          link: webLink,
         },
       },
     },

@@ -17,8 +17,26 @@
 
 import type { D1Database } from "@/lib/db/types";
 import { getCloudflareEnv, localEnv } from "@/lib/cloudflare";
-import { sendToMany, type FcmBatchResult, type FcmSendResult } from "@/lib/fcm";
+import {
+  parseServiceAccount,
+  sendToMany,
+  type FcmBatchResult,
+  type FcmSendResult,
+  type FcmServiceAccount,
+} from "@/lib/fcm";
 import { parseWebPushToken, sendWebPushToMany } from "@/lib/web-push";
+
+export const SETTING_FCM_SERVICE_ACCOUNT = "fcm_service_account_v1";
+export const SETTING_FIREBASE_CLIENT_CONFIG = "firebase_client_config_v1";
+
+export interface FirebaseClientConfig {
+  apiKey: string;
+  appId: string;
+  webAppId: string;
+  projectId: string;
+  senderId: string;
+  vapidKey: string;
+}
 
 export type PushTargetType = "ALL" | "STUDENTS" | "TEACHERS" | "CLASS" | "USER";
 export type PushKind = "MANUAL" | "NOTICE" | "ROUTINE" | "RESULT" | "SYSTEM";
@@ -78,6 +96,83 @@ export interface PushNotificationRow {
 
 export async function getServerEnv() {
   return (await getCloudflareEnv()) ?? localEnv();
+}
+
+/**
+ * Resolves the active FCM Service Account from either D1 (`settings`) or
+ * Cloudflare Worker `FCM_SERVICE_ACCOUNT` secret/var.
+ */
+export async function getEffectiveFcmServiceAccount(
+  db: D1Database
+): Promise<{
+  raw: string | null;
+  parsed: FcmServiceAccount | null;
+  source: "db" | "env" | "none";
+}> {
+  const row = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_FCM_SERVICE_ACCOUNT)
+    .first<{ value: string }>()
+    .catch(() => null);
+
+  if (row?.value) {
+    const parsedDb = parseServiceAccount(row.value);
+    if (parsedDb) {
+      return { raw: row.value, parsed: parsedDb, source: "db" };
+    }
+  }
+
+  const env = await getServerEnv();
+  const envRaw = typeof env.FCM_SERVICE_ACCOUNT === "string" ? env.FCM_SERVICE_ACCOUNT.trim() : "";
+  if (envRaw) {
+    const parsedEnv = parseServiceAccount(envRaw);
+    if (parsedEnv) {
+      return { raw: envRaw, parsed: parsedEnv, source: "env" };
+    }
+  }
+
+  return { raw: null, parsed: null, source: "none" };
+}
+
+/**
+ * Resolves Firebase public client config from D1 (`settings`) with fallback to
+ * Cloudflare Worker environment variables (`wrangler.toml` `[vars]`).
+ */
+export async function getEffectiveFirebaseClientConfig(
+  db: D1Database
+): Promise<FirebaseClientConfig> {
+  const env = await getServerEnv();
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+  let dbCfg: Partial<FirebaseClientConfig> = {};
+  const row = await db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .bind(SETTING_FIREBASE_CLIENT_CONFIG)
+    .first<{ value: string }>()
+    .catch(() => null);
+
+  if (row?.value) {
+    try {
+      dbCfg = JSON.parse(row.value) as Partial<FirebaseClientConfig>;
+    } catch {
+      // ignore invalid json
+    }
+  }
+
+  const appId = str(dbCfg.appId) || str(env.FIREBASE_APP_ID);
+  const webAppId =
+    str(dbCfg.webAppId) ||
+    str(env.FIREBASE_WEB_APP_ID) ||
+    (appId.includes(":web:") ? appId : "");
+
+  return {
+    apiKey: str(dbCfg.apiKey) || str(env.FIREBASE_API_KEY),
+    appId,
+    webAppId,
+    projectId: str(dbCfg.projectId) || str(env.FIREBASE_PROJECT_ID),
+    senderId: str(dbCfg.senderId) || str(env.FIREBASE_SENDER_ID),
+    vapidKey: str(dbCfg.vapidKey) || str(env.FIREBASE_VAPID_KEY),
+  };
 }
 
 function nowSqlUtc(): string {
@@ -471,8 +566,9 @@ export async function processDueNotifications(db: D1Database): Promise<ProcessSu
       }
 
       if (fcmTokenStrs.length > 0) {
+        const effSa = await getEffectiveFcmServiceAccount(db);
         const fcmBatch = await sendToMany(
-          env.FCM_SERVICE_ACCOUNT as string | undefined,
+          effSa.raw ?? undefined,
           fcmTokenStrs,
           payload
         );

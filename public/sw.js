@@ -20,25 +20,48 @@ function resolveUrl(rawUrl) {
   return "/dashboard";
 }
 
-// Handle incoming Web Push event (even when the PWA is closed in background)
+// Handle incoming FCM HTTP v1 & Web Push (VAPID) events (even when the PWA is closed in background)
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
   try {
     const data = event.data.json();
-    const title = data.title || "বিজ্ঞান পণ্ডিত একাডেমি — নোটিফিকেশন";
-    const targetUrl = resolveUrl(data.url || data.deepLink || data.data?.route);
+    const notif = data.notification || {};
+    const customData = data.data || {};
+
+    const title =
+      data.title ||
+      notif.title ||
+      customData.title ||
+      "বিজ্ঞান পণ্ডিত একাডেমি — নোটিফিকেশন";
+    const body =
+      data.body ||
+      notif.body ||
+      customData.body ||
+      "আপনার জন্য একটি নতুন বার্তা রয়েছে।";
+    const image = data.image || notif.image || customData.image || undefined;
+    const targetUrl = resolveUrl(
+      data.url ||
+        data.deepLink ||
+        customData.route ||
+        customData.url ||
+        notif.click_action ||
+        data.fcmOptions?.link ||
+        data.fcm_options?.link
+    );
+    const notifId = data.notificationId || customData.notificationId || null;
+
     const options = {
-      body: data.body || "আপনার জন্য একটি নতুন বার্তা রয়েছে।",
+      body,
       icon: "/icons/icon-192.png?v=5",
       badge: "/icons/icon-192.png?v=5",
-      ...(data.image ? { image: data.image } : {}),
+      ...(image ? { image } : {}),
       vibrate: [200, 100, 200],
-      tag: data.tag || `bp-notif-${data.notificationId || Date.now()}`,
+      tag: data.tag || notif.tag || `bp-notif-${notifId || Date.now()}`,
       renotify: true,
       data: {
         url: targetUrl,
-        notificationId: data.notificationId || null,
+        notificationId: notifId,
       },
     };
 

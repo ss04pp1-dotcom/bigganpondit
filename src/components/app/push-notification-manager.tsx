@@ -31,6 +31,9 @@ import {
   Ban,
   RotateCcw,
   PlayCircle,
+  Settings2,
+  Smartphone,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -145,8 +148,24 @@ export function PushNotificationManager({
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [devices, setDevices] = useState({ total: 0, students: 0, teachers: 0 });
   const [fcmConfigured, setFcmConfigured] = useState(true);
+  const [fcmSaConfigured, setFcmSaConfigured] = useState(false);
+  const [fcmProjectId, setFcmProjectId] = useState("bigganpondit");
+  const [fcmClientEmail, setFcmClientEmail] = useState<string | null>(null);
+  const [fcmSource, setFcmSource] = useState<string>("none");
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  // FCM Config modal state
+  const [fcmModalOpen, setFcmModalOpen] = useState(false);
+  const [saJsonInput, setSaJsonInput] = useState("");
+  const [fbProjectId, setFbProjectId] = useState("bigganpondit");
+  const [fbSenderId, setFbSenderId] = useState("904886174333");
+  const [fbApiKey, setFbApiKey] = useState("");
+  const [fbAppId, setFbAppId] = useState("");
+  const [fbWebAppId, setFbWebAppId] = useState("");
+  const [fbVapidKey, setFbVapidKey] = useState("");
+  const [savingFcm, setSavingFcm] = useState(false);
+  const [testingDevice, setTestingDevice] = useState(false);
 
   // Compose form state
   const [createOpen, setCreateOpen] = useState(false);
@@ -174,6 +193,18 @@ export function PushNotificationManager({
         setClasses(json.classes ?? []);
         setDevices(json.devices ?? { total: 0, students: 0, teachers: 0 });
         setFcmConfigured(!!json.fcmConfigured);
+        setFcmSaConfigured(!!json.fcmServiceAccountConfigured);
+        setFcmProjectId(json.fcmProjectId || "bigganpondit");
+        setFcmClientEmail(json.fcmClientEmail || null);
+        setFcmSource(json.fcmSource || "none");
+        if (json.firebaseConfig) {
+          setFbProjectId(json.firebaseConfig.projectId || "bigganpondit");
+          setFbSenderId(json.firebaseConfig.senderId || "904886174333");
+          setFbApiKey(json.firebaseConfig.apiKey || "");
+          setFbAppId(json.firebaseConfig.appId || "");
+          setFbWebAppId(json.firebaseConfig.webAppId || "");
+          setFbVapidKey(json.firebaseConfig.vapidKey || "");
+        }
       }
     } catch {
       // ignore
@@ -185,6 +216,148 @@ export function PushNotificationManager({
   useEffect(() => {
     load();
   }, [load]);
+
+  async function handleSaveFcmConfig(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingFcm(true);
+    try {
+      const res = await fetch("/api/push/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceAccountJson: saJsonInput.trim() || undefined,
+          projectId: fbProjectId.trim(),
+          senderId: fbSenderId.trim(),
+          apiKey: fbApiKey.trim(),
+          appId: fbAppId.trim(),
+          webAppId: fbWebAppId.trim(),
+          vapidKey: fbVapidKey.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => ({ ok: false }));
+      if (!res.ok || !json.ok) {
+        toast({
+          title: json.error ?? "কনফিগারেশন সংরক্ষণ করা যায়নি।",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: json.message ?? "Firebase (FCM) কনফিগারেশন সংরক্ষিত হয়েছে!",
+      });
+      setSaJsonInput("");
+      setFcmModalOpen(false);
+      load();
+    } finally {
+      setSavingFcm(false);
+    }
+  }
+
+  async function registerAndTestThisDevice() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      toast({
+        title: "এই ব্রাউজারে পুশ নোটিফিকেশন সাপোর্ট নেই।",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTestingDevice(true);
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        toast({
+          title: "নোটিফিকেশন অনুমতি দেওয়া হয়নি",
+          description: "ব্রাউজার বা অ্যাপের সেটিংস থেকে Notification Allow করুন।",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const key = "bp_push_device_id";
+      let deviceId = localStorage.getItem(key);
+      if (!deviceId) {
+        deviceId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? `pwa-${crypto.randomUUID()}`
+            : `pwa-${Date.now()}`;
+        localStorage.setItem(key, deviceId);
+      }
+
+      let tokenToRegister = `local-pwa:${deviceId}`;
+
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.register("/sw.js").catch(() => null);
+        if (reg) {
+          await navigator.serviceWorker.ready.catch(() => null);
+          const cfgRes = await fetch("/api/push/config").catch(() => null);
+          const cfgJson = cfgRes?.ok ? await cfgRes.json().catch(() => null) : null;
+          const publicKey: string | undefined = cfgJson?.webPushPublicKey;
+
+          if (publicKey && "pushManager" in reg) {
+            let sub = await reg.pushManager.getSubscription().catch(() => null);
+            if (!sub) {
+              const padding = "=".repeat((4 - (publicKey.length % 4)) % 4);
+              const base64 = (publicKey + padding).replace(/-/g, "+").replace(/_/g, "/");
+              const rawData = window.atob(base64);
+              const appServerKey = new Uint8Array(rawData.length);
+              for (let i = 0; i < rawData.length; ++i) {
+                appServerKey[i] = rawData.charCodeAt(i);
+              }
+              sub = await reg.pushManager
+                .subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: appServerKey as BufferSource,
+                })
+                .catch(() => null);
+            }
+            if (sub) {
+              tokenToRegister = JSON.stringify(sub.toJSON());
+            }
+          }
+        }
+      }
+
+      await fetch("/api/notifications/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: tokenToRegister,
+          deviceId,
+          platform: "web",
+          appVersion: "pwa-1.0",
+        }),
+      });
+
+      const sendRes = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "বিজ্ঞান পণ্ডিত — টেস্ট পুশ নোটিফিকেশন 🔔",
+          body: "অভিনন্দন! আপনার ইনস্টল করা অ্যাপে FCM ও Web Push নোটিফিকেশন সঠিকভাবে কাজ করছে।",
+          targetType: "USER",
+          targetUserId: user.id,
+          when: "now",
+          recurrence: "NONE",
+          deepLink: "home",
+        }),
+      });
+      const sendJson = await sendRes.json().catch(() => ({ ok: false }));
+      if (sendRes.ok && sendJson.ok) {
+        toast({
+          title: "এই ডিভাইসটি যুক্ত হয়েছে এবং টেস্ট পুশ পাঠানো হয়েছে! 🔔",
+        });
+        load();
+      } else {
+        toast({
+          title: "ডিভাইস যুক্ত হয়েছে!",
+        });
+        load();
+      }
+    } finally {
+      setTestingDevice(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -354,20 +527,60 @@ export function PushNotificationManager({
         </Card>
       </div>
 
-      {/* FCM setup warning */}
-      {!fcmConfigured && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+      {/* Firebase (FCM) & Web Push status banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 text-sm">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">FCM কনফিগার করা হয়নি</p>
-            <p className="mt-1">
-              নোটিফিকেশন কিউতে জমা হবে, কিন্তু পাঠানো যাবে না। Firebase service-account JSON key
-              যোগ করুন: <code className="px-1 rounded bg-amber-100">bunx wrangler secret put FCM_SERVICE_ACCOUNT</code>
-              — বিস্তারিত docs/FCM_SETUP.md দেখুন।
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-emerald-950">
+                পুশ ইঞ্জিন সক্রিয় (FCM + PWA WebPush)
+              </span>
+              <Badge variant="outline" className="bg-white text-emerald-800 border-emerald-300">
+                প্রজেক্ট: {fcmProjectId}
+              </Badge>
+              {fcmSaConfigured ? (
+                <Badge className="bg-emerald-600 text-white">
+                  FCM HTTP v1 সংযুক্ত ({fcmSource === "db" ? "ডাটাবেস" : "Cloudflare Secret"})
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300">
+                  FCM WebPush (VAPID) মোড
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-emerald-900/80 mt-1">
+              {fcmSaConfigured
+                ? `Firebase Service Account (${fcmClientEmail}) এবং ইনস্টল করা PWA WebPush উভয় মাধ্যমেই পুশ নোটিফিকেশন যাচ্ছে।`
+                : "ইনস্টল করা অ্যাপে (PWA) সরাসরি Google FCM এন্ডপয়েন্টের মাধ্যমে পুশ নোটিফিকেশন চালু আছে। চাইলে নিচের বাটনে ক্লিক করে Firebase Service Account JSON-ও যুক্ত করতে পারেন।"}
             </p>
           </div>
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-900"
+            onClick={registerAndTestThisDevice}
+            disabled={testingDevice}
+          >
+            {testingDevice ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+            ) : (
+              <Smartphone className="h-4 w-4 mr-1.5 text-emerald-600" />
+            )}
+            এই ডিভাইসে টেস্ট পুশ
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white"
+            onClick={() => setFcmModalOpen(true)}
+          >
+            <Settings2 className="h-4 w-4 mr-1.5" /> Firebase (FCM) সেটআপ
+          </Button>
+        </div>
+      </div>
 
       {/* Compose + list */}
       <Card>
@@ -687,6 +900,122 @@ export function PushNotificationManager({
                 ) : (
                   "কিউতে যোগ করুন"
                 )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Firebase (FCM) Configuration Dialog */}
+      <Dialog open={fcmModalOpen} onOpenChange={setFcmModalOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5 text-emerald-600" /> Firebase Cloud Messaging (FCM) সেটআপ
+            </DialogTitle>
+            <DialogDescription>
+              ইনস্টল করা PWA এবং Android অ্যাপে সরাসরি FCM দিয়ে পুশ নোটিফিকেশন পাঠাতে আপনার Firebase
+              প্রজেক্টের তথ্য বা Service Account JSON এখানে সংরক্ষণ করুন।
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveFcmConfig} className="space-y-4">
+            <div className="rounded-lg border bg-slate-50 p-3 text-xs space-y-1">
+              <p className="font-semibold text-slate-900">
+                বর্তমান স্ট্যাটাস:{" "}
+                {fcmSaConfigured ? (
+                  <span className="text-emerald-700">
+                    FCM HTTP v1 সক্রিয় ({fcmClientEmail})
+                  </span>
+                ) : (
+                  <span className="text-amber-700">
+                    FCM WebPush (VAPID) সক্রিয় — চাইলে নিচে Service Account JSON পেস্ট করতে পারেন
+                  </span>
+                )}
+              </p>
+              <p className="text-slate-600">
+                Firebase Console → Project Settings → Service accounts →{" "}
+                <strong>Generate new private key</strong> থেকে ডাউনলোড করা JSON ফাইলটির ভেতরের টেক্সট
+                নিচের বক্সে পেস্ট করুন।
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="fcm-sa-json">
+                Firebase Service Account JSON {fcmSaConfigured ? "(আপডেট করতে চাইলে পেস্ট করুন)" : "*"}
+              </Label>
+              <Textarea
+                id="fcm-sa-json"
+                value={saJsonInput}
+                onChange={(e) => setSaJsonInput(e.target.value)}
+                placeholder='{"type": "service_account", "project_id": "bigganpondit", "private_key": "-----BEGIN PRIVATE KEY-----\n...", "client_email": "firebase-adminsdk-..."}'
+                rows={4}
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="fb-project">Project ID</Label>
+                <Input
+                  id="fb-project"
+                  value={fbProjectId}
+                  onChange={(e) => setFbProjectId(e.target.value)}
+                  placeholder="bigganpondit"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fb-sender">Sender ID</Label>
+                <Input
+                  id="fb-sender"
+                  value={fbSenderId}
+                  onChange={(e) => setFbSenderId(e.target.value)}
+                  placeholder="904886174333"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="fb-apikey">Web API Key</Label>
+              <Input
+                id="fb-apikey"
+                value={fbApiKey}
+                onChange={(e) => setFbApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="fb-web-appid">Web App ID (PWA-এর জন্য ঐচ্ছিক)</Label>
+                <Input
+                  id="fb-web-appid"
+                  value={fbWebAppId}
+                  onChange={(e) => setFbWebAppId(e.target.value)}
+                  placeholder="1:904886174333:web:..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fb-vapid">Web Push VAPID Key (ঐচ্ছিক)</Label>
+                <Input
+                  id="fb-vapid"
+                  value={fbVapidKey}
+                  onChange={(e) => setFbVapidKey(e.target.value)}
+                  placeholder="B..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setFcmModalOpen(false)}>
+                বাতিল
+              </Button>
+              <Button type="submit" disabled={savingFcm}>
+                {savingFcm ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                )}
+                সংরক্ষণ করুন
               </Button>
             </div>
           </form>

@@ -137,7 +137,8 @@ export function RoutineNotificationWatcher({
     []
   );
 
-  // Subscribe browser/PWA to Web Push (VAPID) and register token in D1 `device_tokens`
+  // Subscribe browser/PWA to Firebase Cloud Messaging (FCM) or FCM WebPush (VAPID)
+  // and register token in D1 `device_tokens`
   const syncWebPushSubscription = useCallback(async () => {
     if (typeof window === "undefined" || syncingRef.current) return false;
     if (!("Notification" in window) || Notification.permission !== "granted") return false;
@@ -155,10 +156,64 @@ export function RoutineNotificationWatcher({
           swRegistrationRef.current = reg;
           await navigator.serviceWorker.ready.catch(() => null);
 
-          if ("pushManager" in reg) {
-            const vapidRes = await fetch("/api/push/vapid").catch(() => null);
-            const vapidJson = vapidRes?.ok ? await vapidRes.json().catch(() => null) : null;
-            const publicKey: string | undefined = vapidJson?.publicKey;
+          const cfgRes = await fetch("/api/push/config").catch(() => null);
+          const cfgJson = cfgRes?.ok ? await cfgRes.json().catch(() => null) : null;
+          const fb = cfgJson?.firebase;
+          const fcmSaReady = !!cfgJson?.fcmServiceAccountConfigured;
+
+          // Path 1: Native Firebase Cloud Messaging (FCM HTTP v1 token) if Firebase Web App ID + Service Account are ready
+          const webAppId = fb?.webAppId || (typeof fb?.appId === "string" && fb.appId.includes(":web:") ? fb.appId : "");
+          if (fcmSaReady && fb?.apiKey && fb?.projectId && fb?.senderId && webAppId) {
+            try {
+              const loadScript = (src: string) =>
+                new Promise<void>((resolve, reject) => {
+                  if (document.querySelector(`script[src="${src}"]`)) return resolve();
+                  const s = document.createElement("script");
+                  s.src = src;
+                  s.async = true;
+                  s.onload = () => resolve();
+                  s.onerror = () => reject(new Error(`Failed to load ${src}`));
+                  document.head.appendChild(s);
+                });
+
+              await loadScript("https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js");
+              await loadScript("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js");
+
+              const win = window as any;
+              if (win.firebase) {
+                if (!win.firebase.apps?.length) {
+                  win.firebase.initializeApp({
+                    apiKey: fb.apiKey,
+                    projectId: fb.projectId,
+                    messagingSenderId: fb.senderId,
+                    appId: webAppId,
+                  });
+                }
+                const messaging = win.firebase.messaging();
+                const fcmToken = await messaging
+                  .getToken({
+                    serviceWorkerRegistration: reg,
+                    ...(fb.vapidKey ? { vapidKey: fb.vapidKey } : {}),
+                  })
+                  .catch(() => null);
+
+                if (typeof fcmToken === "string" && fcmToken.length > 20) {
+                  tokenToRegister = fcmToken;
+                }
+              }
+            } catch (fcmErr) {
+              console.debug("FCM JS SDK fallback to WebPush:", fcmErr);
+            }
+          }
+
+          // Path 2: Standard W3C Web Push (uses Google FCM endpoint on Android/Chrome automatically)
+          if (tokenToRegister.startsWith("local-pwa:") && "pushManager" in reg) {
+            let publicKey: string | undefined = cfgJson?.webPushPublicKey;
+            if (!publicKey) {
+              const vapidRes = await fetch("/api/push/vapid").catch(() => null);
+              const vapidJson = vapidRes?.ok ? await vapidRes.json().catch(() => null) : null;
+              publicKey = vapidJson?.publicKey;
+            }
 
             if (publicKey) {
               let sub = await reg.pushManager.getSubscription().catch(() => null);

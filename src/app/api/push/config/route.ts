@@ -24,43 +24,126 @@
 // setup can be verified from any browser:
 //   GET /api/push/config → "enabled":true, "serviceAccountConfigured":true
 import { getDb } from "@/lib/db";
-import { getServerEnv } from "@/lib/push-service";
-import { parseServiceAccount } from "@/lib/fcm";
+import { requireApiUser } from "@/lib/auth/guards";
+import {
+  getEffectiveFcmServiceAccount,
+  getEffectiveFirebaseClientConfig,
+  SETTING_FCM_SERVICE_ACCOUNT,
+  SETTING_FIREBASE_CLIENT_CONFIG,
+} from "@/lib/push-service";
+import { clearFcmTokenCache, parseServiceAccount } from "@/lib/fcm";
 import { getOrCreateVapidKeys } from "@/lib/web-push";
-import { handleError, ok } from "@/lib/api";
+import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const str = (v: unknown): string =>
-  typeof v === "string" ? v.trim() : "";
-
 export async function GET() {
   try {
-    const env = await getServerEnv();
     const db = await getDb();
-    const vapid = await getOrCreateVapidKeys(db).catch(() => null);
-
-    const apiKey = str(env.FIREBASE_API_KEY);
-    const appId = str(env.FIREBASE_APP_ID);
-    const projectId = str(env.FIREBASE_PROJECT_ID);
-    const senderId = str(env.FIREBASE_SENDER_ID);
+    const [vapid, effSa, cfg] = await Promise.all([
+      getOrCreateVapidKeys(db).catch(() => null),
+      getEffectiveFcmServiceAccount(db),
+      getEffectiveFirebaseClientConfig(db),
+    ]);
 
     const configured =
-      apiKey.length > 10 &&
-      appId.length > 10 &&
-      projectId.length > 3 &&
-      senderId.length > 3;
+      cfg.apiKey.length > 10 &&
+      (cfg.appId.length > 10 || cfg.webAppId.length > 10) &&
+      cfg.projectId.length > 2 &&
+      cfg.senderId.length > 3;
 
-    const fcmConfigured =
-      parseServiceAccount(str(env.FCM_SERVICE_ACCOUNT)) !== null;
+    const fcmConfigured = effSa.parsed !== null;
 
     return ok({
       enabled: configured || !!vapid?.publicKey,
       serviceAccountConfigured: fcmConfigured || !!vapid?.publicKey,
+      fcmServiceAccountConfigured: fcmConfigured,
+      fcmSource: effSa.source,
+      fcmProjectId: effSa.parsed?.project_id ?? (cfg.projectId || null),
+      fcmClientEmail: effSa.parsed?.client_email ?? null,
       webPushPublicKey: vapid?.publicKey ?? null,
       firebase: configured
-        ? { apiKey, appId, projectId, senderId }
+        ? {
+            apiKey: cfg.apiKey,
+            appId: cfg.appId || cfg.webAppId,
+            webAppId: cfg.webAppId,
+            projectId: cfg.projectId,
+            senderId: cfg.senderId,
+            vapidKey: cfg.vapidKey || null,
+          }
         : null,
+    });
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    assertSameOrigin(req);
+    const { db } = await requireApiUser(["ADMIN", "DIRECTOR"]);
+    const body = (await req.json().catch(() => ({}))) as {
+      serviceAccountJson?: string | null;
+      apiKey?: string;
+      appId?: string;
+      webAppId?: string;
+      projectId?: string;
+      senderId?: string;
+      vapidKey?: string;
+    };
+
+    // 1. Validate & save FCM Service Account JSON if provided
+    if (typeof body.serviceAccountJson === "string" && body.serviceAccountJson.trim().length > 0) {
+      const raw = body.serviceAccountJson.trim();
+      const parsed = parseServiceAccount(raw);
+      if (!parsed) {
+        throw new ApiError(
+          400,
+          "সার্ভিস অ্যাকাউন্ট JSON সঠিক নয়। এতে project_id, client_email এবং private_key থাকতে হবে।"
+        );
+      }
+
+      await db
+        .prepare(
+          `INSERT INTO settings (key, value, updated_at)
+           VALUES (?, ?, datetime('now'))
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
+        )
+        .bind(SETTING_FCM_SERVICE_ACCOUNT, raw)
+        .run();
+
+      clearFcmTokenCache();
+    }
+
+    // 2. Save Firebase client config overrides if provided
+    const currentCfg = await getEffectiveFirebaseClientConfig(db);
+    const nextCfg = {
+      apiKey: typeof body.apiKey === "string" ? body.apiKey.trim() : currentCfg.apiKey,
+      appId: typeof body.appId === "string" ? body.appId.trim() : currentCfg.appId,
+      webAppId: typeof body.webAppId === "string" ? body.webAppId.trim() : currentCfg.webAppId,
+      projectId: typeof body.projectId === "string" ? body.projectId.trim() : currentCfg.projectId,
+      senderId: typeof body.senderId === "string" ? body.senderId.trim() : currentCfg.senderId,
+      vapidKey: typeof body.vapidKey === "string" ? body.vapidKey.trim() : currentCfg.vapidKey,
+    };
+
+    await db
+      .prepare(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
+      )
+      .bind(SETTING_FIREBASE_CLIENT_CONFIG, JSON.stringify(nextCfg))
+      .run();
+
+    const effSa = await getEffectiveFcmServiceAccount(db);
+
+    return ok({
+      message: "Firebase (FCM) কনফিগারেশন সফলভাবে সংরক্ষিত হয়েছে।",
+      fcmServiceAccountConfigured: effSa.parsed !== null,
+      fcmSource: effSa.source,
+      fcmProjectId: effSa.parsed?.project_id ?? nextCfg.projectId,
+      fcmClientEmail: effSa.parsed?.client_email ?? null,
+      firebase: nextCfg,
     });
   } catch (e) {
     return handleError(e);

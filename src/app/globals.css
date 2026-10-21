@@ -186,14 +186,14 @@
 
 @media print {
   @page {
-    size: auto;
+    size: A4 landscape;
     margin: 0;
   }
 
-  /* 1. Global Reset: Eliminate dark smudges, box-shadows, and black blur across all elements */
-  *,
-  *::before,
-  *::after {
+  /* 1. Global Reset: Eliminate dark smudges, box-shadows, and black blur across all elements (except inside .rc-page) */
+  *:not(.rc-page):not(.rc-page *),
+  *:not(.rc-page):not(.rc-page *)::before,
+  *:not(.rc-page):not(.rc-page *)::after {
     box-shadow: none !important;
     text-shadow: none !important;
     filter: none !important;
@@ -378,7 +378,7 @@
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  table {
+  table:not(.rc-tbl) {
     page-break-inside: auto;
     width: 100% !important;
   }
@@ -434,10 +434,10 @@ body { background: var(--reference-bg); color: var(--reference-text); }
 [data-slot="input"] { height: 35px !important; background: #fff; font-size: 13px !important; }
 
 /* tables */
-table { border-collapse: separate; border-spacing: 0; }
-thead tr { background: #f2f6fb !important; }
-th { color: #42546b !important; font-weight: 600 !important; }
-tbody tr:hover { background: #f7fbff !important; }
+table:not(.rc-tbl) { border-collapse: separate; border-spacing: 0; }
+table:not(.rc-tbl) thead tr { background: #f2f6fb !important; }
+table:not(.rc-tbl) th { color: #42546b !important; font-weight: 600 !important; }
+table:not(.rc-tbl) tbody tr:hover { background: #f7fbff !important; }
 
 /* app shell */
 .app-sidebar {
@@ -1014,12 +1014,15 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 
 .rc-tbl {
-  position: absolute;
-  left: 61px;
-  top: 112px;
-  width: 970px;
-  table-layout: fixed;
-  border-collapse: collapse;
+  position: absolute !important;
+  left: 61px !important;
+  top: 112px !important;
+  width: 970px !important;
+  max-width: 970px !important;
+  min-width: 970px !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
   text-align: center;
   font-weight: 700;
 }
@@ -1028,23 +1031,31 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-tbl th,
 .rc-tbl td {
-  border: 1.5px solid #111;
+  border: 1.5px solid #111 !important;
   background: #eaf2dd;
   padding: 0 2px;
   overflow: hidden;
+  color: #111;
+}
+.rc-tbl thead tr {
+  background: transparent !important;
 }
 .rc-tbl th {
-  background: #f3f7ec;
+  background: #f3f7ec !important;
+  color: #111 !important;
   font-size: 20px;
   line-height: 1.3;
   height: 93px;
-  font-weight: 700;
+  font-weight: 700 !important;
 }
 .rc-tbl th.rc-pk {
-  background: #fce3d4;
+  background: #fce3d4 !important;
+}
+.rc-tbl th.rc-top {
+  background: #fff9db !important;
 }
 .rc-tbl th.rc-att {
-  background: #e8f5e9;
+  background: #e8f5e9 !important;
   font-size: 15.5px;
   line-height: 1.2;
   padding: 0 1px;
@@ -1189,18 +1200,29 @@ tbody tr:hover { background: #f7fbff !important; }
 
 @media print {
   @page {
-    size: 297mm 210mm;
+    size: A4 landscape;
+    margin: 0;
+  }
+  @page :left {
+    size: A4 landscape;
+    margin: 0;
+  }
+  @page :right {
+    size: A4 landscape;
     margin: 0;
   }
   body:has(.rc-slot) {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    width: 297mm !important;
-    max-width: 297mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
   body:has(.rc-slot) .app-shell,
   body:has(.rc-slot) .app-main,
@@ -1209,25 +1231,27 @@ tbody tr:hover { background: #f7fbff !important; }
   body:has(.rc-slot) .lg\:pl-\[176px\] {
     margin: 0 !important;
     padding: 0 !important;
-    max-width: 297mm !important;
-    width: 297mm !important;
+    max-width: none !important;
+    width: 100% !important;
     display: block !important;
     height: auto !important;
     min-height: 0 !important;
+    overflow: visible !important;
   }
   body:has(.rc-slot) .app-sidebar,
   body:has(.rc-slot) .app-topbar,
   body:has(.rc-slot) header,
   body:has(.rc-slot) nav,
   body:has(.rc-slot) footer,
+  body:has(.rc-slot) aside,
   body:has(.rc-slot) .no-print,
   body:has(.rc-slot) .notice-ticker {
     display: none !important;
   }
   .rc-slot {
     width: 297mm !important;
-    max-width: 297mm !important;
     height: 210mm !important;
+    max-width: 297mm !important;
     max-height: 210mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
@@ -1239,6 +1263,9 @@ tbody tr:hover { background: #f7fbff !important; }
     display: block !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+    position: relative !important;
   }
   .rc-slot-cover {
     break-after: page !important;
@@ -1259,10 +1286,22 @@ tbody tr:hover { background: #f7fbff !important; }
   .rc-page {
     width: 1123px !important;
     height: 794px !important;
+    max-width: 1123px !important;
+    max-height: 794px !important;
     transform: none !important;
     transform-origin: 0 0 !important;
     overflow: hidden !important;
     margin: 0 !important;
+  }
+  .rc-tbl {
+    position: absolute !important;
+    left: 61px !important;
+    top: 112px !important;
+    width: 970px !important;
+    max-width: 970px !important;
+    min-width: 970px !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
   }
 }
 

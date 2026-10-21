@@ -501,19 +501,28 @@ export function OfficialResultCard({
               __html: `
                 @media print {
                   @page {
-                    size: 297mm 210mm;
+                    size: A4 landscape;
+                    margin: 0;
+                  }
+                  @page :left {
+                    size: A4 landscape;
+                    margin: 0;
+                  }
+                  @page :right {
+                    size: A4 landscape;
                     margin: 0;
                   }
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
-                    width: 297mm !important;
-                    max-width: 297mm !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
                     height: auto !important;
                     min-height: 0 !important;
                     background: #ffffff !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
+                    color-adjust: exact !important;
                     overflow: visible !important;
                   }
                   .app-sidebar,
@@ -521,6 +530,7 @@ export function OfficialResultCard({
                   header,
                   nav,
                   footer,
+                  aside,
                   .no-print,
                   .notice-ticker,
                   [class*="NoticeTicker"],
@@ -530,19 +540,21 @@ export function OfficialResultCard({
                   .app-shell,
                   .app-main,
                   main,
+                  [class*="lg:pl-"],
                   .lg\\:pl-\\[176px\\] {
                     margin: 0 !important;
                     padding: 0 !important;
-                    max-width: 297mm !important;
-                    width: 297mm !important;
+                    max-width: none !important;
+                    width: 100% !important;
                     display: block !important;
                     height: auto !important;
                     min-height: 0 !important;
+                    overflow: visible !important;
                   }
                   .rc-slot {
                     width: 297mm !important;
-                    max-width: 297mm !important;
                     height: 210mm !important;
+                    max-width: 297mm !important;
                     max-height: 210mm !important;
                     margin: 0 auto !important;
                     padding: 0 !important;
@@ -554,6 +566,9 @@ export function OfficialResultCard({
                     display: block !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
+                    background: #ffffff !important;
+                    box-sizing: border-box !important;
+                    position: relative !important;
                   }
                   .rc-slot-cover {
                     break-after: page !important;
@@ -574,10 +589,22 @@ export function OfficialResultCard({
                   .rc-page {
                     width: 1123px !important;
                     height: 794px !important;
+                    max-width: 1123px !important;
+                    max-height: 794px !important;
                     transform: none !important;
                     transform-origin: 0 0 !important;
                     overflow: hidden !important;
                     margin: 0 !important;
+                  }
+                  .rc-tbl {
+                    position: absolute !important;
+                    left: 61px !important;
+                    top: 112px !important;
+                    width: 970px !important;
+                    max-width: 970px !important;
+                    min-width: 970px !important;
+                    table-layout: fixed !important;
+                    border-collapse: collapse !important;
                   }
                 }
               `,

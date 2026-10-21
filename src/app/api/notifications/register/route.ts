@@ -14,9 +14,9 @@ import { parseJson } from "@/lib/validation";
 import { z } from "zod";
 
 const registerSchema = z.object({
-  token: z.string().min(20).max(512),
+  token: z.string().min(10).max(2048),
   deviceId: z.string().min(1).max(128),
-  platform: z.enum(["android", "ios", "web"]).default("android"),
+  platform: z.enum(["android", "ios", "web"]).default("web"),
   appVersion: z.string().max(32).optional(),
 });
 

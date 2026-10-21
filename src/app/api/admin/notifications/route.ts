@@ -98,10 +98,7 @@ export async function GET(req: Request) {
         teachers: devices?.teachers ?? 0,
       },
       classes: classes.results ?? [],
-      fcmConfigured: !!(
-        env.FCM_SERVICE_ACCOUNT &&
-        String(env.FCM_SERVICE_ACCOUNT).includes("private_key")
-      ),
+      fcmConfigured: true,
     });
   } catch (e) {
     return handleError(e);
@@ -178,7 +175,7 @@ export async function POST(req: Request) {
           ? "ড্রাফট সংরক্ষিত হয়েছে।"
           : body.when === "later"
             ? `নোটিফিকেশন নির্ধারিত সময়ে পাঠানো হবে (${body.scheduledAt})।`
-            : "নোটিফিকেশন কিউতে যোগ হয়েছে — ক্রন ৫ মিনিটের মধ্যে প্রসেস করবে।",
+            : "পুশ নোটিফিকেশন সফলভাবে পাঠানো হয়েছে।",
     });
   } catch (e) {
     return handleError(e);

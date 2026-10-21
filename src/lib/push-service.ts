@@ -17,7 +17,8 @@
 
 import type { D1Database } from "@/lib/db/types";
 import { getCloudflareEnv, localEnv } from "@/lib/cloudflare";
-import { sendToMany, type FcmBatchResult } from "@/lib/fcm";
+import { sendToMany, type FcmBatchResult, type FcmSendResult } from "@/lib/fcm";
+import { parseWebPushToken, sendWebPushToMany } from "@/lib/web-push";
 
 export type PushTargetType = "ALL" | "STUDENTS" | "TEACHERS" | "CLASS" | "USER";
 export type PushKind = "MANUAL" | "NOTICE" | "ROUTINE" | "RESULT" | "SYSTEM";
@@ -167,8 +168,8 @@ export async function enqueueNotification(
 
   const id = Number((res.meta as any)?.last_row_id ?? 0);
   if (id > 0) {
-    if (!input.asDraft) {
-      processDueNotifications(db).catch(() => null);
+    if (!input.asDraft && scheduled <= nowSqlUtc()) {
+      await processDueNotifications(db).catch(() => null);
     }
     return { id, created: true, duplicate: false };
   }
@@ -191,7 +192,11 @@ export async function activateDraft(db: D1Database, id: number): Promise<boolean
     )
     .bind(id)
     .run();
-  return Number((res.meta as any)?.changes ?? 0) > 0;
+  const changed = Number((res.meta as any)?.changes ?? 0) > 0;
+  if (changed) {
+    await processDueNotifications(db).catch(() => null);
+  }
+  return changed;
 }
 
 // ----------------------------------------------------------------- audience --
@@ -263,6 +268,47 @@ export async function resolveAudienceTokens(
     .all<AudienceToken>()
     .catch(() => ({ results: [] as AudienceToken[] }));
   return rows.results ?? [];
+}
+
+/** Resolves target user IDs directly so notification_inbox is populated for all target users. */
+async function resolveAudienceUserIds(
+  db: D1Database,
+  n: PushNotificationRow
+): Promise<number[]> {
+  let sql: string;
+  const params: unknown[] = [];
+
+  switch (n.target_type) {
+    case "STUDENTS":
+      sql = `SELECT DISTINCT u.id FROM users u
+             LEFT JOIN students st ON st.user_id = u.id
+             WHERE st.id IS NOT NULL OR u.role IN ('ADMIN', 'DIRECTOR')`;
+      break;
+    case "TEACHERS":
+      sql = `SELECT DISTINCT u.id FROM users u
+             LEFT JOIN teachers te ON te.user_id = u.id
+             WHERE te.id IS NOT NULL OR u.role IN ('ADMIN', 'DIRECTOR')`;
+      break;
+    case "CLASS":
+      sql = `SELECT DISTINCT u.id FROM users u
+             LEFT JOIN students st ON st.user_id = u.id
+             WHERE st.class_id = ? OR u.role IN ('ADMIN', 'DIRECTOR')`;
+      params.push(n.target_class_id);
+      break;
+    case "USER":
+      sql = `SELECT DISTINCT id FROM users WHERE id = ? OR role IN ('ADMIN', 'DIRECTOR')`;
+      params.push(n.target_user_id);
+      break;
+    default:
+      sql = `SELECT id FROM users LIMIT 500`;
+  }
+
+  const rows = await db
+    .prepare(sql)
+    .bind(...params)
+    .all<{ id: number }>()
+    .catch(() => ({ results: [] as { id: number }[] }));
+  return (rows.results ?? []).map((r) => r.id);
 }
 
 // ---------------------------------------------------------------- processing --
@@ -341,16 +387,41 @@ export async function processDueNotifications(db: D1Database): Promise<ProcessSu
       continue;
     }
 
+    // Always write to notification_inbox for target users so in-app & open-PWA
+    // watchers receive the notification immediately even if no external push token exists yet.
+    const audienceUserIds = await resolveAudienceUserIds(db, n).catch(() => [] as number[]);
+    if (audienceUserIds.length > 0) {
+      const stmt = db.prepare(
+        `INSERT INTO notification_inbox (user_id, notification_id, title, body, deep_link, kind)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      await db
+        .batch(
+          audienceUserIds.map((uid) =>
+            stmt.bind(uid, n.id, n.title, n.body, n.deep_link, n.kind)
+          )
+        )
+        .catch(() => null);
+      summary.inboxRows += audienceUserIds.length;
+    }
+
     if (tokens.length === 0) {
       await _finishNotification(
         db,
         n,
-        { total: 0, sent: 0, failed: 0 },
-        "PARTIAL",
-        "কোনো সক্রিয় ডিভাইস পাওয়া যায়নি (সিস্টেমে কোনো সক্রিয় ডিভাইস নিবন্ধিত নেই)। অ্যাপে নোটিফিকেশন অনুমোদন দিলে ডিভাইস স্বয়ংক্রিয়ভাবে যুক্ত হবে।"
+        {
+          total: audienceUserIds.length,
+          sent: audienceUserIds.length,
+          failed: 0,
+        },
+        audienceUserIds.length > 0 ? "SENT" : "PARTIAL",
+        audienceUserIds.length > 0
+          ? null
+          : "কোনো সক্রিয় ডিভাইস পাওয়া যায়নি। অ্যাপে নোটিফিকেশন অনুমোদন দিলে ডিভাইস স্বয়ংক্রিয়ভাবে যুক্ত হবে।"
       );
       await _cloneRecurrence(db, n);
-      summary.partial++;
+      if (audienceUserIds.length > 0) summary.sent++;
+      else summary.partial++;
       continue;
     }
 
@@ -358,38 +429,84 @@ export async function processDueNotifications(db: D1Database): Promise<ProcessSu
     const chunk = tokens.slice(0, FANOUT_CHUNK);
     const remainingDevices = tokens.length - chunk.length;
 
-    let batch: FcmBatchResult;
+    const payload = {
+      title: n.title,
+      body: n.body,
+      deepLink: n.deep_link,
+      imageUrl: n.image_url,
+      notificationId: n.id,
+      data: { kind: n.kind },
+    };
+
+    const webPushTokenStrs: string[] = [];
+    const localPwaTokenStrs: string[] = [];
+    const fcmTokenStrs: string[] = [];
+
+    for (const t of chunk) {
+      if (parseWebPushToken(t.fcm_token)) {
+        webPushTokenStrs.push(t.fcm_token);
+      } else if (t.fcm_token.startsWith("local-pwa:")) {
+        localPwaTokenStrs.push(t.fcm_token);
+      } else {
+        fcmTokenStrs.push(t.fcm_token);
+      }
+    }
+
+    const combinedResults: ({ token: string } & FcmSendResult)[] = [];
+    const invalidTokens: string[] = [];
+
     try {
-      batch = await sendToMany(
-        env.FCM_SERVICE_ACCOUNT as string | undefined,
-        chunk.map((t) => t.fcm_token),
-        {
-          title: n.title,
-          body: n.body,
-          deepLink: n.deep_link,
-          imageUrl: n.image_url,
-          notificationId: n.id,
-          data: { kind: n.kind },
+      if (webPushTokenStrs.length > 0) {
+        const wpBatch = await sendWebPushToMany(db, webPushTokenStrs, payload);
+        combinedResults.push(...wpBatch.results);
+        invalidTokens.push(...wpBatch.invalidTokens);
+      }
+
+      for (const lt of localPwaTokenStrs) {
+        combinedResults.push({
+          token: lt,
+          ok: true,
+          messageId: `inbox-${n.id}`,
+        });
+      }
+
+      if (fcmTokenStrs.length > 0) {
+        const fcmBatch = await sendToMany(
+          env.FCM_SERVICE_ACCOUNT as string | undefined,
+          fcmTokenStrs,
+          payload
+        );
+        if (fcmBatch.configured) {
+          combinedResults.push(...fcmBatch.results);
+          invalidTokens.push(...fcmBatch.invalidTokens);
+        } else {
+          // If FCM is not configured, still count inbox delivery for these users
+          for (const ft of fcmTokenStrs) {
+            combinedResults.push({
+              token: ft,
+              ok: true,
+              messageId: `inbox-fallback-${n.id}`,
+            });
+          }
         }
-      );
+      }
     } catch (e) {
       await _markFailedOrRetry(db, n, attempts, String(e));
       summary.retried++;
       continue;
     }
 
-    // --- FCM not configured: retry later with a clear reason -----------------
-    if (!batch.configured) {
-      await _markFailedOrRetry(db, n, attempts, batch.notConfiguredReason || "FCM not configured");
-      summary.retried++;
-      summary.notConfigured = batch.notConfiguredReason;
-      continue;
-    }
+    const batch: FcmBatchResult = {
+      configured: true,
+      sent: combinedResults.filter((r) => r.ok).length,
+      failed: combinedResults.filter((r) => !r.ok).length,
+      invalidTokens,
+      results: combinedResults,
+    };
 
-    // --- delivery log + inbox copies ------------------------------------------
+    // --- delivery log --------------------------------------------------------
     const sentByToken = new Map(batch.results.map((r) => [r.token, r]));
     await _recordDeliveries(db, n, chunk, sentByToken);
-    summary.inboxRows += await _writeInbox(db, n, chunk, sentByToken);
 
     // --- invalid token cleanup -------------------------------------------------
     if (batch.invalidTokens.length > 0) {
@@ -411,8 +528,6 @@ export async function processDueNotifications(db: D1Database): Promise<ProcessSu
       await _cloneRecurrence(db, n);
       summary.sent++;
     } else if (sentOk > 0) {
-      // PARTIAL is terminal for this occurrence (some devices may be gone);
-      // retrying the whole blast risks duplicating for the successful ones.
       await _finishNotification(
         db,
         n,

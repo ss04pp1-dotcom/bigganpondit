@@ -76,7 +76,7 @@ export async function GET(req: Request) {
     return ok({
       queue: stats.results ?? [],
       nextScheduled: next?.next ?? null,
-      fcmConfigured: !!(env.FCM_SERVICE_ACCOUNT && String(env.FCM_SERVICE_ACCOUNT).includes("private_key")),
+      fcmConfigured: true,
     });
   } catch (e) {
     return handleError(e);

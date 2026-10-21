@@ -79,8 +79,8 @@ export async function PATCH(
           )
           .bind(id)
           .run();
-        processDueNotifications(db).catch(() => null);
-        return ok({ retried: true, message: "পুনরায় পাঠানো হচ্ছে..." });
+        await processDueNotifications(db).catch(() => null);
+        return ok({ retried: true, message: "পুনরায় পাঠানো হয়েছে।" });
       }
 
       case "edit": {

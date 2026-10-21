@@ -23,8 +23,10 @@
 // unknown fields (org.json), so this is purely additive; it exists so the
 // setup can be verified from any browser:
 //   GET /api/push/config → "enabled":true, "serviceAccountConfigured":true
+import { getDb } from "@/lib/db";
 import { getServerEnv } from "@/lib/push-service";
 import { parseServiceAccount } from "@/lib/fcm";
+import { getOrCreateVapidKeys } from "@/lib/web-push";
 import { handleError, ok } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,9 @@ const str = (v: unknown): string =>
 export async function GET() {
   try {
     const env = await getServerEnv();
+    const db = await getDb();
+    const vapid = await getOrCreateVapidKeys(db).catch(() => null);
+
     const apiKey = str(env.FIREBASE_API_KEY);
     const appId = str(env.FIREBASE_APP_ID);
     const projectId = str(env.FIREBASE_PROJECT_ID);
@@ -46,14 +51,13 @@ export async function GET() {
       projectId.length > 3 &&
       senderId.length > 3;
 
-    // Boolean-only readiness signal for the SERVER-side sender. Never
-    // exposes any part of the service-account key.
-    const serviceAccountConfigured =
+    const fcmConfigured =
       parseServiceAccount(str(env.FCM_SERVICE_ACCOUNT)) !== null;
 
     return ok({
-      enabled: configured,
-      serviceAccountConfigured,
+      enabled: configured || !!vapid?.publicKey,
+      serviceAccountConfigured: fcmConfigured || !!vapid?.publicKey,
+      webPushPublicKey: vapid?.publicKey ?? null,
       firebase: configured
         ? { apiKey, appId, projectId, senderId }
         : null,

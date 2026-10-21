@@ -26,6 +26,7 @@ import {
   Layers,
   Wallet,
   Zap,
+  Globe,
 } from "lucide-react";
 import type { Role } from "@/lib/constants";
 
@@ -66,6 +67,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   ADMIN: [
     { href: "/admin/dashboard", label: "ড্যাশবোর্ড", icon: LayoutDashboard },
+    { href: "/admin/website", label: "ওয়েবসাইট ও কোর্স", icon: Globe },
     { href: "/admin/directors", label: "পরিচালক", icon: Building2 },
     { href: "/admin/teachers", label: "শিক্ষক", icon: GraduationCap },
     { href: "/admin/classes", label: "শ্রেণি ও ব্যাচ", icon: Layers },

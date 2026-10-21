@@ -212,6 +212,14 @@ export function LoginForm({
     <div className="min-h-screen w-full bg-gradient-to-b from-[#022851] via-[#07366b] to-[#e8eef6] flex flex-col items-center justify-between px-4 py-8">
       {/* Top Header Branding */}
       <header className="w-full max-w-lg text-center text-white pt-2 pb-6">
+        <div className="mb-3 flex justify-center">
+          <a
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 hover:bg-white/20 px-4 py-1.5 text-xs font-semibold text-blue-100 backdrop-blur-xs transition"
+          >
+            <span>← হোমপেজ ও কোর্সসমূহ দেখুন</span>
+          </a>
+        </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
           নম্বর সংগ্রাহক ও রিপোর্ট সফটওয়্যার
         </h1>

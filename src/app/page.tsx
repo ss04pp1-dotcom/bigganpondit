@@ -1,12 +1,22 @@
-// Root entry: send the user to the right dashboard (or login).
+// Root entry: Public landing page showcasing academy courses & features,
+// with a top-right Login button (and Dashboard link if already signed in).
 
 import { cookies } from "next/headers";
 import { getDb, getSetting } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { roleHome } from "@/lib/auth/guards";
-import { LoginForm } from "./(auth)/login/login-form";
-import { RedirectClient } from "@/components/app/redirect-client";
-import { APP_TITLE, DEFAULT_ACADEMY_NAME, SETTING_ACADEMY_LOGO, SETTING_ACADEMY_NAME } from "@/lib/constants";
+import { PublicLanding } from "@/components/landing/public-landing";
+import {
+  APP_TITLE,
+  DEFAULT_ACADEMY_NAME,
+  SETTING_ACADEMY_LOGO,
+  SETTING_ACADEMY_NAME,
+} from "@/lib/constants";
+import {
+  DEFAULT_LANDING_CONFIG,
+  SETTING_LANDING_PAGE,
+  parseLandingConfig,
+} from "@/lib/landing-config";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +31,8 @@ export default async function Home() {
     dbError = (err as Error)?.message || String(err);
   }
 
-  let redirectTo: string | null = null;
+  let dashboardUrl: string | null = null;
+  let isAdmin = false;
 
   if (db) {
     try {
@@ -31,7 +42,8 @@ export default async function Home() {
       if (sid) {
         const user = await getCurrentUser(db);
         if (user) {
-          redirectTo = roleHome(user.role);
+          dashboardUrl = roleHome(user.role);
+          isAdmin = user.role === "ADMIN" || user.role === "DIRECTOR";
         }
       }
     } catch (sessionErr) {
@@ -41,21 +53,18 @@ export default async function Home() {
 
   let academyName = DEFAULT_ACADEMY_NAME;
   let logoUrl: string | null = null;
+  let landingConfig = DEFAULT_LANDING_CONFIG;
 
   if (db) {
     try {
       academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
       const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
       logoUrl = logoKey ? `/api/files/${logoKey}` : null;
+      const rawLanding = await getSetting(SETTING_LANDING_PAGE, "");
+      landingConfig = parseLandingConfig(rawLanding);
     } catch (settingsErr) {
       console.warn("[Home] Settings fetch notice:", settingsErr);
     }
-  }
-
-  const demoHint = process.env.DEMO_HINT === "1";
-
-  if (redirectTo) {
-    return <RedirectClient to={redirectTo} />;
   }
 
   return (
@@ -65,11 +74,13 @@ export default async function Home() {
           সতর্কতা: ডেটাবেস সংযোগ বিচ্ছিন্ন ({dbError})। Cloudflare D1 বাইন্ডিং ও wrangler.toml পরীক্ষা করুন।
         </div>
       )}
-      <LoginForm
+      <PublicLanding
         academyName={academyName}
         logoUrl={logoUrl}
         appTitle={APP_TITLE}
-        demoHint={demoHint}
+        config={landingConfig}
+        dashboardUrl={dashboardUrl}
+        isAdmin={isAdmin}
       />
     </>
   );

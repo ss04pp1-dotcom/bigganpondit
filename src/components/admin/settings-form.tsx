@@ -3,8 +3,9 @@
 // Academy settings form (admin).
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette, BookMarked } from "lucide-react";
+import { Loader2, Save, Trash2, AlertTriangle, Sparkles, ShieldCheck, Key, Mail, Eye, EyeOff, Palette, BookMarked, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -220,6 +221,27 @@ export function AdminSettingsForm({
 
   return (
     <div className="space-y-4">
+      <Card className="border-blue-300 bg-gradient-to-r from-blue-50/90 via-white to-cyan-50/70 shadow-xs">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-blue-950 font-bold text-[16px]">
+              <Globe className="h-5 w-5 text-blue-600" />
+              <span>পাবলিক ওয়েবসাইট, কোর্স ও ফিচার কাস্টমাইজেশন</span>
+            </div>
+            <p className="text-[12px] text-slate-600">
+              যে কেউ ওয়েবসাইটে ঢুকলে যে সকল কোর্স, বৈশিষ্ট্য, ভর্তি বিজ্ঞপ্তি ও যোগাযোগের তথ্য দেখতে পায় তা পরিবর্তন ও নতুন কোর্স/ফিচার যুক্ত করুন।
+            </p>
+          </div>
+          <Link
+            href="/admin/website"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm shrink-0 transition"
+          >
+            <Globe className="h-4 w-4" />
+            <span>কোর্স ও ফিচার এডিট করুন</span>
+          </Link>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="border-b border-border pb-3">

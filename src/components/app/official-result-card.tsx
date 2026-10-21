@@ -541,15 +541,18 @@ export function OfficialResultCard({
                   }
                   .rc-slot {
                     width: 297mm !important;
-                    height: 208mm !important;
-                    max-height: 208mm !important;
-                    margin: 0 !important;
+                    height: 204mm !important;
+                    max-height: 204mm !important;
+                    margin: 0 auto !important;
                     padding: 0 !important;
                     border: none !important;
                     box-shadow: none !important;
                     overflow: hidden !important;
                     break-inside: avoid !important;
                     page-break-inside: avoid !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
@@ -563,14 +566,17 @@ export function OfficialResultCard({
                     page-break-after: always !important;
                   }
                   .rc-slot-sheet.rc-last,
-                  .rc-slot.rc-last {
+                  .rc-slot.rc-last,
+                  .rc-slot:last-of-type,
+                  .rc-slot:last-child {
                     break-after: avoid !important;
                     page-break-after: avoid !important;
                   }
                   .rc-page {
-                    transform: scale(0.998) !important;
-                    transform-origin: 0 0 !important;
+                    transform: scale(0.955) !important;
+                    transform-origin: center center !important;
                     overflow: hidden !important;
+                    margin: 0 auto !important;
                   }
                 }
               `,

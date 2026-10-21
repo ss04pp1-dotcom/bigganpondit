@@ -696,11 +696,11 @@ tbody tr:hover { background: #f7fbff !important; }
   background-repeat: no-repeat;
 }
 .rc-pl {
-  left: 10px;
+  left: 34px;
   background-image: var(--rc-bg-left, url(/card/bg-left.jpg));
 }
 .rc-pr {
-  left: 582px;
+  left: 568px;
   background-image: var(--rc-bg-right, url(/card/bg-right.jpg));
 }
 
@@ -1186,10 +1186,18 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 
 @media print {
+  @page {
+    size: 297mm 210mm;
+    margin: 0;
+  }
   body:has(.rc-slot) {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
+    width: 297mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
   body:has(.rc-slot) .app-shell,
   body:has(.rc-slot) .app-main,
@@ -1201,30 +1209,34 @@ tbody tr:hover { background: #f7fbff !important; }
     max-width: none !important;
     width: 297mm !important;
     display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
   body:has(.rc-slot) .app-sidebar,
   body:has(.rc-slot) .app-topbar,
   body:has(.rc-slot) header,
   body:has(.rc-slot) nav,
+  body:has(.rc-slot) footer,
+  body:has(.rc-slot) .no-print,
   body:has(.rc-slot) .notice-ticker {
     display: none !important;
   }
   .rc-slot {
-    page: rc;
     width: 297mm !important;
-    height: 209.5mm !important;
-    max-height: 209.5mm !important;
-    margin: 0 !important;
+    height: 204mm !important;
+    max-height: 204mm !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
     overflow: hidden !important;
-    break-after: page !important;
-    page-break-after: always !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .rc-slot-cover {
     break-after: page !important;
@@ -1236,14 +1248,17 @@ tbody tr:hover { background: #f7fbff !important; }
     page-break-after: always !important;
   }
   .rc-slot-sheet.rc-last,
-  .rc-slot.rc-last {
-    break-after: auto !important;
-    page-break-after: auto !important;
+  .rc-slot.rc-last,
+  .rc-slot:last-of-type,
+  .rc-slot:last-child {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
   }
   .rc-page {
-    transform: scale(0.998) !important;
-    transform-origin: 0 0 !important;
+    transform: scale(0.955) !important;
+    transform-origin: center center !important;
     overflow: hidden !important;
+    margin: 0 auto !important;
   }
 }
 

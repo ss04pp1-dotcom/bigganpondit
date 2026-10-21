@@ -9,7 +9,6 @@ export async function GET(req: Request) {
   try {
     const { user, db } = await requireApiUser(["ADMIN", "DIRECTOR", "TEACHER"]);
     const url = new URL(req.url);
-
     const classIdStr = url.searchParams.get("classId");
     const monthStr = url.searchParams.get("month") || String(currentMonthDhaka());
     const yearStr = url.searchParams.get("year") || String(currentYearDhaka());
@@ -34,6 +33,7 @@ export async function GET(req: Request) {
 
     const month = Number(monthStr);
     const year = Number(yearStr);
+
     // VALIDATION: month/year must be real ranges — invalid input previously
     // produced a garbage LIKE prefix silently.
     if (!Number.isInteger(month) || month < 1 || month > 12) {
@@ -88,24 +88,21 @@ export async function GET(req: Request) {
       const days = studentDays[s.id] || {};
       let present = 0;
       let absent = 0;
-      let late = 0;
-
+      let leave = 0;
       for (let d = 1; d <= daysInMonth; d++) {
         const st = days[d];
         if (st === "PRESENT") present++;
         else if (st === "ABSENT") absent++;
-        else if (st === "LATE") late++;
+        else if (st === "LEAVE" || st === "CHUTI" || st === "LATE") leave++;
       }
-
-      const totalRecorded = present + absent + late;
+      const totalRecorded = present + absent;
       const rate = totalRecorded > 0 ? Math.round((present / totalRecorded) * 100) : 0;
-
       return {
         ...s,
         days,
         present,
         absent,
-        late,
+        leave,
         rate,
       };
     });

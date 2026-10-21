@@ -1,4 +1,4 @@
-// /api/attendance — Daily attendance management (Admin, Director, Teacher)
+// /api/attendance — Daily attendance (Admin, Director, Teacher)
 import { getDb } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
@@ -15,6 +15,7 @@ export async function GET(req: Request) {
     if (!classIdStr) {
       throw new ApiError(400, "শ্রেণি নির্বাচন করুন।");
     }
+
     let classId = Number(classIdStr);
     const byId = await db.prepare("SELECT id FROM classes WHERE id = ?").bind(classId).first<{ id: number }>().catch(() => null);
     if (!byId) {
@@ -59,16 +60,16 @@ export async function GET(req: Request) {
     const total = students.length;
     let present = 0;
     let absent = 0;
-    let late = 0;
+    let leave = 0;
     let unmarked = 0;
-
     for (const s of students) {
       if (s.attendance_status === "PRESENT") present++;
       else if (s.attendance_status === "ABSENT") absent++;
-      else if (s.attendance_status === "LATE") late++;
+      else if (s.attendance_status === "LEAVE" || s.attendance_status === "CHUTI" || s.attendance_status === "LATE") leave++;
       else unmarked++;
     }
 
+    const recorded = present + absent;
     return ok({
       date,
       classId,
@@ -77,9 +78,9 @@ export async function GET(req: Request) {
         total,
         present,
         absent,
-        late,
+        leave,
         unmarked,
-        rate: total > 0 ? Math.round((present / total) * 100) : 0,
+        rate: recorded > 0 ? Math.round((present / recorded) * 100) : 0,
       },
     });
   } catch (e) {
@@ -96,12 +97,12 @@ export async function POST(req: Request) {
       date?: string;
       entries?: Array<{
         studentId: number;
-        status: "PRESENT" | "ABSENT" | "LATE";
+        status: "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE";
         remarks?: string;
       }>;
       records?: Array<{
         studentId: number;
-        status: "PRESENT" | "ABSENT" | "LATE";
+        status: "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE";
         remarks?: string;
       }>;
     };
@@ -112,6 +113,7 @@ export async function POST(req: Request) {
     }
 
     const date = body.date.trim();
+
     // VALIDATION: date must be a real YYYY-MM-DD calendar date (no future
     // dates — attendance is recorded on/before the day itself).
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00`).getTime())) {
@@ -145,8 +147,9 @@ export async function POST(req: Request) {
     }
 
     // VALIDATION: status enum + every student must belong to the class
-    const VALID_STATUSES = new Set(["PRESENT", "ABSENT", "LATE"]);
-    const validEntries: Array<{ studentId: number; status: "PRESENT" | "ABSENT" | "LATE"; remarks: string | null }> = [];
+    const VALID_STATUSES = new Set(["PRESENT", "ABSENT", "LEAVE", "CHUTI", "LATE"]);
+    const validEntries: Array<{ studentId: number; status: string; remarks: string | null }> = [];
+
     for (const entry of entries) {
       const studentId = Number(entry.studentId);
       const status = String(entry.status ?? "");
@@ -156,7 +159,9 @@ export async function POST(req: Request) {
       if (!VALID_STATUSES.has(status)) {
         throw new ApiError(400, `অবৈধ হাজিরা স্থিতি (${status})।`);
       }
-      validEntries.push({ studentId, status: status as "PRESENT" | "ABSENT" | "LATE", remarks: entry.remarks?.trim() || null });
+      // Normalize CHUTI/LATE to LEAVE if needed, or preserve
+      const normalizedStatus = status === "CHUTI" ? "LEAVE" : status;
+      validEntries.push({ studentId, status: normalizedStatus, remarks: entry.remarks?.trim() || null });
     }
 
     if (validEntries.length > 0) {

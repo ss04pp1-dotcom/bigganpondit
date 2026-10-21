@@ -18,8 +18,8 @@ self.addEventListener("push", (event) => {
     const title = data.title || "বিজ্ঞান পণ্ডিত একাডেমি — ক্লাস নোটিফিকেশন";
     const options = {
       body: data.body || "আপনার পরবর্তী ক্লাসের সময় হয়েছে।",
-      icon: "/api/logo",
-      badge: "/api/logo",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
       vibrate: [200, 100, 200],
       tag: data.tag || "class-routine-notif",
       renotify: true,
@@ -34,7 +34,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification("বিজ্ঞান পণ্ডিত একাডেমি", {
         body: text,
-        icon: "/api/logo",
+        icon: "/icons/icon-192.png",
       })
     );
   }
@@ -43,7 +43,6 @@ self.addEventListener("push", (event) => {
 // Focus or open window on clicking notification
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-
   const targetUrl = event.notification.data?.url || "/";
 
   event.waitUntil(

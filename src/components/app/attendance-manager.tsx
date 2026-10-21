@@ -7,7 +7,7 @@ import {
   Users,
   CheckCircle2,
   XCircle,
-  Clock,
+  Palmtree,
   Printer,
   Save,
   Loader2,
@@ -36,7 +36,7 @@ interface StudentAttRow {
   section: string | null;
   phone: string | null;
   photo_key: string | null;
-  attendance_status: "PRESENT" | "ABSENT" | "LATE" | null;
+  attendance_status: "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE" | null;
   attendance_remarks: string | null;
 }
 
@@ -55,7 +55,7 @@ export function AttendanceManager({
   const [date, setDate] = useState(todayYmdDhaka);
   const [students, setStudents] = useState<StudentAttRow[]>([]);
   // undefined = unmarked (never fabricated as PRESENT)
-  const [dailyStatus, setDailyStatus] = useState<Record<number, "PRESENT" | "ABSENT" | "LATE" | undefined>>({});
+  const [dailyStatus, setDailyStatus] = useState<Record<number, "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE" | undefined>>({});
   const [loadingDaily, setLoadingDaily] = useState(false);
   const [savingDaily, setSavingDaily] = useState(false);
 
@@ -101,11 +101,12 @@ export function AttendanceManager({
         // (attendance_status is null for unmarked students). Unmarked
         // students stay undefined — saving must never fabricate them as
         // PRESENT.
-        const map: Record<number, "PRESENT" | "ABSENT" | "LATE" | undefined> = {};
+        const map: Record<number, "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE" | undefined> = {};
         for (const s of json.students) {
+          const st = s.attendance_status;
           map[s.id] =
-            s.attendance_status === "PRESENT" || s.attendance_status === "ABSENT" || s.attendance_status === "LATE"
-              ? s.attendance_status
+            st === "PRESENT" || st === "ABSENT" || st === "LEAVE" || st === "CHUTI" || st === "LATE"
+              ? st
               : undefined;
         }
         setDailyStatus(map);
@@ -146,8 +147,8 @@ export function AttendanceManager({
     }
   }, [activeTab, loadMonthlySheet]);
 
-  function markAll(status: "PRESENT" | "ABSENT") {
-    const updated: Record<number, "PRESENT" | "ABSENT" | "LATE"> = {};
+  function markAll(status: "PRESENT" | "ABSENT" | "LEAVE") {
+    const updated: Record<number, "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE"> = {};
     for (const s of students) {
       updated[s.id] = status;
     }
@@ -156,6 +157,7 @@ export function AttendanceManager({
 
   async function handleSaveDaily() {
     if (!targetClassParam) return;
+
     // FIX: save ONLY the students whose status was explicitly set —
     // either already recorded in the DB (prefilled on load) or clicked in
     // this session. Unmarked students are silently skipped instead of being
@@ -164,19 +166,20 @@ export function AttendanceManager({
       .filter((s) => dailyStatus[s.id] !== undefined)
       .map((s) => ({
         studentId: s.id,
-        status: dailyStatus[s.id] as "PRESENT" | "ABSENT" | "LATE",
+        status: dailyStatus[s.id] as "PRESENT" | "ABSENT" | "LEAVE" | "CHUTI" | "LATE",
       }));
 
     if (entries.length === 0) {
       toast({
         title: "কারো হাজিরা চিহ্নিত হয়নি।",
-        description: "উপস্থিত/অনুপস্থিত বোতাম চেপে অন্তত একজন শিক্ষার্থীর হাজিরা দিন, অথবা 'সবাইকে উপস্থিত' ব্যবহার করুন।",
+        description: "উপস্থিত/অনুপস্থিত/ছুটি বোতাম চেপে অন্তত একজন শিক্ষার্থীর হাজিরা দিন, অথবা 'সবাই উপস্থিত' ব্যবহার করুন।",
         variant: "destructive",
       });
       return;
     }
 
     const unmarkedCount = students.length - entries.length;
+
     setSavingDaily(true);
     try {
       const res = await fetch("/api/attendance", {
@@ -194,7 +197,6 @@ export function AttendanceManager({
         toast({ title: json.error ?? "হাজিরা সংরক্ষণ ব্যর্থ হয়েছে।", variant: "destructive" });
         return;
       }
-
       toast({
         title: json.message,
         ...(unmarkedCount > 0
@@ -213,9 +215,9 @@ export function AttendanceManager({
   const totalStudents = students.length;
   const presentCount = Object.values(dailyStatus).filter((st) => st === "PRESENT").length;
   const absentCount = Object.values(dailyStatus).filter((st) => st === "ABSENT").length;
-  const lateCount = Object.values(dailyStatus).filter((st) => st === "LATE").length;
+  const leaveCount = Object.values(dailyStatus).filter((st) => st === "LEAVE" || st === "CHUTI" || st === "LATE").length;
   const unmarkedCount = students.filter((s) => dailyStatus[s.id] === undefined).length;
-  const markedCount = presentCount + absentCount + lateCount;
+  const markedCount = presentCount + absentCount; // Leave/chuti is not marked against attendance
   const rate = markedCount > 0 ? Math.round((presentCount / markedCount) * 100) : 0;
 
   return (
@@ -322,6 +324,16 @@ export function AttendanceManager({
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  onClick={() => markAll("LEAVE")}
+                  disabled={activeClassObj?.is_active === 0}
+                  className="flex-1 sm:flex-initial h-8 text-[11px] sm:text-xs font-semibold text-amber-700 border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+                >
+                  <Palmtree className="mr-1 h-3.5 w-3.5 text-amber-600" />
+                  সবাই ছুটি
+                </Button>
+                <Button
+                  size="sm"
                   onClick={handleSaveDaily}
                   disabled={savingDaily || students.length === 0 || activeClassObj?.is_active === 0}
                   className={`w-full sm:w-auto h-8.5 sm:h-8 gap-1.5 text-xs font-semibold shadow-xs ${
@@ -361,9 +373,9 @@ export function AttendanceManager({
               <span className="text-[11px] font-medium text-red-700">অনুপস্থিত</span>
               <p className="text-xl font-bold text-red-700">{bn(absentCount)} জন</p>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 shadow-2xs">
-              <span className="text-[11px] font-medium text-blue-700">উপস্থিতির হার</span>
-              <p className="text-xl font-bold text-blue-700">{fmtPct(rate)}</p>
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 shadow-2xs">
+              <span className="text-[11px] font-medium text-amber-700">ছুটি</span>
+              <p className="text-xl font-bold text-amber-700">{bn(leaveCount)} জন</p>
             </div>
           </div>
 
@@ -385,6 +397,7 @@ export function AttendanceManager({
                 {students.map((s) => {
                   // undefined stays undefined — unmarked shows neutral styling
                   const currentSt = dailyStatus[s.id];
+                  const isLeave = currentSt === "LEAVE" || currentSt === "CHUTI" || currentSt === "LATE";
                   return (
                     <div
                       key={s.id}
@@ -408,21 +421,20 @@ export function AttendanceManager({
                             <div className="flex items-center gap-2 text-[11px] text-slate-500">
                               {s.section && <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">শাখা: {s.section}</span>}
                               {s.phone && (
-                                <a href={`tel:${s.phone}`} className="text-emerald-700 hover:underline font-mono">
+                                <a href={`tel:${s.phone}`} className="text-emerald-700 font-mono font-medium">
                                   {bn(s.phone)}
                                 </a>
                               )}
                             </div>
                           </div>
                         </div>
-                        <div className="shrink-0 text-center bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
-                          <span className="text-[10px] text-slate-500 block leading-tight">রোল</span>
-                          <span className="text-xs font-bold font-mono text-slate-800">{bn(s.roll)}</span>
-                        </div>
+                        <span className="font-bold font-mono text-sm px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                          #{bn(s.roll)}
+                        </span>
                       </div>
 
-                      {/* Bottom: 3 Large Touch Buttons (Zero Horizontal Cut-off) */}
-                      <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100/90 rounded-lg border border-slate-200/80">
+                      {/* Action Segmented Buttons */}
+                      <div className="grid grid-cols-3 gap-1.5 pt-0.5 border-t border-slate-100">
                         <button
                           type="button"
                           onClick={() => setDailyStatus({ ...dailyStatus, [s.id]: "PRESENT" })}
@@ -451,16 +463,16 @@ export function AttendanceManager({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDailyStatus({ ...dailyStatus, [s.id]: "LATE" })}
+                          onClick={() => setDailyStatus({ ...dailyStatus, [s.id]: "LEAVE" })}
                           className={cn(
                             "flex items-center justify-center gap-1 py-2 rounded-md text-xs font-bold transition-all",
-                            currentSt === "LATE"
+                            isLeave
                               ? "bg-amber-500 text-white shadow-xs"
                               : "text-slate-600 hover:text-amber-700 bg-transparent"
                           )}
                         >
-                          <Clock className="h-3.5 w-3.5 shrink-0" />
-                          <span>দেরি</span>
+                          <Palmtree className="h-3.5 w-3.5 shrink-0" />
+                          <span>ছুটি</span>
                         </button>
                       </div>
                     </div>
@@ -468,14 +480,14 @@ export function AttendanceManager({
                 })}
               </div>
 
-              {/* DESKTOP VIEW: Full Table (>= sm) */}
-              <div className="hidden sm:block overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-slate-100/80 text-[11px] font-semibold text-slate-600 border-b border-slate-200">
-                      <th className="px-3 py-2.5 text-center w-12">রোল</th>
-                      <th className="px-3 py-2.5 w-12 text-center">ছবি</th>
-                      <th className="px-3 py-2.5">শিক্ষার্থীর নাম</th>
+              {/* DESKTOP VIEW: Table (>= sm) */}
+              <div className="hidden sm:block rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                    <tr>
+                      <th className="px-3 py-2.5 text-center w-16">রোল</th>
+                      <th className="px-3 py-2.5 text-center w-12">ছবি</th>
+                      <th className="px-3 py-2.5 text-left">নাম</th>
                       <th className="px-3 py-2.5 text-center">শাখা</th>
                       <th className="px-3 py-2.5 text-center">ফোন নম্বর</th>
                       <th className="px-3 py-2.5 text-center w-56">হাজিরা স্থিতি</th>
@@ -485,6 +497,7 @@ export function AttendanceManager({
                     {students.map((s) => {
                       // undefined = unmarked (neutral row, no button highlighted)
                       const currentSt = dailyStatus[s.id];
+                      const isLeave = currentSt === "LEAVE" || currentSt === "CHUTI" || currentSt === "LATE";
                       return (
                         <tr
                           key={s.id}
@@ -492,11 +505,11 @@ export function AttendanceManager({
                             "transition-colors",
                             currentSt === undefined
                               ? "bg-slate-50/50"
+                              : currentSt === "PRESENT"
+                              ? "hover:bg-slate-50"
                               : currentSt === "ABSENT"
                               ? "bg-red-50/40"
-                              : currentSt === "LATE"
-                              ? "bg-amber-50/30"
-                              : "hover:bg-slate-50"
+                              : "bg-amber-50/30"
                           )}
                         >
                           <td className="px-3 py-2.5 text-center font-bold font-mono text-slate-700">
@@ -548,15 +561,15 @@ export function AttendanceManager({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDailyStatus({ ...dailyStatus, [s.id]: "LATE" })}
+                                onClick={() => setDailyStatus({ ...dailyStatus, [s.id]: "LEAVE" })}
                                 className={cn(
                                   "rounded px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                                  currentSt === "LATE"
+                                  isLeave
                                     ? "bg-amber-500 text-white shadow-2xs"
                                     : "text-slate-600 hover:text-amber-700"
                                 )}
                               >
-                                দেরি
+                                ছুটি
                               </button>
                             </div>
                           </td>
@@ -573,6 +586,8 @@ export function AttendanceManager({
                   <span className="text-emerald-700">উপস্থিত: {bn(presentCount)}</span>
                   <span className="mx-1 text-slate-300">•</span>
                   <span className="text-red-600">অনুপস্থিত: {bn(absentCount)}</span>
+                  <span className="mx-1 text-slate-300">•</span>
+                  <span className="text-amber-600">ছুটি: {bn(leaveCount)}</span>
                 </div>
                 <Button
                   size="sm"
@@ -698,6 +713,7 @@ export function AttendanceManager({
                         for (let d = 1; d <= sheetData.daysInMonth; d++) {
                           if (days[d] === "PRESENT") p++;
                           else if (days[d] === "ABSENT") a++;
+                          // LEAVE / CHUTI is holiday/leave: not counted as present or absent
                         }
                       }
                       const totalRecorded = p + a;
@@ -713,6 +729,7 @@ export function AttendanceManager({
                           </td>
                           {Array.from({ length: sheetData.daysInMonth }, (_, i) => i + 1).map((d) => {
                             const status = days[d];
+                            const isLeave = status === "LEAVE" || status === "CHUTI" || status === "LATE";
                             return (
                               <td
                                 key={d}
@@ -722,12 +739,12 @@ export function AttendanceManager({
                                     ? "bg-emerald-50 text-emerald-700"
                                     : status === "ABSENT"
                                     ? "bg-red-50 text-red-600"
-                                    : status === "LATE"
-                                    ? "bg-amber-50 text-amber-600"
+                                    : isLeave
+                                    ? "bg-white text-transparent" // ছুটি তে চাপ দিলে হাজিরা শিটে সম্পূর্ণ ফাঁকা থাকবে
                                     : "text-slate-300"
                                 )}
                               >
-                                {status === "PRESENT" ? "P" : status === "ABSENT" ? "A" : status === "LATE" ? "L" : "-"}
+                                {status === "PRESENT" ? "P" : status === "ABSENT" ? "A" : isLeave ? "" : "-"}
                               </td>
                             );
                           })}
@@ -753,7 +770,6 @@ export function AttendanceManager({
                   <div className="h-10" />
                   <p className="border-t border-slate-400 pt-1">শ্রেণি শিক্ষকের স্বাক্ষর</p>
                 </div>
-
                 <div className="text-center text-[12px] text-slate-800 w-48">
                   {directorSignatureUrl ? (
                     <img

@@ -686,9 +686,9 @@ tbody tr:hover { background: #f7fbff !important; }
 /* ---- পৃষ্ঠা ১ ---- */
 .rc-panel {
   position: absolute;
-  top: 16px;
-  width: 520px;
-  height: 759px;
+  top: 11px;
+  width: 540px;
+  height: 772px;
   border: 2px solid #222;
   background-color: var(--rc-panel-bg, #f4f7fb);
   background-size: cover;
@@ -696,7 +696,7 @@ tbody tr:hover { background: #f7fbff !important; }
   background-repeat: no-repeat;
 }
 .rc-pl {
-  left: 34px;
+  left: 15px;
   background-image: var(--rc-bg-left, url(/card/bg-left.jpg));
 }
 .rc-pr {
@@ -706,8 +706,8 @@ tbody tr:hover { background: #f7fbff !important; }
 
 .rc-cbox {
   position: absolute;
-  left: 18px;
-  width: 479px;
+  left: 16px;
+  width: 508px;
   height: 138px;
   border: 1px solid #333;
   border-radius: 3px;
@@ -846,31 +846,31 @@ tbody tr:hover { background: #f7fbff !important; }
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 .rc-badge {
-  left: 167px;
-  top: 268px;
-  width: 185px;
+  left: 170px;
+  top: 266px;
+  width: 200px;
   height: 64px;
   background: linear-gradient(#34b052, #15802f);
   border: 2px solid #fff;
   border-radius: 9px;
   color: #fff;
   font-weight: 700;
-  font-size: 31px;
+  font-size: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
 }
 .rc-my {
-  left: 88px;
-  top: 371px;
-  width: 345px;
-  height: 41px;
+  left: 90px;
+  top: 368px;
+  width: 360px;
+  height: 42px;
   border: 1.5px solid #222;
   border-radius: 22px;
   background: #fbe8dc;
   font-weight: 700;
-  font-size: 17px;
+  font-size: 17.5px;
 }
 .rc-my span {
   position: absolute;
@@ -885,26 +885,26 @@ tbody tr:hover { background: #f7fbff !important; }
   margin-left: 0;
 }
 .rc-tab {
-  left: 190px;
-  top: 455px;
-  width: 126px;
+  left: 200px;
+  top: 452px;
+  width: 140px;
   height: 38px;
   background: #e6efd6;
   border: 1.5px solid #222;
   border-bottom: none;
   border-radius: 18px 18px 0 0;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 14.5px;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2;
 }
 .rc-info {
-  left: 59px;
-  top: 492px;
-  width: 398px;
-  height: 183px;
+  left: 60px;
+  top: 489px;
+  width: 420px;
+  height: 186px;
   background: #e6efd6;
   border: 1.5px solid #222;
   border-radius: 26px;
@@ -920,29 +920,29 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-r b {
   position: absolute;
-  left: 14px;
+  left: 16px;
   bottom: 0;
   white-space: nowrap;
   font-weight: 700;
-  font-size: 17.5px;
+  font-size: 18px;
 }
 .rc-r i {
   position: absolute;
-  left: 101px;
+  left: 110px;
   bottom: 0;
   font-style: normal;
 }
 .rc-r .rc-fill {
   position: absolute;
-  left: 112px;
-  right: 14px;
+  left: 122px;
+  right: 16px;
   height: 18px;
   bottom: 0;
 }
 .rc-r .rc-v {
   position: absolute;
-  left: 118px;
-  right: 16px;
+  left: 128px;
+  right: 18px;
   bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -950,8 +950,8 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-qt {
   left: 0;
-  width: 517px;
-  top: 693px;
+  width: 540px;
+  top: 694px;
   text-align: center;
   font-weight: 700;
   font-size: 14.2px;
@@ -961,24 +961,27 @@ tbody tr:hover { background: #f7fbff !important; }
 /* ---- পৃষ্ঠা ২ ---- */
 .rc-sheet {
   position: absolute;
-  inset: 0;
+  top: 11px;
+  bottom: 11px;
+  left: 15px;
+  right: 15px;
   background-color: var(--rc-sheet-bg, #eaf2dd);
   background-image: var(--rc-bg-sheet, none);
   background-size: cover;
   background-position: center;
-  border: 2.5px solid #555;
+  border: 2px solid #333;
 }
 .rc-stitle {
-  left: 60px;
-  top: 16px;
-  width: 1011px;
-  height: 51px;
+  left: 61px;
+  top: 14px;
+  width: 970px;
+  height: 50px;
   border-top: 1.5px solid #666;
   border-bottom: 1.5px solid #666;
   background: rgba(255, 255, 255, 0.3);
   text-align: center;
   font-weight: 700;
-  font-size: 31px;
+  font-size: 29px;
   line-height: 48px;
   white-space: nowrap;
 }
@@ -992,12 +995,12 @@ tbody tr:hover { background: #f7fbff !important; }
   margin-left: 2px;
 }
 .rc-months {
-  left: 60px;
-  top: 82px;
-  width: 1011px;
+  left: 61px;
+  top: 76px;
+  width: 970px;
   text-align: center;
   font-weight: 700;
-  font-size: 20.3px;
+  font-size: 19.5px;
   line-height: 22px;
   white-space: nowrap;
 }
@@ -1012,9 +1015,9 @@ tbody tr:hover { background: #f7fbff !important; }
 
 .rc-tbl {
   position: absolute;
-  left: 54px;
-  top: 118px;
-  width: 1022px;
+  left: 61px;
+  top: 112px;
+  width: 970px;
   table-layout: fixed;
   border-collapse: collapse;
   text-align: center;
@@ -1121,10 +1124,9 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 
 .rc-sb {
-  top: 707px;
-  height: 68px;
+  top: 704px;
+  height: 52px;
   border: 1.5px solid #111;
-  border-top: none;
   font-weight: 700;
   font-size: 15px;
   text-align: center;
@@ -1132,10 +1134,10 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-sb .rc-sig-wrap {
   position: absolute;
-  bottom: 24px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  height: 30px;
+  height: 28px;
   max-width: 90%;
   display: flex;
   align-items: center;
@@ -1145,7 +1147,7 @@ tbody tr:hover { background: #f7fbff !important; }
 }
 .rc-sb .rc-sig-wrap img,
 .rc-sb .rc-sig-wrap svg {
-  height: 28px;
+  height: 26px;
   max-width: 100%;
   object-fit: contain;
   mix-blend-mode: multiply !important;
@@ -1157,9 +1159,9 @@ tbody tr:hover { background: #f7fbff !important; }
   left: 0;
   right: 0;
   bottom: 0;
-  height: 19px;
+  height: 18px;
   border-top: 1.5px solid #111;
-  line-height: 17px;
+  line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
   background: transparent !important;
@@ -1168,21 +1170,21 @@ tbody tr:hover { background: #f7fbff !important; }
   font-size: 12px;
 }
 .rc-sm {
-  left: 845px;
-  width: 232px;
-  height: 49px;
+  left: 826px;
+  width: 205px;
+  height: 48px;
   background: #fff;
   border: 1.5px solid #111;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px 0 10px;
+  padding: 0 10px;
   font-weight: 700;
-  font-size: 22px;
+  font-size: 21px;
 }
 .rc-sm b {
   color: #1d4ed8;
-  font-size: 20px;
+  font-size: 19px;
 }
 
 @media print {
@@ -1223,8 +1225,8 @@ tbody tr:hover { background: #f7fbff !important; }
   }
   .rc-slot {
     width: 297mm !important;
-    height: 204mm !important;
-    max-height: 204mm !important;
+    height: 209mm !important;
+    max-height: 209mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     box-shadow: none !important;
@@ -1255,7 +1257,9 @@ tbody tr:hover { background: #f7fbff !important; }
     page-break-after: avoid !important;
   }
   .rc-page {
-    transform: scale(0.955) !important;
+    width: 1123px !important;
+    height: 794px !important;
+    transform: scale(0.992) !important;
     transform-origin: center center !important;
     overflow: hidden !important;
     margin: 0 auto !important;

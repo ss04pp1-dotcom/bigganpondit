@@ -541,8 +541,8 @@ export function OfficialResultCard({
                   }
                   .rc-slot {
                     width: 297mm !important;
-                    height: 204mm !important;
-                    max-height: 204mm !important;
+                    height: 209mm !important;
+                    max-height: 209mm !important;
                     margin: 0 auto !important;
                     padding: 0 !important;
                     border: none !important;
@@ -573,7 +573,9 @@ export function OfficialResultCard({
                     page-break-after: avoid !important;
                   }
                   .rc-page {
-                    transform: scale(0.955) !important;
+                    width: 1123px !important;
+                    height: 794px !important;
+                    transform: scale(0.992) !important;
                     transform-origin: center center !important;
                     overflow: hidden !important;
                     margin: 0 auto !important;
@@ -959,7 +961,7 @@ export function OfficialResultCard({
               {/* রেজাল্ট টেবিল: শিক্ষক, বিষয়, উপস্থিতি (P/An), মোট নম্বর, সর্বোচ্চ, প্রাপ্ত, গ্রেড, GPA */}
               <table className="rc-tbl">
                 <colgroup>
-                  {[70, 146, 66, 72, 80, 72, 50, 70, 16, 95, 95, 55, 75].map((w, i) => (
+                  {[74, 150, 66, 72, 82, 72, 50, 70, 14, 94, 94, 56, 76].map((w, i) => (
                     <col key={i} style={{ width: w }} />
                   ))}
                 </colgroup>
@@ -1123,11 +1125,11 @@ export function OfficialResultCard({
                 </tbody>
               </table>
 
-              <div className="rc-a rc-sm" style={{ top: 651 }}>
+              <div className="rc-a rc-sm" style={{ top: 648 }}>
                 <span>অবস্থানঃ</span>
                 <b>{posText}</b>
               </div>
-              <div className="rc-a rc-sm" style={{ top: 708 }}>
+              <div className="rc-a rc-sm" style={{ top: 704 }}>
                 <span>জরিমানাঃ</span>
                 <b>{fineDisplay}</b>
               </div>
@@ -1135,7 +1137,7 @@ export function OfficialResultCard({
               {/* পরিচালকের স্বাক্ষর — কমপ্যাক্ট ২৮px ও স্বচ্ছ ব্যাকগ্রাউন্ড */}
               {isBothDirectors ? (
                 availableDirectors!.slice(0, 2).map((d, i) => (
-                  <div key={d.id} className="rc-a rc-sb" style={{ left: 54 + i * 198, width: i === 0 ? 199.5 : 198 }}>
+                  <div key={d.id} className="rc-a rc-sb" style={{ left: 61 + i * 190, width: 185 }}>
                     <div className="rc-sig-wrap">
                       {d.signatureUrl ? (
                         <TransparentSignature src={d.signatureUrl} alt={`${d.name}-এর স্বাক্ষর`} />
@@ -1148,7 +1150,7 @@ export function OfficialResultCard({
                   </div>
                 ))
               ) : (
-                <div className="rc-a rc-sb" style={{ left: 54, width: 396 }}>
+                <div className="rc-a rc-sb" style={{ left: 61, width: 370 }}>
                   <div className="rc-sig-wrap">
                     {activeSignatureUrl ? (
                       <TransparentSignature src={activeSignatureUrl} alt="ডিরেক্টরের স্বাক্ষর" />
@@ -1160,7 +1162,7 @@ export function OfficialResultCard({
                 </div>
               )}
               
-              <div className="rc-a rc-sb" style={{ left: 448.5, width: 374.5 }}>
+              <div className="rc-a rc-sb" style={{ left: 436, width: 375 }}>
                 <div className="rc-sig-wrap" />
                 <div className="rc-ln">অভিভাবকের স্বাক্ষর</div>
               </div>

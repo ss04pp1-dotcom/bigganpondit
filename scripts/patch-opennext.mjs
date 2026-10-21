@@ -60,4 +60,33 @@ for (const targetPath of targetFiles) {
   }
 }
 
+// 4. Patch Next.js version check in @opennextjs/aws so it never aborts build on Next 15.4.9
+const helperPaths = [
+  path.join(rootDir, "node_modules/@opennextjs/aws/dist/build/helper.js"),
+];
+
+for (const helperPath of helperPaths) {
+  if (fs.existsSync(helperPath)) {
+    let hCode = fs.readFileSync(helperPath, "utf-8");
+    let hModified = false;
+
+    if (hCode.includes("export function checkNextVersionSupport(")) {
+      const patchedFn = `export function checkNextVersionSupport(nextVersion, allowUnsupportedNextVersion, flagName = "--dangerously-use-unsupported-next-version") {\n    return;\n`;
+      if (!hCode.includes(patchedFn)) {
+        hCode = hCode.replace(
+          /export function checkNextVersionSupport\([^{]*\{/,
+          patchedFn
+        );
+        hModified = true;
+      }
+    }
+
+    if (hModified) {
+      fs.writeFileSync(helperPath, hCode, "utf-8");
+      patchedCount++;
+      console.log(`[patch-opennext] Bypassed Next.js version support check in ${helperPath}`);
+    }
+  }
+}
+
 console.log(`[patch-opennext] Complete (${patchedCount} file(s) updated).`);

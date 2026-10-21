@@ -1,11 +1,23 @@
 import type { MetadataRoute } from "next";
+import { getDb, getSetting } from "@/lib/db";
+import { DEFAULT_ACADEMY_NAME, SETTING_ACADEMY_NAME } from "@/lib/constants";
 
-export default function manifest(): MetadataRoute.Manifest {
+export const dynamic = "force-dynamic";
+
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  let academyName = DEFAULT_ACADEMY_NAME;
+  try {
+    await getDb();
+    const configuredName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
+    if (configuredName) academyName = configuredName;
+  } catch {
+    // Fallback to default academy name
+  }
+
   return {
-    name: "বিজ্ঞান পণ্ডিত একাডেমি",
-    short_name: "বিজ্ঞান পণ্ডিত",
-    description:
-      "বিজ্ঞান পণ্ডিত একাডেমি — পূর্ণাঙ্গ কোচিং ও একাডেমি ম্যানেজমেন্ট সিস্টেম, ক্লাস রুটিন, ব্যাচ ট্র্যাকিং ও রেজাল্ট পোর্টাল।",
+    name: academyName,
+    short_name: academyName,
+    description: `${academyName} — পূর্ণাঙ্গ কোচিং ও একাডেমি ম্যানেজমেন্ট সিস্টেম, ক্লাস রুটিন, ব্যাচ ট্র্যাকিং ও রেজাল্ট পোর্টাল।`,
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
@@ -13,26 +25,14 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#0f172a",
     icons: [
       {
-        src: "/icons/icon-192.png",
-        sizes: "192x192",
+        src: "/api/logo",
+        sizes: "192x192 512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-maskable-192.png",
-        sizes: "192x192",
-        type: "image/png",
-        purpose: "maskable",
-      },
-      {
-        src: "/icons/icon-512.png",
-        sizes: "512x512",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/icons/icon-maskable-512.png",
-        sizes: "512x512",
+        src: "/api/logo?maskable=1",
+        sizes: "192x192 512x512",
         type: "image/png",
         purpose: "maskable",
       },

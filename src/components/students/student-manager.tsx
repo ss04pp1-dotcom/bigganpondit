@@ -212,6 +212,11 @@ export function StudentManager({
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("ALL");
 
+  // Dynamic classes and batches loaded from API
+  const [allClasses, setAllClasses] = useState<{ id: number; name: string; sort_order: number; is_active?: number }[]>([]);
+  const [allBatches, setAllBatches] = useState<{ id: number; name: string; class_id: number; time_slot?: string | null; days?: string | null }[]>([]);
+  const [batchFilter, setBatchFilter] = useState<string>("ALL");
+
   const dynamicFilters = useMemo(() => {
     const list: { key: string; label: string }[] = [{ key: "ALL", label: "সবাই" }];
     const sourceClasses = allClasses.length > 0
@@ -276,10 +281,6 @@ export function StudentManager({
   // Student promotion modal state for Admin
   const [promotionOpen, setPromotionOpen] = useState(false);
 
-  // Dynamic classes and batches loaded from API
-  const [allClasses, setAllClasses] = useState<{ id: number; name: string; sort_order: number; is_active?: number }[]>([]);
-  const [allBatches, setAllBatches] = useState<{ id: number; name: string; class_id: number; time_slot?: string | null; days?: string | null }[]>([]);
-  const [batchFilter, setBatchFilter] = useState<string>("ALL");
 
   // Guardian selection: "FATHER" | "MOTHER" | "OTHER"
   const [guardianType, setGuardianType] = useState<"FATHER" | "MOTHER" | "OTHER">("FATHER");

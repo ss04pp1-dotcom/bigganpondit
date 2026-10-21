@@ -187,7 +187,7 @@
 @media print {
   @page {
     size: auto;
-    margin: 4mm 6mm;
+    margin: 0;
   }
 
   /* 1. Global Reset: Eliminate dark smudges, box-shadows, and black blur across all elements */
@@ -793,9 +793,9 @@ tbody tr:hover { background: #f7fbff !important; }
   height: 125px;
 }
 .rc-logo-b {
-  left: 50px;
+  left: 0;
   top: 10px;
-  width: 420px;
+  width: 540px;
   height: 165px;
 }
 
@@ -1196,8 +1196,8 @@ tbody tr:hover { background: #f7fbff !important; }
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    width: 297mm !important;
+    max-width: 297mm !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
@@ -1209,8 +1209,8 @@ tbody tr:hover { background: #f7fbff !important; }
   body:has(.rc-slot) .lg\:pl-\[176px\] {
     margin: 0 !important;
     padding: 0 !important;
-    max-width: 100% !important;
-    width: 100% !important;
+    max-width: 297mm !important;
+    width: 297mm !important;
     display: block !important;
     height: auto !important;
     min-height: 0 !important;
@@ -1225,10 +1225,10 @@ tbody tr:hover { background: #f7fbff !important; }
     display: none !important;
   }
   .rc-slot {
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 198mm !important;
-    max-height: 198mm !important;
+    width: 297mm !important;
+    max-width: 297mm !important;
+    height: 210mm !important;
+    max-height: 210mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     box-shadow: none !important;
@@ -1236,9 +1236,7 @@ tbody tr:hover { background: #f7fbff !important; }
     overflow: hidden !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    display: block !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -1261,10 +1259,10 @@ tbody tr:hover { background: #f7fbff !important; }
   .rc-page {
     width: 1123px !important;
     height: 794px !important;
-    transform: scale(0.93) !important;
-    transform-origin: center center !important;
+    transform: none !important;
+    transform-origin: 0 0 !important;
     overflow: hidden !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
   }
 }
 

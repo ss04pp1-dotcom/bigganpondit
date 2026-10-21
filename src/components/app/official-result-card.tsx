@@ -507,8 +507,8 @@ export function OfficialResultCard({
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
-                    width: 100% !important;
-                    max-width: 100% !important;
+                    width: 297mm !important;
+                    max-width: 297mm !important;
                     height: auto !important;
                     min-height: 0 !important;
                     background: #ffffff !important;
@@ -533,17 +533,17 @@ export function OfficialResultCard({
                   .lg\\:pl-\\[176px\\] {
                     margin: 0 !important;
                     padding: 0 !important;
-                    max-width: 100% !important;
-                    width: 100% !important;
+                    max-width: 297mm !important;
+                    width: 297mm !important;
                     display: block !important;
                     height: auto !important;
                     min-height: 0 !important;
                   }
                   .rc-slot {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    height: 198mm !important;
-                    max-height: 198mm !important;
+                    width: 297mm !important;
+                    max-width: 297mm !important;
+                    height: 210mm !important;
+                    max-height: 210mm !important;
                     margin: 0 auto !important;
                     padding: 0 !important;
                     border: none !important;
@@ -551,9 +551,7 @@ export function OfficialResultCard({
                     overflow: hidden !important;
                     break-inside: avoid !important;
                     page-break-inside: avoid !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
+                    display: block !important;
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
@@ -576,10 +574,10 @@ export function OfficialResultCard({
                   .rc-page {
                     width: 1123px !important;
                     height: 794px !important;
-                    transform: scale(0.93) !important;
-                    transform-origin: center center !important;
+                    transform: none !important;
+                    transform-origin: 0 0 !important;
                     overflow: hidden !important;
-                    margin: 0 auto !important;
+                    margin: 0 !important;
                   }
                 }
               `,
@@ -853,39 +851,14 @@ export function OfficialResultCard({
               
               {/* বিজ্ঞান পণ্ডিত — বড় আকর্ষণীয় অফিশিয়াল লোগো (Tutor Center ব্যাজ সহ) */}
               <div className="rc-logo-b rc-a flex flex-col items-center justify-center">
-                {logoUrl ? (
-                  <img
-                    src={logoUrl}
-                    alt="বিজ্ঞান পণ্ডিত"
-                    style={{ maxHeight: "172px", maxWidth: "470px", width: "auto", objectFit: "contain" }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center pt-1">
-                    <div className="relative inline-flex items-center justify-center">
-                      <span
-                        className="text-[64px] font-black tracking-tight text-[#1b5e20]"
-                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
-                      >
-                        বিজ্ঞান
-                      </span>
-                      <span
-                        className="ml-2.5 text-[64px] font-black tracking-tight text-[#e65100]"
-                        style={{ fontFamily: "Kalpurush, Hind Siliguri, sans-serif" }}
-                      >
-                        পণ্ডিত
-                      </span>
-                      <span className="absolute -top-3.5 -right-16 rounded-full bg-[#d32f2f] px-3.5 py-0.5 text-[12px] font-black uppercase text-white shadow-sm tracking-wider">
-                        Tutor Center
-                      </span>
-                    </div>
-                  </div>
-                )}
+                <img
+                  src={logoUrl || "/logo.png"}
+                  alt="বিজ্ঞান পণ্ডিত"
+                  style={{ maxHeight: "172px", maxWidth: "470px", width: "auto", objectFit: "contain" }}
+                />
               </div>
 
-              {!logoUrl && (
-                <div className="rc-a rc-tagline">সঠিক দিকনির্দেশনাই সাফল্যের চাবিকাঠি</div>
-              )}
-              <div className="rc-a rc-addr" style={logoUrl ? { top: 188 } : undefined}>
+              <div className="rc-a rc-addr" style={{ top: 188 }}>
                 সজীব ভিলা (সলঙ্গা রোড), বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ
               </div>
               <div className="rc-a rc-badge">রেজাল্ট কার্ড</div>

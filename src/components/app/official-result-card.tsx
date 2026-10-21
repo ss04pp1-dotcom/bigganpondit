@@ -507,8 +507,8 @@ export function OfficialResultCard({
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
-                    width: 297mm !important;
-                    min-width: 297mm !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
                     height: auto !important;
                     min-height: 0 !important;
                     background: #ffffff !important;
@@ -533,16 +533,17 @@ export function OfficialResultCard({
                   .lg\\:pl-\\[176px\\] {
                     margin: 0 !important;
                     padding: 0 !important;
-                    max-width: none !important;
-                    width: 297mm !important;
+                    max-width: 100% !important;
+                    width: 100% !important;
                     display: block !important;
                     height: auto !important;
                     min-height: 0 !important;
                   }
                   .rc-slot {
-                    width: 297mm !important;
-                    height: 209mm !important;
-                    max-height: 209mm !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    height: 198mm !important;
+                    max-height: 198mm !important;
                     margin: 0 auto !important;
                     padding: 0 !important;
                     border: none !important;
@@ -575,7 +576,7 @@ export function OfficialResultCard({
                   .rc-page {
                     width: 1123px !important;
                     height: 794px !important;
-                    transform: scale(0.992) !important;
+                    transform: scale(0.93) !important;
                     transform-origin: center center !important;
                     overflow: hidden !important;
                     margin: 0 auto !important;

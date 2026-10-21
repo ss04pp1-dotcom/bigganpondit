@@ -13,39 +13,47 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const isMaskable = searchParams.get("maskable") === "1" || searchParams.get("maskable") === "true";
   const size = searchParams.get("size");
+  const isRaw = searchParams.get("raw") === "1";
 
-  try {
-    const db = await getDb();
-    const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
+  // Only return the raw rectangular R2 upload if explicitly requested via ?raw=1.
+  // For PWA icons, favicons, splash screens, and notification badges, ALWAYS serve
+  // the square 1:1 solid-white-background safe-zone padded icons so Android/Chrome
+  // never squishes a rectangle into a square or renders transparency as a black oval.
+  if (isRaw) {
+    try {
+      await getDb();
+      const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
 
-    if (logoKey && logoKey.startsWith("academy/logos/")) {
-      // Serve ONLY the academy/logos/ prefix — never an arbitrary R2 object
-      const bucket = await getBucket();
-      const obj = await bucket.get(logoKey);
-      if (obj && obj.data) {
-        let contentType = "image/png";
-        if (logoKey.endsWith(".jpg") || logoKey.endsWith(".jpeg")) contentType = "image/jpeg";
-        else if (logoKey.endsWith(".webp")) contentType = "image/webp";
-        else if (logoKey.endsWith(".svg")) contentType = "image/svg+xml";
+      if (logoKey && logoKey.startsWith("academy/logos/")) {
+        const bucket = await getBucket();
+        const obj = await bucket.get(logoKey);
+        if (obj && obj.data) {
+          let contentType = "image/png";
+          if (logoKey.endsWith(".jpg") || logoKey.endsWith(".jpeg")) contentType = "image/jpeg";
+          else if (logoKey.endsWith(".webp")) contentType = "image/webp";
+          else if (logoKey.endsWith(".svg")) contentType = "image/svg+xml";
 
-        return new Response(obj.data as unknown as BodyInit, {
-          headers: {
-            "Content-Type": contentType,
-            "Cache-Control": "public, max-age=180, s-maxage=300",
-          },
-        });
+          return new Response(obj.data as unknown as BodyInit, {
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": "public, max-age=180, s-maxage=300",
+            },
+          });
+        }
       }
+    } catch {
+      // Fallback to static icons below
     }
-  } catch {
-    // If DB is initializing or offline, serve official static branding
   }
 
-  // Fallback to official Biggan Pondit branding icons
   if (isMaskable) {
-    return NextResponse.redirect(new URL("/icons/icon-maskable-512.png", request.url), 307);
+    if (size === "192") {
+      return NextResponse.redirect(new URL("/icons/icon-maskable-192.png?v=5", request.url), 307);
+    }
+    return NextResponse.redirect(new URL("/icons/icon-maskable-512.png?v=5", request.url), 307);
   }
   if (size === "192") {
-    return NextResponse.redirect(new URL("/icons/icon-192.png", request.url), 307);
+    return NextResponse.redirect(new URL("/icons/icon-192.png?v=5", request.url), 307);
   }
-  return NextResponse.redirect(new URL("/icons/icon-512.png", request.url), 307);
+  return NextResponse.redirect(new URL("/icons/icon-512.png?v=5", request.url), 307);
 }

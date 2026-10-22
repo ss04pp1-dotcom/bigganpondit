@@ -3,201 +3,347 @@
 
 export const SETTING_LANDING_PAGE = "landing_page_config";
 
+export type CourseColorTheme = "blue" | "green" | "purple" | "emerald" | "orange";
+export type CourseSymbolType = "atom" | "flask" | "pi" | "dna" | "sigma" | "book";
+
 export interface LandingStat {
   id: string;
   value: string;
   label: string;
+  iconName: string; // "users" | "graduation" | "book" | "award"
 }
 
 export interface LandingCourse {
   id: string;
   title: string;
-  badge: string;
+  subtitle: string;
+  symbol: CourseSymbolType;
+  colorTheme: CourseColorTheme;
+  bullet1: string;
+  bullet2: string;
+  bullet3: string;
+  buttonText: string;
+  imageUrl?: string;
   targetClass: string;
-  subjects: string;
   schedule: string;
   feeLabel: string;
   description: string;
-  highlight?: boolean;
 }
 
 export interface LandingFeature {
   id: string;
   title: string;
-  badge: string;
   description: string;
-  iconName: string; // "book" | "award" | "bell" | "users" | "shield" | "laptop" | "clock" | "check"
+  iconName: string; // "graduation" | "monitor" | "users" | "chart" | "book" | "shield"
+}
+
+export interface LandingNotice {
+  id: string;
+  day: string;
+  month: string;
+  title: string;
+  details: string;
+}
+
+export interface LandingTestimonial {
+  id: string;
+  studentName: string;
+  studentBatch: string;
+  comment: string;
+  rating: number;
+  avatarUrl?: string;
 }
 
 export interface LandingPageConfig {
-  heroBadge: string;
-  heroTitle: string;
-  heroSubtitle: string;
-  admissionBanner: string;
-  coursesSectionTitle: string;
-  coursesSectionSubtitle: string;
-  featuresSectionTitle: string;
-  featuresSectionSubtitle: string;
-  stats: LandingStat[];
-  courses: LandingCourse[];
+  schemaVersion: number;
+  // Header & Hero
+  loginBtnText: string;
+  heroTagline: string;
+  heroTitleLine1: string;
+  heroTitleLine2: string;
+  heroSubtitleHeading: string;
+  heroDescription: string;
+  heroQuote: string;
+  heroPrimaryBtnText: string;
+  heroSecondaryBtnText: string;
+  heroImageUrl: string;
+
+  // 6 Feature Strip Items
   features: LandingFeature[];
-  contactPhone: string;
-  contactPhoneAlt: string;
-  contactEmail: string;
+
+  // Subject-Wise Courses Section
+  coursesSectionTag: string;
+  coursesSectionTitle: string;
+  coursesViewAllText: string;
+  courses: LandingCourse[];
+
+  // About Us + 2x2 Stats Section
+  aboutTag: string;
+  aboutTitle: string;
+  aboutDescription: string;
+  aboutDetails: string;
+  aboutBtnText: string;
+  aboutImageUrl: string;
+  stats: LandingStat[];
+
+  // Recent Notices & Testimonials Section
+  noticesSectionTitle: string;
+  noticesViewAllText: string;
+  notices: LandingNotice[];
+
+  testimonialsSectionTitle: string;
+  testimonialsViewAllText: string;
+  testimonials: LandingTestimonial[];
+
+  // Footer & Contact
+  footerTagline: string;
+  footerMotto: string;
+  copyrightText: string;
+  newsletterTitle: string;
+  newsletterSubtitle: string;
+  newsletterPlaceholder: string;
   contactAddress: string;
-  officeHours: string;
+  contactPhone: string;
+  contactEmail: string;
   facebookUrl: string;
+  youtubeUrl: string;
+  instagramUrl: string;
+  telegramUrl: string;
 }
 
 export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
-  heroBadge: "ভর্তি চলছে • একাডেমিক ও স্পেশাল ব্যাচ",
-  heroTitle: "বিজ্ঞান ও গণিতের ভীতি দূর করে কাঙ্ক্ষিত সাফল্যের বিশ্বস্ত ঠিকানা",
-  heroSubtitle:
-    "ষষ্ঠ থেকে দশম শ্রেণি এবং এসএসসি পরীক্ষার্থীদের জন্য আধুনিক ও সম্পূর্ণ ডিজিটাল মনিটরিং সমৃদ্ধ কোচিং ও একাডেমিক কেয়ার। নিয়মিত পরীক্ষা, ডিজিটাল হাজিরা, অনলাইন মার্কশিট ও অভিজ্ঞ শিক্ষকমণ্ডলীর নিবিড় তত্ত্বাবধান।",
-  admissionBanner:
-    "নতুন শিক্ষাবর্ষে ৬ষ্ঠ থেকে ১০ম শ্রেণি এবং এসএসসি স্পেশাল মডেল টেস্ট ব্যাচে সীমিত আসনে ভর্তি চলছে! আজই যোগাযোগ করুন।",
-  coursesSectionTitle: "আমাদের চলমান কোর্স ও ব্যাচসমূহ",
-  coursesSectionSubtitle:
-    "শিক্ষার্থীদের মেধা ও শ্রেণি অনুযায়ী বিশেষভাবে সাজানো আমাদের একাডেমিক কোর্সগুলো দেখে নিন",
-  featuresSectionTitle: "আমাদের বিশেষ বৈশিষ্ট্য ও ডিজিটাল সুবিধাসমূহ",
-  featuresSectionSubtitle:
-    "পড়াশোনার পাশাপাশি আধুনিক প্রযুক্তির সাহায্যে প্রতিটি শিক্ষার্থীর শতভাগ অগ্রগতি নিশ্চিত করা হয়",
-  stats: [
-    { id: "st-1", value: "৬ষ্ঠ–১০ম", label: "শ্রেণির পূর্ণাঙ্গ একাডেমিক ব্যাচ" },
-    { id: "st-2", value: "১০০%", label: "ডিজিটাল হাজিরা ও রেজাল্ট ট্র্যাকিং" },
-    { id: "st-3", value: "সাপ্তাহিক", label: "অধ্যায়ভিত্তিক ও মাসিক মডেল টেস্ট" },
-    { id: "st-4", value: "২৪/৭", label: "অনলাইন স্টুডেন্ট ও অভিভাবক পোর্টাল" },
-  ],
-  courses: [
-    {
-      id: "crs-1",
-      title: "নবম ও দশম শ্রেণি — বিজ্ঞান বিভাগ (পূর্ণাঙ্গ কোর্স)",
-      badge: "সবচেয়ে জনপ্রিয়",
-      targetClass: "৯ম ও ১০ম শ্রেণি (বিজ্ঞান)",
-      subjects: "পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান, উচ্চতর গণিত ও সাধারণ গণিত",
-      schedule: "সপ্তাহে ৬ দিন ক্লাস • সাপ্তাহিক ও মাসিক পরীক্ষা",
-      feeLabel: "ভর্তি ও মাসিক বেতন: অফিসে যোগাযোগ করুন",
-      description:
-        "এসএসসি বোর্ড পরীক্ষার সিলেবাস অনুযায়ী প্রতিটি অধ্যায়ের বেসিক ক্লিয়ার, সৃজনশীল ও এমসিকিউ অনুশীলন এবং এক্সক্লুসিভ লেকচার শিট প্রদান।",
-      highlight: true,
-    },
-    {
-      id: "crs-2",
-      title: "এসএসসি (SSC) ফাইনাল মডেল টেস্ট ও রিভিশন ব্যাচ",
-      badge: "এসএসসি স্পেশাল",
-      targetClass: "এসএসসি পরীক্ষার্থী",
-      subjects: "বিজ্ঞান বিভাগের সকল আবশ্যিক ও নৈর্বাচনিক বিষয়",
-      schedule: "নিয়মিত অধ্যায়ভিত্তিক ও পূর্ণাঙ্গ বোর্ড স্ট্যান্ডার্ড মডেল টেস্ট",
-      feeLabel: "স্পেশাল প্যাকেজ ফি",
-      description:
-        "বোর্ড পরীক্ষার পূর্বে সম্পূর্ণ সিলেবাস রিভিশন, বিগত বছরের প্রশ্ন বিশ্লেষণ, উত্তরপত্র মূল্যায়ন ও মেধা তালিকা প্রকাশ।",
-      highlight: false,
-    },
-    {
-      id: "crs-3",
-      title: "অষ্টম শ্রেণি — জুনিয়র সায়েন্স ও গণিত ফাউন্ডেশন",
-      badge: "ফাউন্ডেশন ব্যাচ",
-      targetClass: "৮ম শ্রেণি",
-      subjects: "বিজ্ঞান, গণিত, ইংরেজি ও আইসিটি",
-      schedule: "সপ্তাহে ৫/৬ দিন ক্লাস • নিয়মিত ক্লাস টেস্ট",
-      feeLabel: "মাসিক বেতন: সুলভ মূল্যে",
-      description:
-        "নবম শ্রেণিতে বিজ্ঞান বিভাগে পড়ার মজবুত ভিত্তি তৈরি করতে গণিত ও বিজ্ঞানের প্রতিটি টপিক হাতে-কলমে সহজবোধ্য উপায়ে পাঠদান।",
-      highlight: false,
-    },
-    {
-      id: "crs-4",
-      title: "ষষ্ঠ ও সপ্তম শ্রেণি — বেসিক বিল্ডিং একাডেমিক কেয়ার",
-      badge: "জুনিয়র ব্যাচ",
-      targetClass: "৬ষ্ঠ ও ৭ম শ্রেণি",
-      subjects: "গণিত, বিজ্ঞান ও ইংরেজি গ্রামার",
-      schedule: "সপ্তাহে ৫ দিন ক্লাস • ডেইলি ওয়ার্কশিট ও মূল্যায়ন",
-      feeLabel: "মাসিক বেতন: সুলভ মূল্যে",
-      description:
-        "ছোটবেলা থেকেই গণিত ও বিজ্ঞানের ভীতি দূর করে আনন্দের সাথে শেখা এবং স্কুলের পরীক্ষায় শীর্ষ ফলাফল নিশ্চিত করার বিশেষ যত্ন।",
-      highlight: false,
-    },
-    {
-      id: "crs-5",
-      title: "নবম ও দশম শ্রেণি — মানবিক ও সাধারণ গণিত/ইংরেজি ব্যাচ",
-      badge: "জেনারেল ব্যাচ",
-      targetClass: "৯ম ও ১০ম শ্রেণি",
-      subjects: "সাধারণ গণিত, সাধারণ বিজ্ঞান, ইংরেজি ও আবশ্যিক বিষয়",
-      schedule: "সপ্তাহে ৫ দিন ক্লাস • নিয়মিত মডেল টেস্ট",
-      feeLabel: "ভর্তি চলছে",
-      description:
-        "গণিত, ইংরেজি ও সাধারণ বিজ্ঞানে দুর্বল শিক্ষার্থীদের জন্য আলাদা যত্ন এবং অতিরিক্ত সলভ ক্লাসের বিশেষ ব্যবস্থা।",
-      highlight: false,
-    },
-    {
-      id: "crs-6",
-      title: "বিজ্ঞান পণ্ডিত প্রকাশনী — এক্সক্লুসিভ নোটবুক ও লেকচার শিট",
-      badge: "ডিজিটাল লাইব্রেরি",
-      targetClass: "৬ষ্ঠ থেকে ১০ম শ্রেণি",
-      subjects: "সকল বিষয়ের অধ্যায়ভিত্তিক হ্যান্ডনোট ও সাজেশন",
-      schedule: "অনলাইন রিড-অনলি অ্যাক্সেস ও প্রিন্টেড শিট",
-      feeLabel: "ভর্তিকৃত শিক্ষার্থীদের জন্য বিশেষ সুবিধা",
-      description:
-        "আমাদের নিজস্ব প্রকাশনীর তৈরি সহজবোধ্য নোটবুক, সূত্রাবলী ও বোর্ড স্ট্যান্ডার্ড প্রশ্ন ব্যাংক যা অ্যাপ ও ওয়েবসাইটে যেকোনো সময় পড়া যায়।",
-      highlight: false,
-    },
-  ],
+  schemaVersion: 2,
+  loginBtnText: "লগইন / রেজিস্ট্রেশন",
+  heroTagline: "স্বপ্ন দেখো  •  প্রস্তুতি নাও  •  সফল হও",
+  heroTitleLine1: "বিজ্ঞান পণ্ডিত",
+  heroTitleLine2: "একাডেমি",
+  heroSubtitleHeading: "বিজ্ঞানভিত্তিক শিক্ষা, উজ্জ্বল ভবিষ্যৎ",
+  heroDescription:
+    "মাধ্যমিক ও উচ্চমাধ্যমিকের বিজ্ঞান বিভাগসহ সকল শিক্ষার্থীদের জন্য মানসম্মত ও আধুনিক পদ্ধতিতে প্রস্তুতিমূলক কোচিং ও অনলাইন লার্নিং প্ল্যাটফর্ম।",
+  heroQuote: "“জ্ঞানই সফলতার চাবিকাঠি”",
+  heroPrimaryBtnText: "কোর্সসমূহ দেখুন",
+  heroSecondaryBtnText: "আমাদের সম্পর্কে",
+  heroImageUrl: "",
+
   features: [
     {
       id: "feat-1",
-      title: "ডিজিটাল হাজিরা ও অভিভাবকের ফোনে SMS অ্যালার্ট",
-      badge: "স্মার্ট ট্র্যাকিং",
-      description:
-        "প্রতিদিন ক্লাসে উপস্থিতি বা অনুপস্থিতির তথ্য ডিজিটাল হাজিরা শিটে সংরক্ষণ এবং সরাসরি অভিভাবকের মোবাইলে SMS বার্তার মাধ্যমে অবহিতকরণ।",
-      iconName: "bell",
+      title: "বিশেষজ্ঞ শিক্ষক মণ্ডলী",
+      description: "অভিজ্ঞ ও দক্ষ শিক্ষকদের দ্বারা পাঠদান",
+      iconName: "graduation",
     },
     {
       id: "feat-2",
-      title: "অনলাইন মার্কশিট, রেজাল্ট কার্ড ও মেধা তালিকা",
-      badge: "তাৎক্ষণিক ফলাফল",
-      description:
-        "ক্লাস টেস্ট, মাসিক ও বার্ষিক পরীক্ষার নম্বর অনলাইনে প্রকাশ। শিক্ষার্থীরা নিজেদের আইডি দিয়ে লগইন করে পূর্ণাঙ্গ গ্রেড শিট ও মেরিট পজিশন দেখতে পারে।",
-      iconName: "award",
+      title: "আধুনিক ও স্মার্ট ক্লাস",
+      description: "অনলাইন + অফলাইন উভয় মাধ্যমেই ক্লাস",
+      iconName: "monitor",
     },
     {
       id: "feat-3",
-      title: "অভিজ্ঞ ও যত্নশীল শিক্ষক মণ্ডলী",
-      badge: "সেরা পাঠদান",
-      description:
-        "প্রতিটি বিষয়ের জন্য রয়েছেন অভিজ্ঞ ও দক্ষ শিক্ষক, যাঁরা মুখস্থবিদ্যার পরিবর্তে বিষয়বস্তু বুঝে পড়ার ওপর সর্বোচ্চ গুরুত্ব দেন।",
+      title: "ব্যক্তিগত গাইডেন্স",
+      description: "প্রতিটি শিক্ষার্থীর জন্য বিশেষ সহায়তা",
       iconName: "users",
     },
     {
       id: "feat-4",
-      title: "ডিজিটাল প্রকাশনী ও অনলাইন লেকচার শিট",
-      badge: "ই-লাইব্রেরি",
-      description:
-        "বিজ্ঞান পণ্ডিত প্রকাশনীর বিশেষ নোটবুক ও লেকচার শিট শিক্ষার্থীরা যেকোনো সময় আমাদের ওয়েবসাইট বা অ্যাপে লগইন করে পড়তে পারে।",
-      iconName: "book",
+      title: "নিয়মিত মূল্যায়ন",
+      description: "মডেল টেস্ট ও পরীক্ষার প্রস্তুতি",
+      iconName: "chart",
     },
     {
       id: "feat-5",
-      title: "ডেইলি ক্লাস রুটিন ও পুশ নোটিফিকেশন রিমাইন্ডার",
-      badge: "অটো রিমাইন্ডার",
-      description:
-        "ক্লাস শুরু হওয়ার ১০ মিনিট আগে এবং ক্লাস শুরুর সময় স্বয়ংক্রিয়ভাবে মোবাইলে নোটিফিকেশন ও রুটিন অ্যালার্ট পৌঁছে যায়।",
-      iconName: "clock",
+      title: "ডিজিটাল রিসোর্স",
+      description: "নোট, সাজেশন, প্রশ্নব্যাংক ও ভিডিও লেকচার",
+      iconName: "book",
     },
     {
       id: "feat-6",
-      title: "স্বচ্ছ ফি পরিশোধ ও ডিজিটাল মানি রিসিপ্ট",
-      badge: "ডিজিটাল হিসাব",
-      description:
-        "মাসিক বেতন ও পরীক্ষার ফি পরিশোধের সম্পূর্ণ ইতিহাস, বকেয়া হিসাব এবং অনলাইন পেমেন্ট রশিদ পোর্টাল থেকেই দেখা ও ডাউনলোড করা যায়।",
+      title: "নির্ভরযোগ্য প্রতিষ্ঠান",
+      description: "সফলতার দিকনির্দেশনায় আমাদের অঙ্গীকার",
       iconName: "shield",
     },
   ],
-  contactPhone: "01700-000000",
-  contactPhoneAlt: "",
-  contactEmail: "info@bigganpondit.com",
-  contactAddress: "বিজ্ঞান পণ্ডিত একাডেমি ক্যাম্পাস, মেইন রোড, বাংলাদেশ",
-  officeHours: "শনিবার – বৃহস্পতিবার (সকাল ৮:০০টা – রাত ৮:০০টা)",
+
+  coursesSectionTag: "আমাদের কোর্সসমূহ",
+  coursesSectionTitle: "বিষয়ভিত্তিক কোর্স প্রোগ্রাম",
+  coursesViewAllText: "সব কোর্স দেখুন",
+  courses: [
+    {
+      id: "crs-physics",
+      title: "পদার্থবিজ্ঞান",
+      subtitle: "ধারণা থেকে প্রয়োগ, পদার্থবিজ্ঞানে সফলতা",
+      symbol: "atom",
+      colorTheme: "blue",
+      bullet1: "ক্লাস: ৪০+",
+      bullet2: "মডেল টেস্ট: ২০+",
+      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৯ম-১০ম শ্রেণি, এসএসসি ও এইচএসসি",
+      schedule: "সপ্তাহে ৩/৪ দিন ক্লাস • অধ্যায়ভিত্তিক মডেল টেস্ট",
+      feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+      description:
+        "পদার্থবিজ্ঞানের প্রতিটি অধ্যায়ের মৌলিক ধারণা (Basic Concept), সূত্রের প্রমাণ, গাণিতিক সমস্যার সহজ সমাধান এবং বোর্ড ও ভর্তি পরীক্ষার সৃজনশীল/এমসিকিউ প্রস্তুতি।",
+    },
+    {
+      id: "crs-chemistry",
+      title: "রসায়ন",
+      subtitle: "রাসায়নিক বিক্রিয়া ও তত্ত্বের সহজ সমাধান",
+      symbol: "flask",
+      colorTheme: "green",
+      bullet1: "ক্লাস: ৪০+",
+      bullet2: "মডেল টেস্ট: ২০+",
+      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৯ম-১০ম শ্রেণি, এসএসসি ও এইচএসসি",
+      schedule: "সপ্তাহে ৩/৪ দিন ক্লাস • নিয়মিত ল্যাব ও তত্ত্ব বিশ্লেষণ",
+      feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+      description:
+        "জৈব ও অজৈব রসায়ন, পর্যায় সারণি, রাসায়নিক বন্ধন ও বিক্রিয়ার কৌশল মুখস্থ না করে বুঝে শেখার বিশেষ পদ্ধতি এবং এক্সক্লুসিভ নোটবুক সুবিধা।",
+    },
+    {
+      id: "crs-math",
+      title: "গণিত",
+      subtitle: "গাণিতিক যুক্তি ও সমস্যার সহজ সমাধান",
+      symbol: "pi",
+      colorTheme: "purple",
+      bullet1: "ক্লাস: ৪৫+",
+      bullet2: "মডেল টেস্ট: ২৫+",
+      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৬ষ্ঠ থেকে ১০ম শ্রেণি ও এসএসসি",
+      schedule: "সপ্তাহে ৪ দিন ক্লাস • সাপ্তাহিক সলভ ক্লাস",
+      feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+      description:
+        "বীজগণিত, জ্যামিতি, ত্রিকোণমিতি ও পরিমিতির ভীতি দূর করে শর্টকাট ও বিস্তারিত উভয় পদ্ধতিতে গাণিতিক সমস্যা সমাধানের দক্ষতা অর্জন।",
+    },
+    {
+      id: "crs-biology",
+      title: "জীববিজ্ঞান",
+      subtitle: "জীবজগতের রহস্য ও আধুনিক জীববিজ্ঞান",
+      symbol: "dna",
+      colorTheme: "emerald",
+      bullet1: "ক্লাস: ৩৫+",
+      bullet2: "মডেল টেস্ট: ২০+",
+      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৯ম-১০ম শ্রেণি, এসএসসি ও মেডিকেল ফাউন্ডেশন",
+      schedule: "সপ্তাহে ৩ দিন ক্লাস • চিত্রসহ অ্যানাটমি ও ফিজিওলজি",
+      feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+      description:
+        "চিত্র ও ডায়াগ্রামের সাহায্যে উদ্ভিদবিজ্ঞান ও প্রাণিবিজ্ঞানের প্রতিটি টপিক সহজভাবে উপস্থাপন এবং বোর্ড ও মেডিকেল ভর্তি প্রস্তুতির পূর্ণাঙ্গ গাইডলাইন।",
+    },
+    {
+      id: "crs-higher-math",
+      title: "উচ্চতর গণিত",
+      subtitle: "জটিল গাণিতিক সমস্যার সহজ সমাধান",
+      symbol: "sigma",
+      colorTheme: "orange",
+      bullet1: "ক্লাস: ৪৫+",
+      bullet2: "মডেল টেস্ট: ২৫+",
+      bullet3: "বিশ্ববিদ্যালয় প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৯ম-১০ম শ্রেণি, এসএসসি ও এইচএসসি",
+      schedule: "সপ্তাহে ৪ দিন ক্লাস • স্পেশাল প্রবলেম সলভিং সেশন",
+      feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+      description:
+        "ক্যালকুলাস, ভেক্টর, স্থানাঙ্ক জ্যামিতি, সম্ভাবনা ও অসীম ধারার মতো জটিল অধ্যায়গুলো ধাপে ধাপে অনুশীলন এবং ইঞ্জিনিয়ারিং/বিশ্ববিদ্যালয় প্রস্তুতির মজবুত ভিত্তি।",
+    },
+  ],
+
+  aboutTag: "আমাদের সম্পর্কে",
+  aboutTitle: "বিজ্ঞান পণ্ডিত একাডেমি",
+  aboutDescription:
+    "আমরা বিশ্বাস করি, সঠিক দিকনির্দেশনা ও মানসম্পন্ন শিক্ষার মাধ্যমে প্রতিটি শিক্ষার্থী তার স্বপ্ন পূরণ করতে পারে। আমাদের একাডেমিতে অভিজ্ঞ শিক্ষকমণ্ডলী, আধুনিক প্রযুক্তি এবং নিয়মিত মূল্যায়নের মাধ্যমে শিক্ষার্থীদের সর্বোচ্চ প্রস্তুতি নিশ্চিত করা হয়।",
+  aboutDetails:
+    "বিজ্ঞান পণ্ডিত একাডেমিতে প্রতিটি শিক্ষার্থীর উপস্থিতি ডিজিটালভাবে ট্র্যাক করা হয় এবং অভিভাবকদের কাছে নিয়মিত এসএমএস ও অনলাইন পোর্টালের মাধ্যমে ফলাফল পৌঁছে দেওয়া হয়। আমাদের রয়েছে নিজস্ব ডিজিটাল প্রকাশনী, অধ্যায়ভিত্তিক লেকচার শিট, সাপ্তাহিক ও মাসিক মডেল টেস্ট এবং দুর্বল শিক্ষার্থীদের জন্য ওয়ান-টু-ওয়ান কেয়ার সেশন।",
+  aboutBtnText: "আরও জানুন",
+  aboutImageUrl: "",
+  stats: [
+    { id: "st-1", value: "৫,০০০+", label: "সন্তুষ্ট শিক্ষার্থী", iconName: "users" },
+    { id: "st-2", value: "৫০+", label: "অভিজ্ঞ শিক্ষক", iconName: "graduation" },
+    { id: "st-3", value: "২০+", label: "বিষয়ভিত্তিক কোর্স", iconName: "book" },
+    { id: "st-4", value: "৯৮%", label: "সফলতার হার", iconName: "award" },
+  ],
+
+  noticesSectionTitle: "সাম্প্রতিক নোটিশ",
+  noticesViewAllText: "সব নোটিশ দেখুন",
+  notices: [
+    {
+      id: "nt-1",
+      day: "২৫",
+      month: "জুলাই",
+      title: "HSC 2026 ব্যাচের নতুন ক্লাস রুটিন প্রকাশ",
+      details:
+        "এইচএসসি ২০২৬ শিক্ষাবর্ষের পদার্থবিজ্ঞান, রসায়ন, উচ্চতর গণিত ও জীববিজ্ঞান বিষয়ের নতুন সাপ্তাহিক ক্লাস রুটিন প্রকাশ করা হয়েছে। শিক্ষার্থীরা পোর্টালে লগইন করে রুটিন দেখতে পারবে।",
+    },
+    {
+      id: "nt-2",
+      day: "২০",
+      month: "জুলাই",
+      title: "ভর্তি পরীক্ষার প্রস্তুতি কোর্সের রেজিস্ট্রেশন শুরু হয়েছে",
+      details:
+        "নতুন শিক্ষাবর্ষের একাডেমিক ও ভর্তি পরীক্ষার প্রস্তুতি কোর্সের রেজিস্ট্রেশন শুরু হয়েছে। সীমিত আসনে ভর্তি নিশ্চিত করতে দ্রুত অফিসে যোগাযোগ করুন।",
+    },
+    {
+      id: "nt-3",
+      day: "১৬",
+      month: "জুলাই",
+      title: "মাসিক পরীক্ষার সময়সূচী প্রকাশ",
+      details:
+        "সকল চলমান ব্যাচের মাসিক মূল্যায়ন পরীক্ষার রুটিন ও সিলেবাস প্রকাশ করা হয়েছে। নির্ধারিত সময়ে সকল শিক্ষার্থীকে পরীক্ষায় অংশগ্রহণের নির্দেশ দেওয়া হলো।",
+    },
+  ],
+
+  testimonialsSectionTitle: "শিক্ষার্থীদের মতামত",
+  testimonialsViewAllText: "সব মতামত দেখুন",
+  testimonials: [
+    {
+      id: "tm-1",
+      studentName: "আব্দুল্লাহ খান",
+      studentBatch: "HSC 2025, বিজ্ঞান বিভাগ",
+      comment:
+        "বিজ্ঞান পণ্ডিত একাডেমিতে পড়ে আমার পদার্থবিজ্ঞান ও রসায়নের প্রতি ভয় কেটে গেছে। শিক্ষকদের গাইডলাইন সত্যি অসাধারণ!",
+      rating: 5,
+      avatarUrl: "",
+    },
+    {
+      id: "tm-2",
+      studentName: "তাসনিম জাহান সারা",
+      studentBatch: "SSC 2025, বিজ্ঞান বিভাগ",
+      comment:
+        "নিয়মিত মডেল টেস্ট, ডিজিটাল নোটবুক এবং প্রতিটি অধ্যায়ের বেসিক ক্লিয়ার ক্লাসের কারণে বোর্ড পরীক্ষায় আমার আত্মবিশ্বাস অনেক বেড়েছে।",
+      rating: 5,
+      avatarUrl: "",
+    },
+    {
+      id: "tm-3",
+      studentName: "মাহমুদুল হাসান রাহাত",
+      studentBatch: "১০ম শ্রেণি, বিজ্ঞান বিভাগ",
+      comment:
+        "উচ্চতর গণিত ও পদার্থবিজ্ঞানের জটিল গাণিতিক সমস্যাগুলো স্যাররা এত সহজভাবে বুঝিয়ে দেন যা আগে কখনো পাইনি।",
+      rating: 5,
+      avatarUrl: "",
+    },
+  ],
+
+  footerTagline: "জ্ঞান  |  চর্চা  |  সাফল্য",
+  footerMotto: "শিক্ষায় জয়ে, জীবনে জয়ে",
+  copyrightText: "© 2025 বিজ্ঞান পণ্ডিত একাডেমি. সর্বস্বত্ব সংরক্ষিত।",
+  newsletterTitle: "নিউজলেটার",
+  newsletterSubtitle: "নতুন কোর্স ও আপডেট পেতে সাবস্ক্রাইব করুন",
+  newsletterPlaceholder: "আপনার ইমেইল লিখুন",
+  contactAddress: "ঢাকা, বাংলাদেশ",
+  contactPhone: "+880 1700-000000",
+  contactEmail: "info@bigganpandit.com",
   facebookUrl: "",
+  youtubeUrl: "",
+  instagramUrl: "",
+  telegramUrl: "",
 };
 
 export function parseLandingConfig(rawJson: string | null | undefined): LandingPageConfig {
@@ -206,27 +352,88 @@ export function parseLandingConfig(rawJson: string | null | undefined): LandingP
   }
   try {
     const parsed = JSON.parse(rawJson) as Partial<LandingPageConfig>;
+    // If stored config is from older schemaVersion, upgrade seamlessly to v2 defaults
+    if (parsed.schemaVersion !== 2) {
+      return DEFAULT_LANDING_CONFIG;
+    }
+
     return {
-      heroBadge: parsed.heroBadge ?? DEFAULT_LANDING_CONFIG.heroBadge,
-      heroTitle: parsed.heroTitle ?? DEFAULT_LANDING_CONFIG.heroTitle,
-      heroSubtitle: parsed.heroSubtitle ?? DEFAULT_LANDING_CONFIG.heroSubtitle,
-      admissionBanner: parsed.admissionBanner ?? DEFAULT_LANDING_CONFIG.admissionBanner,
-      coursesSectionTitle: parsed.coursesSectionTitle ?? DEFAULT_LANDING_CONFIG.coursesSectionTitle,
-      coursesSectionSubtitle:
-        parsed.coursesSectionSubtitle ?? DEFAULT_LANDING_CONFIG.coursesSectionSubtitle,
-      featuresSectionTitle:
-        parsed.featuresSectionTitle ?? DEFAULT_LANDING_CONFIG.featuresSectionTitle,
-      featuresSectionSubtitle:
-        parsed.featuresSectionSubtitle ?? DEFAULT_LANDING_CONFIG.featuresSectionSubtitle,
-      stats: Array.isArray(parsed.stats) ? parsed.stats : DEFAULT_LANDING_CONFIG.stats,
-      courses: Array.isArray(parsed.courses) ? parsed.courses : DEFAULT_LANDING_CONFIG.courses,
-      features: Array.isArray(parsed.features) ? parsed.features : DEFAULT_LANDING_CONFIG.features,
-      contactPhone: parsed.contactPhone ?? DEFAULT_LANDING_CONFIG.contactPhone,
-      contactPhoneAlt: parsed.contactPhoneAlt ?? DEFAULT_LANDING_CONFIG.contactPhoneAlt,
-      contactEmail: parsed.contactEmail ?? DEFAULT_LANDING_CONFIG.contactEmail,
+      schemaVersion: 2,
+      loginBtnText: parsed.loginBtnText ?? DEFAULT_LANDING_CONFIG.loginBtnText,
+      heroTagline: parsed.heroTagline ?? DEFAULT_LANDING_CONFIG.heroTagline,
+      heroTitleLine1: parsed.heroTitleLine1 ?? DEFAULT_LANDING_CONFIG.heroTitleLine1,
+      heroTitleLine2: parsed.heroTitleLine2 ?? DEFAULT_LANDING_CONFIG.heroTitleLine2,
+      heroSubtitleHeading:
+        parsed.heroSubtitleHeading ?? DEFAULT_LANDING_CONFIG.heroSubtitleHeading,
+      heroDescription: parsed.heroDescription ?? DEFAULT_LANDING_CONFIG.heroDescription,
+      heroQuote: parsed.heroQuote ?? DEFAULT_LANDING_CONFIG.heroQuote,
+      heroPrimaryBtnText:
+        parsed.heroPrimaryBtnText ?? DEFAULT_LANDING_CONFIG.heroPrimaryBtnText,
+      heroSecondaryBtnText:
+        parsed.heroSecondaryBtnText ?? DEFAULT_LANDING_CONFIG.heroSecondaryBtnText,
+      heroImageUrl: parsed.heroImageUrl ?? DEFAULT_LANDING_CONFIG.heroImageUrl,
+
+      features:
+        Array.isArray(parsed.features) && parsed.features.length > 0
+          ? parsed.features
+          : DEFAULT_LANDING_CONFIG.features,
+
+      coursesSectionTag:
+        parsed.coursesSectionTag ?? DEFAULT_LANDING_CONFIG.coursesSectionTag,
+      coursesSectionTitle:
+        parsed.coursesSectionTitle ?? DEFAULT_LANDING_CONFIG.coursesSectionTitle,
+      coursesViewAllText:
+        parsed.coursesViewAllText ?? DEFAULT_LANDING_CONFIG.coursesViewAllText,
+      courses:
+        Array.isArray(parsed.courses) && parsed.courses.length > 0
+          ? parsed.courses
+          : DEFAULT_LANDING_CONFIG.courses,
+
+      aboutTag: parsed.aboutTag ?? DEFAULT_LANDING_CONFIG.aboutTag,
+      aboutTitle: parsed.aboutTitle ?? DEFAULT_LANDING_CONFIG.aboutTitle,
+      aboutDescription: parsed.aboutDescription ?? DEFAULT_LANDING_CONFIG.aboutDescription,
+      aboutDetails: parsed.aboutDetails ?? DEFAULT_LANDING_CONFIG.aboutDetails,
+      aboutBtnText: parsed.aboutBtnText ?? DEFAULT_LANDING_CONFIG.aboutBtnText,
+      aboutImageUrl: parsed.aboutImageUrl ?? DEFAULT_LANDING_CONFIG.aboutImageUrl,
+      stats:
+        Array.isArray(parsed.stats) && parsed.stats.length > 0
+          ? parsed.stats
+          : DEFAULT_LANDING_CONFIG.stats,
+
+      noticesSectionTitle:
+        parsed.noticesSectionTitle ?? DEFAULT_LANDING_CONFIG.noticesSectionTitle,
+      noticesViewAllText:
+        parsed.noticesViewAllText ?? DEFAULT_LANDING_CONFIG.noticesViewAllText,
+      notices:
+        Array.isArray(parsed.notices) && parsed.notices.length > 0
+          ? parsed.notices
+          : DEFAULT_LANDING_CONFIG.notices,
+
+      testimonialsSectionTitle:
+        parsed.testimonialsSectionTitle ??
+        DEFAULT_LANDING_CONFIG.testimonialsSectionTitle,
+      testimonialsViewAllText:
+        parsed.testimonialsViewAllText ?? DEFAULT_LANDING_CONFIG.testimonialsViewAllText,
+      testimonials:
+        Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0
+          ? parsed.testimonials
+          : DEFAULT_LANDING_CONFIG.testimonials,
+
+      footerTagline: parsed.footerTagline ?? DEFAULT_LANDING_CONFIG.footerTagline,
+      footerMotto: parsed.footerMotto ?? DEFAULT_LANDING_CONFIG.footerMotto,
+      copyrightText: parsed.copyrightText ?? DEFAULT_LANDING_CONFIG.copyrightText,
+      newsletterTitle: parsed.newsletterTitle ?? DEFAULT_LANDING_CONFIG.newsletterTitle,
+      newsletterSubtitle:
+        parsed.newsletterSubtitle ?? DEFAULT_LANDING_CONFIG.newsletterSubtitle,
+      newsletterPlaceholder:
+        parsed.newsletterPlaceholder ?? DEFAULT_LANDING_CONFIG.newsletterPlaceholder,
       contactAddress: parsed.contactAddress ?? DEFAULT_LANDING_CONFIG.contactAddress,
-      officeHours: parsed.officeHours ?? DEFAULT_LANDING_CONFIG.officeHours,
+      contactPhone: parsed.contactPhone ?? DEFAULT_LANDING_CONFIG.contactPhone,
+      contactEmail: parsed.contactEmail ?? DEFAULT_LANDING_CONFIG.contactEmail,
       facebookUrl: parsed.facebookUrl ?? DEFAULT_LANDING_CONFIG.facebookUrl,
+      youtubeUrl: parsed.youtubeUrl ?? DEFAULT_LANDING_CONFIG.youtubeUrl,
+      instagramUrl: parsed.instagramUrl ?? DEFAULT_LANDING_CONFIG.instagramUrl,
+      telegramUrl: parsed.telegramUrl ?? DEFAULT_LANDING_CONFIG.telegramUrl,
     };
   } catch {
     return DEFAULT_LANDING_CONFIG;

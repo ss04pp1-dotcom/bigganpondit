@@ -1,119 +1,175 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import Link from "next/link";
 import {
   Save,
-  Loader2,
+  RotateCcw,
   Plus,
   Trash2,
   ArrowUp,
   ArrowDown,
-  Globe,
+  ExternalLink,
   BookOpen,
   Sparkles,
+  LayoutTemplate,
   Phone,
-  RotateCcw,
-  ExternalLink,
-  Layers,
-  Star,
+  CheckCircle2,
+  AlertCircle,
+  Bell,
+  MessageSquareQuote,
+  Info,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
 import type {
   LandingPageConfig,
   LandingCourse,
   LandingFeature,
   LandingStat,
+  LandingNotice,
+  LandingTestimonial,
+  CourseColorTheme,
+  CourseSymbolType,
 } from "@/lib/landing-config";
 
-const ICON_OPTIONS = [
-  { value: "bell", label: "🔔 নোটিফিকেশন / SMS" },
-  { value: "award", label: "🏆 ফলাফল / মেধা তালিকা" },
-  { value: "users", label: "👨‍🏫 শিক্ষক / শিক্ষার্থী" },
-  { value: "book", label: "📚 বই / লেকচার শিট" },
-  { value: "clock", label: "⏰ রুটিন / সময়সূচি" },
-  { value: "shield", label: "🛡️ নিরাপত্তা / পেমেন্ট" },
-  { value: "laptop", label: "💻 ডিজিটাল পোর্টাল" },
-  { value: "check", label: "✅ বিশেষ সুবিধা" },
+interface WebsiteEditorProps {
+  initialConfig: LandingPageConfig;
+}
+
+const FEATURE_ICON_OPTIONS = [
+  { value: "graduation", label: "গ্র্যাজুয়েশন ক্যাপ (শিক্ষক/একাডেমিক)" },
+  { value: "monitor", label: "মনিটর / স্মার্ট ক্লাস" },
+  { value: "users", label: "শিক্ষার্থী / গাইডেন্স" },
+  { value: "chart", label: "চার্ট / নিয়মিত মূল্যায়ন" },
+  { value: "book", label: "বই / ডিজিটাল রিসোর্স" },
+  { value: "shield", label: "শিল্ড / নির্ভরযোগ্য প্রতিষ্ঠান" },
+  { value: "award", label: "পদক / সাফল্য" },
 ];
 
-export function WebsiteEditor({ initialConfig }: { initialConfig: LandingPageConfig }) {
+const COURSE_THEME_OPTIONS: { value: CourseColorTheme; label: string }[] = [
+  { value: "blue", label: "নীল (পদার্থবিজ্ঞান থিম)" },
+  { value: "green", label: "সবুজ (রসায়ন থিম)" },
+  { value: "purple", label: "বেগুনি (গণিত থিম)" },
+  { value: "emerald", label: "গাঢ় সবুজ (জীববিজ্ঞান থিম)" },
+  { value: "orange", label: "কমলা (উচ্চতর গণিত থিম)" },
+];
+
+const COURSE_SYMBOL_OPTIONS: { value: CourseSymbolType; label: string }[] = [
+  { value: "atom", label: "⚛ পরমাণু (পদার্থবিজ্ঞান)" },
+  { value: "flask", label: "🧪 ল্যাব ফ্লাস্ক (রসায়ন)" },
+  { value: "pi", label: "π পাই (গণিত)" },
+  { value: "dna", label: "🧬 ডিএনএ (জীববিজ্ঞান)" },
+  { value: "sigma", label: "∑ সিগমা (উচ্চতর গণিত)" },
+  { value: "book", label: "📘 বই (সাধারণ কোর্স)" },
+];
+
+export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
   const [config, setConfig] = useState<LandingPageConfig>(initialConfig);
+  const [activeTab, setActiveTab] = useState<
+    "hero" | "features" | "courses" | "about" | "notices" | "footer"
+  >("courses");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [activeTab, setActiveTab] = useState<"courses" | "features" | "hero" | "contact">("courses");
-  const router = useRouter();
-  const { toast } = useToast();
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   async function handleSave() {
     setSaving(true);
+    setFeedback(null);
     try {
       const res = await fetch("/api/landing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({ config: { ...config, schemaVersion: 2 } }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        toast({ title: json.error ?? "সংরক্ষণ করা যায়নি।", variant: "destructive" });
-        return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        config?: LandingPageConfig;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "সংরক্ষণ করতে সমস্যা হয়েছে।");
       }
-      toast({ title: json.message ?? "ওয়েবসাইটের তথ্য সফলভাবে সংরক্ষিত হয়েছে!" });
-      router.refresh();
-    } catch {
-      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+      if (data.config) {
+        setConfig(data.config);
+      }
+      setFeedback({
+        type: "success",
+        text: data.message || "ওয়েবসাইটের সকল পরিবর্তন সফলভাবে সংরক্ষিত হয়েছে!",
+      });
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        text: (err as Error)?.message || "সংরক্ষণ ব্যর্থ হয়েছে।",
+      });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleResetDefault() {
-    if (!window.confirm("আপনি কি নিশ্চিত যে হোমপেজের সকল কোর্স ও ফিচার ডিফল্ট অবস্থায় ফিরিয়ে আনতে চান?")) {
+  async function handleReset() {
+    if (
+      !window.confirm(
+        "আপনি কি নিশ্চিত যে হোমপেজের সকল কোর্স, ফিচার ও ডিজাইন ডিফল্ট অবস্থায় ফিরিয়ে নিতে চান?"
+      )
+    ) {
       return;
     }
     setResetting(true);
+    setFeedback(null);
     try {
       const res = await fetch("/api/landing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToDefault: true }),
       });
-      const json = await res.json();
-      if (res.ok && json.ok && json.config) {
-        setConfig(json.config);
-        toast({ title: json.message ?? "ডিফল্ট তথ্য পুনরুদ্ধার করা হয়েছে।" });
-        router.refresh();
-      } else {
-        toast({ title: json.error ?? "রিসেট করা যায়নি।", variant: "destructive" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        config?: LandingPageConfig;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "রিসেট করতে সমস্যা হয়েছে।");
       }
-    } catch {
-      toast({ title: "সার্ভারে সমস্যা হয়েছে।", variant: "destructive" });
+      if (data.config) {
+        setConfig(data.config);
+      }
+      setFeedback({
+        type: "success",
+        text: data.message || "ডিফল্ট তথ্যে রিসেট করা হয়েছে।",
+      });
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        text: (err as Error)?.message || "রিসেট ব্যর্থ হয়েছে।",
+      });
     } finally {
       setResetting(false);
     }
   }
 
-  // Course helpers
+  // ---- Course helpers ----
   function addCourse() {
     const newCourse: LandingCourse = {
       id: `crs-${Date.now()}`,
-      title: "নতুন কোর্সের নাম লিখুন",
-      badge: "নতুন ব্যাচ",
-      targetClass: "৬ষ্ঠ - ১০ম শ্রেণি",
-      subjects: "পদার্থ, রসায়ন, গণিত ও জীববিজ্ঞান",
-      schedule: "সপ্তাহে ৬ দিন ক্লাস • সাপ্তাহিক পরীক্ষা",
+      title: "নতুন বিষয় / কোর্স",
+      subtitle: "কোর্সের সংক্ষিপ্ত স্লোগান এখানে লিখুন",
+      symbol: "book",
+      colorTheme: "blue",
+      bullet1: "ক্লাস: ৪০+",
+      bullet2: "মডেল টেস্ট: ২০+",
+      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
+      buttonText: "বিস্তারিত দেখুন",
+      imageUrl: "",
+      targetClass: "৯ম-১০ম ও এইচএসসি",
+      schedule: "সপ্তাহে ৪ দিন ক্লাস",
       feeLabel: "ভর্তি চলছে",
-      description: "এই কোর্সের সংক্ষিপ্ত বিবরণ ও সুবিধাসমূহ এখানে লিখুন।",
-      highlight: false,
+      description: "কোর্সের বিস্তারিত বিবরণ এখানে লিখুন...",
     };
-    setConfig((prev) => ({
-      ...prev,
-      courses: [newCourse, ...prev.courses],
-    }));
+    setConfig((prev) => ({ ...prev, courses: [...prev.courses, newCourse] }));
   }
 
   function updateCourse(idx: number, patch: Partial<LandingCourse>) {
@@ -143,19 +199,15 @@ export function WebsiteEditor({ initialConfig }: { initialConfig: LandingPageCon
     });
   }
 
-  // Feature helpers
+  // ---- Feature helpers ----
   function addFeature() {
     const newFeat: LandingFeature = {
       id: `feat-${Date.now()}`,
-      title: "নতুন বৈশিষ্ট্যের শিরোনাম",
-      badge: "বিশেষ সুবিধা",
-      description: "এই বৈশিষ্ট্যের বিস্তারিত বিবরণ এখানে লিখুন।",
-      iconName: "check",
+      title: "নতুন বৈশিষ্ট্য",
+      description: "সংক্ষিপ্ত বিবরণ লিখুন",
+      iconName: "graduation",
     };
-    setConfig((prev) => ({
-      ...prev,
-      features: [newFeat, ...prev.features],
-    }));
+    setConfig((prev) => ({ ...prev, features: [...prev.features, newFeat] }));
   }
 
   function updateFeature(idx: number, patch: Partial<LandingFeature>) {
@@ -173,29 +225,15 @@ export function WebsiteEditor({ initialConfig }: { initialConfig: LandingPageCon
     }));
   }
 
-  function moveFeature(idx: number, dir: -1 | 1) {
-    setConfig((prev) => {
-      const next = [...prev.features];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      const temp = next[idx];
-      next[idx] = next[target];
-      next[target] = temp;
-      return { ...prev, features: next };
-    });
-  }
-
-  // Stat helpers
+  // ---- Stat helpers ----
   function addStat() {
     const newStat: LandingStat = {
       id: `st-${Date.now()}`,
-      value: "১০০%",
+      value: "১০০+",
       label: "নতুন পরিসংখ্যান",
+      iconName: "award",
     };
-    setConfig((prev) => ({
-      ...prev,
-      stats: [...prev.stats, newStat],
-    }));
+    setConfig((prev) => ({ ...prev, stats: [...prev.stats, newStat] }));
   }
 
   function updateStat(idx: number, patch: Partial<LandingStat>) {
@@ -213,625 +251,1248 @@ export function WebsiteEditor({ initialConfig }: { initialConfig: LandingPageCon
     }));
   }
 
+  // ---- Notice helpers ----
+  function addNotice() {
+    const newNotice: LandingNotice = {
+      id: `nt-${Date.now()}`,
+      day: "২৮",
+      month: "জুলাই",
+      title: "নতুন নোটিশের শিরোনাম লিখুন",
+      details: "নোটিশের বিস্তারিত বিবরণ এখানে লিখুন...",
+    };
+    setConfig((prev) => ({ ...prev, notices: [newNotice, ...prev.notices] }));
+  }
+
+  function updateNotice(idx: number, patch: Partial<LandingNotice>) {
+    setConfig((prev) => {
+      const next = [...prev.notices];
+      next[idx] = { ...next[idx], ...patch };
+      return { ...prev, notices: next };
+    });
+  }
+
+  function removeNotice(idx: number) {
+    setConfig((prev) => ({
+      ...prev,
+      notices: prev.notices.filter((_, i) => i !== idx),
+    }));
+  }
+
+  // ---- Testimonial helpers ----
+  function addTestimonial() {
+    const newTm: LandingTestimonial = {
+      id: `tm-${Date.now()}`,
+      studentName: "শিক্ষার্থীর নাম",
+      studentBatch: "HSC 2025, বিজ্ঞান বিভাগ",
+      comment: "একাডেমি সম্পর্কে শিক্ষার্থীর মতামত এখানে লিখুন...",
+      rating: 5,
+      avatarUrl: "",
+    };
+    setConfig((prev) => ({
+      ...prev,
+      testimonials: [...prev.testimonials, newTm],
+    }));
+  }
+
+  function updateTestimonial(idx: number, patch: Partial<LandingTestimonial>) {
+    setConfig((prev) => {
+      const next = [...prev.testimonials];
+      next[idx] = { ...next[idx], ...patch };
+      return { ...prev, testimonials: next };
+    });
+  }
+
+  function removeTestimonial(idx: number) {
+    setConfig((prev) => ({
+      ...prev,
+      testimonials: prev.testimonials.filter((_, i) => i !== idx),
+    }));
+  }
+
   return (
     <div className="space-y-5">
       {/* Top Action Bar */}
-      <Card className="border-blue-200 bg-gradient-to-r from-blue-50/80 via-white to-cyan-50/60 shadow-xs">
-        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-blue-950 font-bold text-base sm:text-lg">
-              <Globe className="h-5 w-5 text-blue-600" />
-              <span>পাবলিক ওয়েবসাইট, কোর্স ও ফিচার কাস্টমাইজেশন</span>
-            </div>
-            <p className="text-xs text-slate-600">
-              ওয়েবসাইটের মূল পাতায় প্রদর্শিত সকল কোর্স, বৈশিষ্ট্য, ব্যানার ও যোগাযোগের তথ্য এখান থেকে পরিবর্তন, সংযোজন বা মুছে ফেলতে পারবেন।
-            </p>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("courses")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "courses"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>কোর্সসমূহ ({config.courses.length})</span>
+          </button>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
-            <a
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-2xs transition"
-            >
-              <ExternalLink className="h-3.5 w-3.5 text-blue-600" />
-              <span>ওয়েবসাইট দেখুন</span>
-            </a>
+          <button
+            type="button"
+            onClick={() => setActiveTab("hero")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "hero"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <LayoutTemplate className="h-3.5 w-3.5" />
+            <span>হিরো ব্যানার ও হেডার</span>
+          </button>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResetDefault}
-              disabled={resetting || saving}
-              className="h-10 gap-1.5 text-xs border-amber-300 text-amber-800 hover:bg-amber-50"
-            >
-              {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              ডিফল্ট রিসেট
-            </Button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("features")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "features"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>৬টি মূল বৈশিষ্ট্য ({config.features.length})</span>
+          </button>
 
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="h-10 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm px-5"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              সব পরিবর্তন সংরক্ষণ করুন
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          <button
+            type="button"
+            onClick={() => setActiveTab("about")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "about"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Info className="h-3.5 w-3.5" />
+            <span>আমাদের সম্পর্কে ও পরিসংখ্যান</span>
+          </button>
 
-      {/* Section Navigation Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveTab("courses")}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            activeTab === "courses"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <Layers className="h-4 w-4" />
-          <span>কোর্সসমূহ ({config.courses.length})</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notices")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "notices"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            <span>নোটিশ ও মতামত</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("features")}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            activeTab === "features"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <Sparkles className="h-4 w-4" />
-          <span>বৈশিষ্ট্যসমূহ ({config.features.length})</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("footer")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+              activeTab === "footer"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Phone className="h-3.5 w-3.5" />
+            <span>ফুটার ও যোগাযোগ</span>
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("hero")}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            activeTab === "hero"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <BookOpen className="h-4 w-4" />
-          <span>হিরো ব্যানার ও পরিসংখ্যান</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            target="_blank"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-muted transition"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>লাইভ ওয়েবসাইট দেখুন</span>
+          </Link>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("contact")}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            activeTab === "contact"
-              ? "bg-blue-600 text-white shadow-sm"
-              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <Phone className="h-4 w-4" />
-          <span>যোগাযোগ ও ঠিকানা</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={resetting || saving}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>{resetting ? "রিসেট হচ্ছে..." : "ডিফল্ট রিসেট"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 disabled:opacity-50 transition"
+          >
+            <Save className="h-3.5 w-3.5" />
+            <span>{saving ? "সংরক্ষণ হচ্ছে..." : "পরিবর্তন সংরক্ষণ করুন"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* TAB 1: COURSES MANAGER */}
+      {/* Feedback Banner */}
+      {feedback && (
+        <div
+          className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs font-semibold ${
+            feedback.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : "border-red-200 bg-red-50 text-red-900"
+          }`}
+        >
+          {feedback.type === "success" ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          ) : (
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+          )}
+          <span>{feedback.text}</span>
+        </div>
+      )}
+
+      {/* ==================== TAB: SUBJECT COURSES ==================== */}
       {activeTab === "courses" && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">কোর্স সেকশনের শিরোনাম</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <CardTitle className="text-[16px] flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-blue-600" />
-                  কোর্স সেকশন শিরোনাম ও তালিকা
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  যেকোনো কোর্স এডিট করুন, নতুন কোর্স যোগ করুন অথবা অপ্রয়োজনীয় কোর্স মুছে ফেলুন।
-                </CardDescription>
+                <label className="block text-xs font-semibold mb-1">
+                  উপরের ছোট ট্যাগ
+                </label>
+                <input
+                  type="text"
+                  value={config.coursesSectionTag}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, coursesSectionTag: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                />
               </div>
-              <Button
-                type="button"
-                onClick={addCourse}
-                className="h-10 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
-              >
-                <Plus className="h-4 w-4" />
-                নতুন কোর্স যুক্ত করুন
-              </Button>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">কোর্স সেকশনের প্রধান শিরোনাম</Label>
-                  <Input
-                    value={config.coursesSectionTitle}
-                    onChange={(e) =>
-                      setConfig({ ...config, coursesSectionTitle: e.target.value })
-                    }
-                    placeholder="আমাদের চলমান কোর্স ও ব্যাচসমূহ"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">কোর্স সেকশনের সাবটাইটেল</Label>
-                  <Input
-                    value={config.coursesSectionSubtitle}
-                    onChange={(e) =>
-                      setConfig({ ...config, coursesSectionSubtitle: e.target.value })
-                    }
-                    placeholder="শিক্ষার্থীদের মেধা ও শ্রেণি অনুযায়ী বিশেষভাবে সাজানো..."
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  মূল শিরোনাম
+                </label>
+                <input
+                  type="text"
+                  value={config.coursesSectionTitle}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, coursesSectionTitle: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  ডানপাশের বাটন টেক্সট
+                </label>
+                <input
+                  type="text"
+                  value={config.coursesViewAllText}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, coursesViewAllText: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold">
+              বিষয়ভিত্তিক কোর্স কার্ডসমূহ ({config.courses.length}টি)
+            </h2>
+            <button
+              type="button"
+              onClick={addCourse}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>নতুন কোর্স যুক্ত করুন</span>
+            </button>
+          </div>
 
           <div className="space-y-4">
             {config.courses.map((course, idx) => (
-              <Card
+              <div
                 key={course.id}
-                className={`border ${
-                  course.highlight ? "border-blue-400 bg-blue-50/15" : "border-slate-200"
-                }`}
+                className="rounded-xl border border-border bg-card p-4 shadow-2xs space-y-3"
               >
-                <CardHeader className="border-b border-slate-100 py-3 px-4 flex flex-row items-center justify-between gap-2 bg-slate-50/60">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">
+                <div className="flex items-center justify-between border-b border-border pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       {idx + 1}
                     </span>
-                    <span className="font-bold text-sm text-slate-800 truncate">
-                      {course.title || "কোর্স"}
-                    </span>
+                    <h3 className="text-sm font-bold">{course.title}</h3>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md cursor-pointer mr-1">
-                      <input
-                        type="checkbox"
-                        checked={!!course.highlight}
-                        onChange={(e) =>
-                          updateCourse(idx, { highlight: e.target.checked })
-                        }
-                        className="rounded border-blue-300"
-                      />
-                      <Star className="h-3.5 w-3.5 fill-blue-600 text-blue-600" />
-                      <span>হাইলাইট</span>
-                    </label>
-
-                    <Button
+                  <div className="flex items-center gap-1.5">
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={idx === 0}
                       onClick={() => moveCourse(idx, -1)}
-                      title="উপরে তুলুন"
+                      disabled={idx === 0}
+                      className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      title="উপরে নিন"
                     >
                       <ArrowUp className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={idx === config.courses.length - 1}
                       onClick={() => moveCourse(idx, 1)}
-                      title="নিচে নামান"
+                      disabled={idx === config.courses.length - 1}
+                      className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      title="নিচে নিন"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 border-rose-200 text-rose-600 hover:bg-rose-50"
                       onClick={() => removeCourse(idx)}
+                      className="rounded border border-red-200 bg-red-50 p-1 text-red-600 hover:bg-red-100"
                       title="মুছে ফেলুন"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
                   </div>
-                </CardHeader>
+                </div>
 
-                <CardContent className="p-4 space-y-4">
-                  <div className="grid gap-3.5 sm:grid-cols-3">
-                    <div className="sm:col-span-2 space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">কোর্সের নাম / শিরোনাম</Label>
-                      <Input
-                        value={course.title}
-                        onChange={(e) => updateCourse(idx, { title: e.target.value })}
-                        placeholder="যেমন: নবম ও দশম শ্রেণি — বিজ্ঞান বিভাগ"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">ব্যাজ / ট্যাগ</Label>
-                      <Input
-                        value={course.badge}
-                        onChange={(e) => updateCourse(idx, { badge: e.target.value })}
-                        placeholder="যেমন: সবচেয়ে জনপ্রিয় / এসএসসি স্পেশাল"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3.5 sm:grid-cols-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">শ্রেণি / টার্গেট ব্যাচ</Label>
-                      <Input
-                        value={course.targetClass}
-                        onChange={(e) => updateCourse(idx, { targetClass: e.target.value })}
-                        placeholder="যেমন: ৯ম ও ১০ম শ্রেণি (বিজ্ঞান)"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">সময়সূচি / পরীক্ষার তথ্য</Label>
-                      <Input
-                        value={course.schedule}
-                        onChange={(e) => updateCourse(idx, { schedule: e.target.value })}
-                        placeholder="যেমন: সপ্তাহে ৬ দিন ক্লাস • সাপ্তাহিক পরীক্ষা"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">ফি / ভর্তি স্ট্যাটাস</Label>
-                      <Input
-                        value={course.feeLabel}
-                        onChange={(e) => updateCourse(idx, { feeLabel: e.target.value })}
-                        placeholder="যেমন: মাসিক বেতন ১৫০০ টাকা / ভর্তি চলছে"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-slate-700">পড়ানো বিষয়সমূহ (Subjects)</Label>
-                    <Input
-                      value={course.subjects}
-                      onChange={(e) => updateCourse(idx, { subjects: e.target.value })}
-                      placeholder="যেমন: পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান, উচ্চতর গণিত ও সাধারণ গণিত"
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বিষয়ের নাম / শিরোনাম
+                    </label>
+                    <input
+                      type="text"
+                      value={course.title}
+                      onChange={(e) => updateCourse(idx, { title: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
                     />
                   </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-slate-700">কোর্সের বিস্তারিত বিবরণ</Label>
-                    <textarea
-                      value={course.description}
-                      onChange={(e) => updateCourse(idx, { description: e.target.value })}
-                      rows={2}
-                      className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="কোর্স সম্পর্কে বিস্তারিত লিখুন..."
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      সংক্ষিপ্ত স্লোগান (Subtitle)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.subtitle}
+                      onChange={(e) => updateCourse(idx, { subtitle: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
                     />
                   </div>
-                </CardContent>
-              </Card>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      কার্ডের রঙের থিম
+                    </label>
+                    <select
+                      value={course.colorTheme}
+                      onChange={(e) =>
+                        updateCourse(idx, {
+                          colorTheme: e.target.value as CourseColorTheme,
+                        })
+                      }
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    >
+                      {COURSE_THEME_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বিষয়ের আইকন প্রতীক
+                    </label>
+                    <select
+                      value={course.symbol}
+                      onChange={(e) =>
+                        updateCourse(idx, {
+                          symbol: e.target.value as CourseSymbolType,
+                        })
+                      }
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    >
+                      {COURSE_SYMBOL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 3 Bullet Points & Button Text */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বুলেট পয়েন্ট ১ (যেমন: ক্লাস সংখ্যা)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.bullet1}
+                      onChange={(e) => updateCourse(idx, { bullet1: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বুলেট পয়েন্ট ২ (যেমন: মডেল টেস্ট)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.bullet2}
+                      onChange={(e) => updateCourse(idx, { bullet2: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বুলেট পয়েন্ট ৩ (যেমন: প্রস্তুতির ধরন)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.bullet3}
+                      onChange={(e) => updateCourse(idx, { bullet3: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      বাটনের লেখা
+                    </label>
+                    <input
+                      type="text"
+                      value={course.buttonText}
+                      onChange={(e) =>
+                        updateCourse(idx, { buttonText: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Custom Image + Modal Info */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      কাস্টম ব্যানার ছবি URL (ঐচ্ছিক)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.imageUrl || ""}
+                      onChange={(e) => updateCourse(idx, { imageUrl: e.target.value })}
+                      placeholder="খালি রাখলে ডিফল্ট গ্রাফিক্স দেখাবে"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      শ্রেণি / টার্গেট ব্যাচ (পপ-আপে দেখাবে)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.targetClass}
+                      onChange={(e) =>
+                        updateCourse(idx, { targetClass: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      ক্লাস শিডিউল (পপ-আপে দেখাবে)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.schedule}
+                      onChange={(e) => updateCourse(idx, { schedule: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      কোর্স ফি তথ্য (পপ-আপে দেখাবে)
+                    </label>
+                    <input
+                      type="text"
+                      value={course.feeLabel}
+                      onChange={(e) => updateCourse(idx, { feeLabel: e.target.value })}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    বিস্তারিত বিবরণ ("বিস্তারিত দেখুন" বাটনে ক্লিক করলে দেখাবে)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={course.description}
+                    onChange={(e) =>
+                      updateCourse(idx, { description: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* TAB 2: FEATURES MANAGER */}
+      {/* ==================== TAB: HERO & HEADER ==================== */}
+      {activeTab === "hero" && (
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <h2 className="text-sm font-bold">হিরো ব্যানার ও উপরের নেভিগেশন বার</h2>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                উপরের ট্যাগলাইন (যেমন: স্বপ্ন দেখো • প্রস্তুতি নাও • সফল হও)
+              </label>
+              <input
+                type="text"
+                value={config.heroTagline}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroTagline: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                উপরের ডানপাশের লগইন বাটন টেক্সট
+              </label>
+              <input
+                type="text"
+                value={config.loginBtnText}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, loginBtnText: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                প্রধান শিরোনাম ১ম অংশ (সাদা রঙের লেখা)
+              </label>
+              <input
+                type="text"
+                value={config.heroTitleLine1}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroTitleLine1: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                প্রধান শিরোনাম ২য় অংশ (সবুজ রঙের লেখা)
+              </label>
+              <input
+                type="text"
+                value={config.heroTitleLine2}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroTitleLine2: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                সাব-হেডিং (যেমন: বিজ্ঞানভিত্তিক শিক্ষা, উজ্জ্বল ভবিষ্যৎ)
+              </label>
+              <input
+                type="text"
+                value={config.heroSubtitleHeading}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroSubtitleHeading: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ডানপাশের অনুপ্রেরণামূলক উক্তি (যেমন: “জ্ঞানই সফলতার চাবিকাঠি”)
+              </label>
+              <input
+                type="text"
+                value={config.heroQuote}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroQuote: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">
+              হিরো ব্যানারের মূল বিবরণ
+            </label>
+            <textarea
+              rows={3}
+              value={config.heroDescription}
+              onChange={(e) =>
+                setConfig((p) => ({ ...p, heroDescription: e.target.value }))
+              }
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                প্রথম বাটন টেক্সট (সবুজ বাটন)
+              </label>
+              <input
+                type="text"
+                value={config.heroPrimaryBtnText}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroPrimaryBtnText: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                দ্বিতীয় বাটন টেক্সট (প্লে বাটন)
+              </label>
+              <input
+                type="text"
+                value={config.heroSecondaryBtnText}
+                onChange={(e) =>
+                  setConfig((p) => ({
+                    ...p,
+                    heroSecondaryBtnText: e.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                হিরো ব্যানারের কাস্টম ছবি URL (ঐচ্ছিক)
+              </label>
+              <input
+                type="text"
+                value={config.heroImageUrl}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, heroImageUrl: e.target.value }))
+                }
+                placeholder="খালি রাখলে ডিফল্ট বই ও গ্রাফিক্স দেখাবে"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: 6 FEATURES STRIP ==================== */}
       {activeTab === "features" && (
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <CardTitle className="text-[16px] flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-emerald-600" />
-                  বৈশিষ্ট্য সেকশন ও তালিকা
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  একাডেমির বিশেষ সুবিধা ও ডিজিটাল ফিচারগুলো এখান থেকে কাস্টমাইজ করুন।
-                </CardDescription>
-              </div>
-              <Button
-                type="button"
-                onClick={addFeature}
-                className="h-10 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0"
-              >
-                <Plus className="h-4 w-4" />
-                নতুন বৈশিষ্ট্য যুক্ত করুন
-              </Button>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">বৈশিষ্ট্য সেকশনের শিরোনাম</Label>
-                  <Input
-                    value={config.featuresSectionTitle}
-                    onChange={(e) =>
-                      setConfig({ ...config, featuresSectionTitle: e.target.value })
-                    }
-                    placeholder="আমাদের বিশেষ বৈশিষ্ট্য ও ডিজিটাল সুবিধাসমূহ"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">বৈশিষ্ট্য সেকশনের সাবটাইটেল</Label>
-                  <Input
-                    value={config.featuresSectionSubtitle}
-                    onChange={(e) =>
-                      setConfig({ ...config, featuresSectionSubtitle: e.target.value })
-                    }
-                    placeholder="পড়াশোনার পাশাপাশি আধুনিক প্রযুক্তির সাহায্যে..."
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold">
+                হিরো ব্যানারের নিচের ৬টি মূল বৈশিষ্ট্য ({config.features.length}টি)
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                হিরো ব্যানারের ঠিক নিচে সাদা স্ট্রিপে যে ৬টি বিশেষ বৈশিষ্ট্য দেখানো হয়
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addFeature}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>নতুন বৈশিষ্ট্য</span>
+            </button>
+          </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {config.features.map((feat, idx) => (
-              <Card key={feat.id} className="border-slate-200">
-                <CardHeader className="border-b border-slate-100 py-3 px-4 flex flex-row items-center justify-between gap-2 bg-slate-50/60">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">
-                      {idx + 1}
-                    </span>
-                    <span className="font-bold text-sm text-slate-800 truncate">
-                      {feat.title || "বৈশিষ্ট্য"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={idx === 0}
-                      onClick={() => moveFeature(idx, -1)}
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7"
-                      disabled={idx === config.features.length - 1}
-                      onClick={() => moveFeature(idx, 1)}
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7 border-rose-200 text-rose-600 hover:bg-rose-50"
-                      onClick={() => removeFeature(idx)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </CardHeader>
+              <div
+                key={feat.id}
+                className="rounded-xl border border-border bg-card p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary">
+                    বৈশিষ্ট্য #{idx + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeFeature(idx)}
+                    className="rounded p-1 text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
 
-                <CardContent className="p-4 space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-slate-700">বৈশিষ্ট্যের শিরোনাম</Label>
-                    <Input
-                      value={feat.title}
-                      onChange={(e) => updateFeature(idx, { title: e.target.value })}
-                      placeholder="যেমন: ডিজিটাল হাজিরা ও SMS অ্যালার্ট"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    শিরোনাম
+                  </label>
+                  <input
+                    type="text"
+                    value={feat.title}
+                    onChange={(e) => updateFeature(idx, { title: e.target.value })}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
+                  />
+                </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">ছোট ব্যাজ / ট্যাগ</Label>
-                      <Input
-                        value={feat.badge}
-                        onChange={(e) => updateFeature(idx, { badge: e.target.value })}
-                        placeholder="যেমন: স্মার্ট ট্র্যাকিং"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">আইকন স্টাইল</Label>
-                      <select
-                        value={feat.iconName}
-                        onChange={(e) => updateFeature(idx, { iconName: e.target.value })}
-                        className="h-9 w-full rounded-md border border-input bg-white px-3 text-xs font-medium shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        {ICON_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    সংক্ষিপ্ত বিবরণ
+                  </label>
+                  <input
+                    type="text"
+                    value={feat.description}
+                    onChange={(e) =>
+                      updateFeature(idx, { description: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                  />
+                </div>
 
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-slate-700">বিস্তারিত বিবরণ</Label>
-                    <textarea
-                      value={feat.description}
-                      onChange={(e) => updateFeature(idx, { description: e.target.value })}
-                      rows={3}
-                      className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">আইকন</label>
+                  <select
+                    value={feat.iconName}
+                    onChange={(e) =>
+                      updateFeature(idx, { iconName: e.target.value })
+                    }
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                  >
+                    {FEATURE_ICON_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* TAB 3: HERO BANNER & STATS */}
-      {activeTab === "hero" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-[16px]">হিরো সেকশন ও ভর্তি বিজ্ঞপ্তি ব্যানার</CardTitle>
-              <CardDescription className="text-xs">
-                ওয়েবসাইটে ঢুকলেই সবার উপরে যে প্রধান শিরোনাম ও ভর্তি বিজ্ঞপ্তি দেখা যায় তা এখান থেকে পরিবর্তন করুন।
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">ভর্তি বিজ্ঞপ্তি টপ বার (খালি রাখলে দেখাবে না)</Label>
-                <Input
-                  value={config.admissionBanner}
-                  onChange={(e) => setConfig({ ...config, admissionBanner: e.target.value })}
-                  placeholder="নতুন শিক্ষাবর্ষে ৬ষ্ঠ থেকে ১০ম শ্রেণি এবং এসএসসি স্পেশাল ব্যাচে ভর্তি চলছে!"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">হিরো ব্যাজ (উপরের ছোট ট্যাগ)</Label>
-                <Input
-                  value={config.heroBadge}
-                  onChange={(e) => setConfig({ ...config, heroBadge: e.target.value })}
-                  placeholder="ভর্তি চলছে • একাডেমিক ও স্পেশাল ব্যাচ"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">হিরো মূল শিরোনাম (Main Heading)</Label>
-                <Input
-                  value={config.heroTitle}
-                  onChange={(e) => setConfig({ ...config, heroTitle: e.target.value })}
-                  placeholder="বিজ্ঞান ও গণিতের ভীতি দূর করে কাঙ্ক্ষিত সাফল্যের বিশ্বস্ত ঠিকানা"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">হিরো সাবটাইটেল / সংক্ষিপ্ত পরিচিতি</Label>
-                <textarea
-                  value={config.heroSubtitle}
-                  onChange={(e) => setConfig({ ...config, heroSubtitle: e.target.value })}
-                  rows={3}
-                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b border-slate-100 pb-3 flex flex-row items-center justify-between">
+      {/* ==================== TAB: ABOUT US & 2x2 STATS ==================== */}
+      {activeTab === "about" && (
+        <div className="space-y-5">
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <h2 className="text-sm font-bold">আমাদের সম্পর্কে (About Us) সেকশন</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <CardTitle className="text-[16px]">পরিসংখ্যান / হাইলাইটস কাউন্টার</CardTitle>
-                <CardDescription className="text-xs">
-                  হিরো ব্যানারের নিচে প্রদর্শিত ৪টি সংক্ষিপ্ত তথ্য কার্ড।
-                </CardDescription>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={addStat}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                যোগ করুন
-              </Button>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {config.stats.map((st, idx) => (
-                  <div
-                    key={st.id}
-                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500">কার্ড #{idx + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeStat(idx)}
-                        className="text-rose-500 hover:text-rose-700 p-1"
-                        title="মুছুন"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">সংখ্যা / হাইলাইট</Label>
-                      <Input
-                        value={st.value}
-                        onChange={(e) => updateStat(idx, { value: e.target.value })}
-                        placeholder="যেমন: ১০০%"
-                        className="h-9 text-xs font-bold"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-[11px]">বিবরণ লেবেল</Label>
-                      <Input
-                        value={st.label}
-                        onChange={(e) => updateStat(idx, { label: e.target.value })}
-                        placeholder="যেমন: ডিজিটাল হাজিরা"
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* TAB 4: CONTACT & FOOTER INFO */}
-      {activeTab === "contact" && (
-        <Card>
-          <CardHeader className="border-b border-slate-100 pb-3">
-            <CardTitle className="text-[16px]">যোগাযোগ ও ভর্তি অফিসের তথ্য</CardTitle>
-            <CardDescription className="text-xs">
-              ওয়েবসাইটের নিচের অংশে প্রদর্শিত ফোন নম্বর, ঠিকানা ও অফিসের সময়সূচি পরিবর্তন করুন।
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">প্রধান মোবাইল / হেল্পলাইন নম্বর</Label>
-                <Input
-                  value={config.contactPhone}
-                  onChange={(e) => setConfig({ ...config, contactPhone: e.target.value })}
-                  placeholder="01700-000000"
+                <label className="block text-xs font-semibold mb-1">
+                  উপরের ছোট ট্যাগ
+                </label>
+                <input
+                  type="text"
+                  value={config.aboutTag}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, aboutTag: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">বিকল্প মোবাইল নম্বর (ঐচ্ছিক)</Label>
-                <Input
-                  value={config.contactPhoneAlt}
-                  onChange={(e) => setConfig({ ...config, contactPhoneAlt: e.target.value })}
-                  placeholder="01800-000000"
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  শিরোনাম
+                </label>
+                <input
+                  type="text"
+                  value={config.aboutTitle}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, aboutTitle: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">ইমেইল ঠিকানা</Label>
-                <Input
-                  value={config.contactEmail}
-                  onChange={(e) => setConfig({ ...config, contactEmail: e.target.value })}
-                  placeholder="info@bigganpondit.com"
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  বাটনের লেখা
+                </label>
+                <input
+                  type="text"
+                  value={config.aboutBtnText}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, aboutBtnText: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">অফিস ও ক্লাসের সময়সূচি</Label>
-                <Input
-                  value={config.officeHours}
-                  onChange={(e) => setConfig({ ...config, officeHours: e.target.value })}
-                  placeholder="শনিবার – বৃহস্পতিবার (সকাল ৮:০০টা – রাত ৮:০০টা)"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs font-semibold">একাডেমি ক্যাম্পাসের ঠিকানা</Label>
-                <Input
-                  value={config.contactAddress}
-                  onChange={(e) => setConfig({ ...config, contactAddress: e.target.value })}
-                  placeholder="বিজ্ঞান পণ্ডিত একাডেমি ক্যাম্পাস, মেইন রোড..."
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  বামপাশের কাস্টম ছবি URL (ঐচ্ছিক)
+                </label>
+                <input
+                  type="text"
+                  value={config.aboutImageUrl}
+                  onChange={(e) =>
+                    setConfig((p) => ({ ...p, aboutImageUrl: e.target.value }))
+                  }
+                  placeholder="খালি রাখলে Dream Learn Achieve গ্রাফিক্স দেখাবে"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                সংক্ষিপ্ত বিবরণ (হোমপেজে দেখাবে)
+              </label>
+              <textarea
+                rows={3}
+                value={config.aboutDescription}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, aboutDescription: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                অতিরিক্ত বিস্তারিত বিবরণ ("আরও জানুন" বাটনে ক্লিক করলে দেখাবে)
+              </label>
+              <textarea
+                rows={3}
+                value={config.aboutDetails}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, aboutDetails: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+          </div>
+
+          {/* 2x2 Stats Grid Editor */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold">
+                ডানপাশের পরিসংখ্যান বক্স ({config.stats.length}টি)
+              </h2>
+              <button
+                type="button"
+                onClick={addStat}
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>নতুন কার্ড</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {config.stats.map((st, idx) => (
+                <div
+                  key={st.id}
+                  className="rounded-lg border border-border bg-background p-3 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-muted-foreground">
+                      পরিসংখ্যান #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeStat(idx)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      সংখ্যা (যেমন: ৫,০০০+)
+                    </label>
+                    <input
+                      type="text"
+                      value={st.value}
+                      onChange={(e) => updateStat(idx, { value: e.target.value })}
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      লেবেল (যেমন: সন্তুষ্ট শিক্ষার্থী)
+                    </label>
+                    <input
+                      type="text"
+                      value={st.label}
+                      onChange={(e) => updateStat(idx, { label: e.target.value })}
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Bottom Sticky / Floating Save Bar */}
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="h-11 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 shadow-md"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          সব পরিবর্তন সংরক্ষণ করুন
-        </Button>
-      </div>
+      {/* ==================== TAB: NOTICES & TESTIMONIALS ==================== */}
+      {activeTab === "notices" && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Left: Recent Notices */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-emerald-600" />
+                <h2 className="text-sm font-bold">
+                  সাম্প্রতিক নোটিশ ({config.notices.length}টি)
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={addNotice}
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>নতুন নোটিশ</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  সেকশন শিরোনাম
+                </label>
+                <input
+                  type="text"
+                  value={config.noticesSectionTitle}
+                  onChange={(e) =>
+                    setConfig((p) => ({
+                      ...p,
+                      noticesSectionTitle: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  ডানপাশের বাটন টেক্সট
+                </label>
+                <input
+                  type="text"
+                  value={config.noticesViewAllText}
+                  onChange={(e) =>
+                    setConfig((p) => ({
+                      ...p,
+                      noticesViewAllText: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {config.notices.map((nt, idx) => (
+                <div
+                  key={nt.id}
+                  className="rounded-lg border border-border bg-background p-3 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-700">
+                      নোটিশ #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeNotice(idx)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-0.5">
+                        তারিখ (দিন)
+                      </label>
+                      <input
+                        type="text"
+                        value={nt.day}
+                        onChange={(e) => updateNotice(idx, { day: e.target.value })}
+                        placeholder="২৫"
+                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold mb-0.5">
+                        মাস
+                      </label>
+                      <input
+                        type="text"
+                        value={nt.month}
+                        onChange={(e) =>
+                          updateNotice(idx, { month: e.target.value })
+                        }
+                        placeholder="জুলাই"
+                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      নোটিশের শিরোনাম
+                    </label>
+                    <input
+                      type="text"
+                      value={nt.title}
+                      onChange={(e) => updateNotice(idx, { title: e.target.value })}
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      বিস্তারিত বিবরণ (ক্লিক করলে পপ-আপে দেখাবে)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={nt.details}
+                      onChange={(e) =>
+                        updateNotice(idx, { details: e.target.value })
+                      }
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Student Testimonials */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquareQuote className="h-4 w-4 text-emerald-600" />
+                <h2 className="text-sm font-bold">
+                  শিক্ষার্থীদের মতামত ({config.testimonials.length}টি)
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={addTestimonial}
+                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>নতুন মতামত</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  সেকশন শিরোনাম
+                </label>
+                <input
+                  type="text"
+                  value={config.testimonialsSectionTitle}
+                  onChange={(e) =>
+                    setConfig((p) => ({
+                      ...p,
+                      testimonialsSectionTitle: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  ডানপাশের বাটন টেক্সট
+                </label>
+                <input
+                  type="text"
+                  value={config.testimonialsViewAllText}
+                  onChange={(e) =>
+                    setConfig((p) => ({
+                      ...p,
+                      testimonialsViewAllText: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {config.testimonials.map((tm, idx) => (
+                <div
+                  key={tm.id}
+                  className="rounded-lg border border-border bg-background p-3 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-700">
+                      মতামত #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeTestimonial(idx)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-0.5">
+                        শিক্ষার্থীর নাম
+                      </label>
+                      <input
+                        type="text"
+                        value={tm.studentName}
+                        onChange={(e) =>
+                          updateTestimonial(idx, { studentName: e.target.value })
+                        }
+                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-0.5">
+                        ব্যাচ ও বিভাগ
+                      </label>
+                      <input
+                        type="text"
+                        value={tm.studentBatch}
+                        onChange={(e) =>
+                          updateTestimonial(idx, { studentBatch: e.target.value })
+                        }
+                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      শিক্ষার্থীর মন্তব্য / রিভিউ
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={tm.comment}
+                      onChange={(e) =>
+                        updateTestimonial(idx, { comment: e.target.value })
+                      }
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold mb-0.5">
+                      শিক্ষার্থীর ছবি URL (ঐচ্ছিক)
+                    </label>
+                    <input
+                      type="text"
+                      value={tm.avatarUrl || ""}
+                      onChange={(e) =>
+                        updateTestimonial(idx, { avatarUrl: e.target.value })
+                      }
+                      placeholder="খালি রাখলে নামের আদ্যক্ষর অ্যাভাটার দেখাবে"
+                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB: FOOTER & CONTACT ==================== */}
+      {activeTab === "footer" && (
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <h2 className="text-sm font-bold">ফুটার, ঠিকানা ও যোগাযোগের তথ্য</h2>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ঠিকানা
+              </label>
+              <input
+                type="text"
+                value={config.contactAddress}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, contactAddress: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ফোন নম্বর
+              </label>
+              <input
+                type="text"
+                value={config.contactPhone}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, contactPhone: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ইমেইল ঠিকানা
+              </label>
+              <input
+                type="text"
+                value={config.contactEmail}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, contactEmail: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ফুটার ট্যাগলাইন (যেমন: জ্ঞান | চর্চা | সাফল্য)
+              </label>
+              <input
+                type="text"
+                value={config.footerTagline}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, footerTagline: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                ডানপাশের স্লোগান (যেমন: শিক্ষায় জয়ে, জীবনে জয়ে)
+              </label>
+              <input
+                type="text"
+                value={config.footerMotto}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, footerMotto: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                কপিরাইট টেক্সট
+              </label>
+              <input
+                type="text"
+                value={config.copyrightText}
+                onChange={(e) =>
+                  setConfig((p) => ({ ...p, copyrightText: e.target.value }))
+                }
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

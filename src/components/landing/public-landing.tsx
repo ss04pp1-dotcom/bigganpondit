@@ -45,6 +45,7 @@ import type {
   CourseSymbolType,
   WidgetAccentColor,
 } from "@/lib/landing-config";
+import { DEVELOPER_INFO } from "@/lib/constants";
 
 interface PublicLandingProps {
   academyName: string;
@@ -1201,6 +1202,26 @@ export function PublicLanding({
               <CheckCircle2 className="h-4 w-4 text-cyan-400" />
               <span>{config.footerMotto}</span>
             </div>
+          </div>
+
+          {/* Developer credit — single source of truth: DEVELOPER_INFO in src/lib/constants.ts */}
+          <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-2 text-[11px]">
+            <p className="text-slate-500">
+              Developed by{" "}
+              <span className="font-semibold text-slate-300">
+                {DEVELOPER_INFO.name}
+              </span>{" "}
+              •{" "}
+              <span className="font-semibold text-cyan-300/90">
+                {DEVELOPER_INFO.company}
+              </span>
+            </p>
+            <a
+              href={`mailto:${DEVELOPER_INFO.email}`}
+              className="font-mono text-[10px] text-slate-500 hover:text-cyan-300 transition"
+            >
+              Gmail: {DEVELOPER_INFO.email}
+            </a>
           </div>
         </div>
       </footer>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
 import {
   Save,
@@ -17,18 +17,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Bell,
-  MessageSquareQuote,
   Info,
+  ImageIcon,
+  Upload,
 } from "lucide-react";
 import type {
   LandingPageConfig,
   LandingCourse,
   LandingFeature,
+  LandingAboutFeature,
   LandingStat,
   LandingNotice,
   LandingTestimonial,
-  CourseColorTheme,
+  LandingNavItem,
+  LandingHeroChip,
+  LandingHeroWidgetItem,
+  CourseHeaderColor,
   CourseSymbolType,
+  WidgetAccentColor,
 } from "@/lib/landing-config";
 
 interface WebsiteEditorProps {
@@ -36,43 +42,297 @@ interface WebsiteEditorProps {
 }
 
 const FEATURE_ICON_OPTIONS = [
-  { value: "graduation", label: "গ্র্যাজুয়েশন ক্যাপ (শিক্ষক/একাডেমিক)" },
-  { value: "monitor", label: "মনিটর / স্মার্ট ক্লাস" },
-  { value: "users", label: "শিক্ষার্থী / গাইডেন্স" },
-  { value: "chart", label: "চার্ট / নিয়মিত মূল্যায়ন" },
-  { value: "book", label: "বই / ডিজিটাল রিসোর্স" },
-  { value: "shield", label: "শিল্ড / নির্ভরযোগ্য প্রতিষ্ঠান" },
-  { value: "award", label: "পদক / সাফল্য" },
+  { value: "graduation", label: "🎓 শিক্ষক / একাডেমিক" },
+  { value: "monitor", label: "🖥️ মনিটর / স্মার্ট ক্লাস" },
+  { value: "users", label: "👥 শিক্ষার্থী / গাইডেন্স" },
+  { value: "chart", label: "📊 চার্ট / মূল্যায়ন" },
+  { value: "book", label: "📘 বই / রিসোর্স" },
+  { value: "shield", label: "🛡️ শিল্ড / নির্ভরযোগ্যতা" },
+  { value: "award", label: "🏆 পদক / অভিজ্ঞতা" },
+  { value: "target", label: "🎯 টার্গেট / সাফল্য" },
+  { value: "clipboard", label: "📋 ক্লিপবোর্ড / টেস্ট" },
+  { value: "calculator", label: "🧮 ক্যালকুলেটর" },
+  { value: "pen", label: "✏️ কলম" },
+  { value: "file", label: "📄 ফাইল / নোটিশ" },
+  { value: "trend", label: "📈 অগ্রগতি" },
+  { value: "play", label: "▶️ প্লে / লাইভ ক্লাস" },
 ];
 
-const COURSE_THEME_OPTIONS: { value: CourseColorTheme; label: string }[] = [
-  { value: "blue", label: "নীল (পদার্থবিজ্ঞান থিম)" },
-  { value: "green", label: "সবুজ (রসায়ন থিম)" },
-  { value: "purple", label: "বেগুনি (গণিত থিম)" },
-  { value: "emerald", label: "গাঢ় সবুজ (জীববিজ্ঞান থিম)" },
-  { value: "orange", label: "কমলা (উচ্চতর গণিত থিম)" },
+const COURSE_HEADER_COLOR_OPTIONS: { value: CourseHeaderColor; label: string }[] = [
+  { value: "navy", label: "গাঢ় নীল (HSC বিজ্ঞান)" },
+  { value: "teal", label: "টিল (SSC বিজ্ঞান)" },
+  { value: "emerald", label: "গাঢ় সবুজ (জীববিজ্ঞান)" },
+  { value: "violet", label: "বেগুনি (উচ্চতর গণিত)" },
+  { value: "orange", label: "কমলা (ICT)" },
+  { value: "slate", label: "প্রায়-কালো (মডেল টেস্ট)" },
 ];
 
 const COURSE_SYMBOL_OPTIONS: { value: CourseSymbolType; label: string }[] = [
   { value: "atom", label: "⚛ পরমাণু (পদার্থবিজ্ঞান)" },
-  { value: "flask", label: "🧪 ল্যাব ফ্লাস্ক (রসায়ন)" },
+  { value: "flask", label: "🧪 ফ্লাস্ক (রসায়ন)" },
   { value: "pi", label: "π পাই (গণিত)" },
   { value: "dna", label: "🧬 ডিএনএ (জীববিজ্ঞান)" },
   { value: "sigma", label: "∑ সিগমা (উচ্চতর গণিত)" },
   { value: "book", label: "📘 বই (সাধারণ কোর্স)" },
+  { value: "monitor", label: "🖥️ মনিটর (ICT)" },
+  { value: "calculator", label: "🧮 ক্যালকুলেটর" },
+  { value: "clipboard", label: "📋 ক্লিপবোর্ড (টেস্ট)" },
+  { value: "target", label: "🎯 টার্গেট" },
 ];
+
+const WIDGET_COLOR_OPTIONS: { value: WidgetAccentColor; label: string }[] = [
+  { value: "blue", label: "নীল" },
+  { value: "cyan", label: "সায়ান" },
+  { value: "emerald", label: "সবুজ" },
+  { value: "rose", label: "গোলাপি" },
+  { value: "amber", label: "সোনালি" },
+  { value: "violet", label: "বেগুনি" },
+];
+
+/* ------------------------------------------------------------------ */
+/* Small building blocks                                               */
+/* ------------------------------------------------------------------ */
+
+function Field({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1">{label}</label>
+      {children}
+      {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary";
+
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  hint?: string;
+}) {
+  return (
+    <Field label={label} hint={hint}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={inputCls}
+      />
+    </Field>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+  rows = 3,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  rows?: number;
+}) {
+  return (
+    <Field label={label}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        className={inputCls + " resize-y"}
+      />
+    </Field>
+  );
+}
+
+/** Image picker that uploads straight to R2 and stores the returned URL. */
+function LandingImagePicker({
+  label,
+  url,
+  onChange,
+  hint,
+  aspect = "square",
+}: {
+  label: string;
+  url: string;
+  onChange: (url: string) => void;
+  hint?: string;
+  aspect?: "square" | "wide";
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", "landing");
+      const res = await fetch("/api/uploads", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "আপলোড ব্যর্থ হয়েছে।");
+      onChange(json.url as string);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "আপলোড ব্যর্থ হয়েছে।");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-3">
+      <p className="text-xs font-bold mb-2 flex items-center gap-1.5">
+        <ImageIcon className="h-3.5 w-3.5 text-primary" />
+        {label}
+      </p>
+      <div className="flex items-start gap-3">
+        <div
+          className={`shrink-0 overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted ${
+            aspect === "wide" ? "h-20 w-32" : "h-20 w-20"
+          }`}
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={label} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageIcon className="h-6 w-6" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 space-y-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition"
+            >
+              {uploading ? (
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              {uploading ? "আপলোড হচ্ছে..." : url ? "ছবি পরিবর্তন করুন" : "ছবি আপলোড করুন"}
+            </button>
+            {url && (
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-100 transition"
+              >
+                <Trash2 className="h-3 w-3" />
+                সরিয়ে ফেলুন
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            JPG / PNG / WebP — সর্বোচ্চ ১৫ MB। {hint}
+          </p>
+          {err && <p className="text-[11px] font-semibold text-red-600">{err}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListRowActions({
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+  upDisabled,
+  downDisabled,
+  title,
+}: {
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+  upDisabled?: boolean;
+  downDisabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onMoveUp}
+        disabled={upDisabled}
+        className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+        title="উপরে নিন"
+      >
+        <ArrowUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onMoveDown}
+        disabled={downDisabled}
+        className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+        title="নিচে নিন"
+      >
+        <ArrowDown className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded border border-red-200 bg-red-50 p-1 text-red-600 hover:bg-red-100"
+        title={title ?? "মুছে ফেলুন"}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Main editor                                                         */
+/* ------------------------------------------------------------------ */
 
 export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
   const [config, setConfig] = useState<LandingPageConfig>(initialConfig);
   const [activeTab, setActiveTab] = useState<
-    "hero" | "features" | "courses" | "about" | "notices" | "footer"
-  >("courses");
+    "hero" | "courses" | "features" | "about" | "notices" | "footer"
+  >("hero");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  function patch(p: Partial<LandingPageConfig>) {
+    setConfig((prev) => ({ ...prev, ...p }));
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -81,7 +341,7 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
       const res = await fetch("/api/landing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: { ...config, schemaVersion: 2 } }),
+        body: JSON.stringify({ config: { ...config, schemaVersion: 3 } }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
@@ -97,7 +357,7 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
       }
       setFeedback({
         type: "success",
-        text: data.message || "ওয়েবসাইটের সকল পরিবর্তন সফলভাবে সংরক্ষিত হয়েছে!",
+        text: data.message || "ওয়েবসাইটের সকল পরিবর্তন সফলভাবে সংরক্ষিত হয়েছে!",
       });
     } catch (err: unknown) {
       setFeedback({
@@ -112,7 +372,7 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
   async function handleReset() {
     if (
       !window.confirm(
-        "আপনি কি নিশ্চিত যে হোমপেজের সকল কোর্স, ফিচার ও ডিজাইন ডিফল্ট অবস্থায় ফিরিয়ে নিতে চান?"
+        "আপনি কি নিশ্চিত যে হোমপেজের সকল কোর্স, ছবি ও ডিজাইন ডিফল্ট অবস্থায় ফিরিয়ে নিতে চান?"
       )
     ) {
       return;
@@ -151,246 +411,87 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
     }
   }
 
-  // ---- Course helpers ----
-  function addCourse() {
-    const newCourse: LandingCourse = {
-      id: `crs-${Date.now()}`,
-      title: "নতুন বিষয় / কোর্স",
-      subtitle: "কোর্সের সংক্ষিপ্ত স্লোগান এখানে লিখুন",
-      symbol: "book",
-      colorTheme: "blue",
-      bullet1: "ক্লাস: ৪০+",
-      bullet2: "মডেল টেস্ট: ২০+",
-      bullet3: "বোর্ড/এডমিশন প্রস্তুতি",
-      buttonText: "বিস্তারিত দেখুন",
-      imageUrl: "",
-      targetClass: "৯ম-১০ম ও এইচএসসি",
-      schedule: "সপ্তাহে ৪ দিন ক্লাস",
-      feeLabel: "ভর্তি চলছে",
-      description: "কোর্সের বিস্তারিত বিবরণ এখানে লিখুন...",
-    };
-    setConfig((prev) => ({ ...prev, courses: [...prev.courses, newCourse] }));
-  }
-
-  function updateCourse(idx: number, patch: Partial<LandingCourse>) {
+  /* ---------------- generic list helpers ---------------- */
+  function updateList<K extends "navItems" | "heroChips" | "heroWidget" | "features" | "aboutFeatures" | "stats" | "notices" | "testimonials" | "courses" | "supportLinks">(
+    key: K,
+    idx: number,
+    itemUpdates: Partial<LandingPageConfig[K][number]>
+  ) {
     setConfig((prev) => {
-      const next = [...prev.courses];
-      next[idx] = { ...next[idx], ...patch };
-      return { ...prev, courses: next };
+      const next = [...(prev[key] as unknown[])] as LandingPageConfig[K];
+      (next[idx] as unknown as Record<string, unknown>) = {
+        ...(next[idx] as unknown as Record<string, unknown>),
+        ...itemUpdates,
+      };
+      return { ...prev, [key]: next };
     });
   }
 
-  function removeCourse(idx: number) {
+  function addListItem<K extends "navItems" | "heroChips" | "heroWidget" | "features" | "aboutFeatures" | "stats" | "notices" | "testimonials" | "courses" | "supportLinks">(
+    key: K,
+    item: LandingPageConfig[K][number]
+  ) {
     setConfig((prev) => ({
       ...prev,
-      courses: prev.courses.filter((_, i) => i !== idx),
+      [key]: [...(prev[key] as unknown[]), item] as LandingPageConfig[K],
     }));
   }
 
-  function moveCourse(idx: number, dir: -1 | 1) {
+  function removeListItem<K extends "navItems" | "heroChips" | "heroWidget" | "features" | "aboutFeatures" | "stats" | "notices" | "testimonials" | "courses" | "supportLinks">(
+    key: K,
+    idx: number
+  ) {
+    setConfig((prev) => ({
+      ...prev,
+      [key]: (prev[key] as unknown[]).filter((_, i) => i !== idx) as LandingPageConfig[K],
+    }));
+  }
+
+  function moveListItem<K extends "navItems" | "heroChips" | "heroWidget" | "features" | "aboutFeatures" | "stats" | "notices" | "testimonials" | "courses" | "supportLinks">(
+    key: K,
+    idx: number,
+    dir: -1 | 1
+  ) {
     setConfig((prev) => {
-      const next = [...prev.courses];
+      const next = [...(prev[key] as unknown[])] as LandingPageConfig[K];
       const target = idx + dir;
       if (target < 0 || target >= next.length) return prev;
-      const temp = next[idx];
+      const tmp = next[idx];
       next[idx] = next[target];
-      next[target] = temp;
-      return { ...prev, courses: next };
+      next[target] = tmp;
+      return { ...prev, [key]: next };
     });
   }
 
-  // ---- Feature helpers ----
-  function addFeature() {
-    const newFeat: LandingFeature = {
-      id: `feat-${Date.now()}`,
-      title: "নতুন বৈশিষ্ট্য",
-      description: "সংক্ষিপ্ত বিবরণ লিখুন",
-      iconName: "graduation",
-    };
-    setConfig((prev) => ({ ...prev, features: [...prev.features, newFeat] }));
-  }
-
-  function updateFeature(idx: number, patch: Partial<LandingFeature>) {
-    setConfig((prev) => {
-      const next = [...prev.features];
-      next[idx] = { ...next[idx], ...patch };
-      return { ...prev, features: next };
-    });
-  }
-
-  function removeFeature(idx: number) {
-    setConfig((prev) => ({
-      ...prev,
-      features: prev.features.filter((_, i) => i !== idx),
-    }));
-  }
-
-  // ---- Stat helpers ----
-  function addStat() {
-    const newStat: LandingStat = {
-      id: `st-${Date.now()}`,
-      value: "১০০+",
-      label: "নতুন পরিসংখ্যান",
-      iconName: "award",
-    };
-    setConfig((prev) => ({ ...prev, stats: [...prev.stats, newStat] }));
-  }
-
-  function updateStat(idx: number, patch: Partial<LandingStat>) {
-    setConfig((prev) => {
-      const next = [...prev.stats];
-      next[idx] = { ...next[idx], ...patch };
-      return { ...prev, stats: next };
-    });
-  }
-
-  function removeStat(idx: number) {
-    setConfig((prev) => ({
-      ...prev,
-      stats: prev.stats.filter((_, i) => i !== idx),
-    }));
-  }
-
-  // ---- Notice helpers ----
-  function addNotice() {
-    const newNotice: LandingNotice = {
-      id: `nt-${Date.now()}`,
-      day: "২৮",
-      month: "জুলাই",
-      title: "নতুন নোটিশের শিরোনাম লিখুন",
-      details: "নোটিশের বিস্তারিত বিবরণ এখানে লিখুন...",
-    };
-    setConfig((prev) => ({ ...prev, notices: [newNotice, ...prev.notices] }));
-  }
-
-  function updateNotice(idx: number, patch: Partial<LandingNotice>) {
-    setConfig((prev) => {
-      const next = [...prev.notices];
-      next[idx] = { ...next[idx], ...patch };
-      return { ...prev, notices: next };
-    });
-  }
-
-  function removeNotice(idx: number) {
-    setConfig((prev) => ({
-      ...prev,
-      notices: prev.notices.filter((_, i) => i !== idx),
-    }));
-  }
-
-  // ---- Testimonial helpers ----
-  function addTestimonial() {
-    const newTm: LandingTestimonial = {
-      id: `tm-${Date.now()}`,
-      studentName: "শিক্ষার্থীর নাম",
-      studentBatch: "HSC 2025, বিজ্ঞান বিভাগ",
-      comment: "একাডেমি সম্পর্কে শিক্ষার্থীর মতামত এখানে লিখুন...",
-      rating: 5,
-      avatarUrl: "",
-    };
-    setConfig((prev) => ({
-      ...prev,
-      testimonials: [...prev.testimonials, newTm],
-    }));
-  }
-
-  function updateTestimonial(idx: number, patch: Partial<LandingTestimonial>) {
-    setConfig((prev) => {
-      const next = [...prev.testimonials];
-      next[idx] = { ...next[idx], ...patch };
-      return { ...prev, testimonials: next };
-    });
-  }
-
-  function removeTestimonial(idx: number) {
-    setConfig((prev) => ({
-      ...prev,
-      testimonials: prev.testimonials.filter((_, i) => i !== idx),
-    }));
-  }
+  const TABS: { id: typeof activeTab; label: string; icon: React.ReactNode }[] = [
+    { id: "hero", label: "হিরো ও নেভিগেশন", icon: <LayoutTemplate className="h-3.5 w-3.5" /> },
+    { id: "courses", label: `কোর্সসমূহ (${config.courses.length})`, icon: <BookOpen className="h-3.5 w-3.5" /> },
+    { id: "features", label: `বৈশিষ্ট্য (${config.features.length})`, icon: <Sparkles className="h-3.5 w-3.5" /> },
+    { id: "about", label: "আমাদের সম্পর্কে ও পরিসংখ্যান", icon: <Info className="h-3.5 w-3.5" /> },
+    { id: "notices", label: "নোটিশ ও মতামত", icon: <Bell className="h-3.5 w-3.5" /> },
+    { id: "footer", label: "ফুটার ও যোগাযোগ", icon: <Phone className="h-3.5 w-3.5" /> },
+  ];
 
   return (
     <div className="space-y-5">
       {/* Top Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab("courses")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "courses"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>কোর্সসমূহ ({config.courses.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("hero")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "hero"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <LayoutTemplate className="h-3.5 w-3.5" />
-            <span>হিরো ব্যানার ও হেডার</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("features")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "features"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>৬টি মূল বৈশিষ্ট্য ({config.features.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("about")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "about"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Info className="h-3.5 w-3.5" />
-            <span>আমাদের সম্পর্কে ও পরিসংখ্যান</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("notices")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "notices"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Bell className="h-3.5 w-3.5" />
-            <span>নোটিশ ও মতামত</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("footer")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
-              activeTab === "footer"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            <span>ফুটার ও যোগাযোগ</span>
-          </button>
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+                activeTab === tab.id
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2">
@@ -400,9 +501,8 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-muted transition"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>লাইভ ওয়েবসাইট দেখুন</span>
+            <span>লাইভ দেখুন</span>
           </Link>
-
           <button
             type="button"
             onClick={handleReset}
@@ -412,7 +512,6 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
             <RotateCcw className="h-3.5 w-3.5" />
             <span>{resetting ? "রিসেট হচ্ছে..." : "ডিফল্ট রিসেট"}</span>
           </button>
-
           <button
             type="button"
             onClick={handleSave}
@@ -420,7 +519,7 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-500 disabled:opacity-50 transition"
           >
             <Save className="h-3.5 w-3.5" />
-            <span>{saving ? "সংরক্ষণ হচ্ছে..." : "পরিবর্তন সংরক্ষণ করুন"}</span>
+            <span>{saving ? "সংরক্ষণ হচ্ছে..." : "সব পরিবর্তন সংরক্ষণ করুন"}</span>
           </button>
         </div>
       </div>
@@ -443,65 +542,57 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
         </div>
       )}
 
-      {/* ==================== TAB: SUBJECT COURSES ==================== */}
+      {/* ==================== TAB: COURSES ==================== */}
       {activeTab === "courses" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <h2 className="text-sm font-bold">কোর্স সেকশনের শিরোনাম</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  উপরের ছোট ট্যাগ
-                </label>
-                <input
-                  type="text"
-                  value={config.coursesSectionTag}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, coursesSectionTag: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  মূল শিরোনাম
-                </label>
-                <input
-                  type="text"
-                  value={config.coursesSectionTitle}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, coursesSectionTitle: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  ডানপাশের বাটন টেক্সট
-                </label>
-                <input
-                  type="text"
-                  value={config.coursesViewAllText}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, coursesViewAllText: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
+              <TextField
+                label="উপরের ছোট ট্যাগ"
+                value={config.coursesSectionTag}
+                onChange={(v) => patch({ coursesSectionTag: v })}
+              />
+              <TextField
+                label="মূল শিরোনাম"
+                value={config.coursesSectionTitle}
+                onChange={(v) => patch({ coursesSectionTitle: v })}
+              />
+              <TextField
+                label="ডানপাশের বাটন টেক্সট"
+                value={config.coursesViewAllText}
+                onChange={(v) => patch({ coursesViewAllText: v })}
+              />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold">
-              বিষয়ভিত্তিক কোর্স কার্ডসমূহ ({config.courses.length}টি)
-            </h2>
+            <h2 className="text-sm font-bold">কোর্স কার্ডসমূহ ({config.courses.length}টি)</h2>
             <button
               type="button"
-              onClick={addCourse}
+              onClick={() =>
+                addListItem("courses", {
+                  id: `crs-${Date.now()}`,
+                  title: "নতুন কোর্স",
+                  subtitle: "কোর্সের সংক্ষিপ্ত বিবরণ",
+                  symbol: "book",
+                  headerColor: "navy",
+                  subjects: "বিষয়ভিত্তিক ট্যাগ লিখুন",
+                  bullet1: "ক্লাস: ৪০+",
+                  bullet2: "মডেল টেস্ট: ২০+",
+                  bullet3: "বোর্ড প্রস্তুতি",
+                  buttonText: "বিস্তারিত দেখুন",
+                  imageUrl: "",
+                  targetClass: "শ্রেণি উল্লেখ করুন",
+                  schedule: "সপ্তাহে ৩ দিন ক্লাস",
+                  feeLabel: "ভর্তি ও কোর্স ফি: অফিসে যোগাযোগ করুন",
+                  description: "কোর্সের বিস্তারিত বিবরণ এখানে লিখুন...",
+                } as LandingCourse)
+              }
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>নতুন কোর্স যুক্ত করুন</span>
+              <span>নতুন কোর্স যোগ করুন</span>
             </button>
           </div>
 
@@ -516,459 +607,183 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                       {idx + 1}
                     </span>
-                    <h3 className="text-sm font-bold">{course.title}</h3>
+                    <h3 className="text-sm font-bold">{course.title || "কোর্স"}</h3>
                   </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => moveCourse(idx, -1)}
-                      disabled={idx === 0}
-                      className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                      title="উপরে নিন"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveCourse(idx, 1)}
-                      disabled={idx === config.courses.length - 1}
-                      className="rounded border border-border p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                      title="নিচে নিন"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeCourse(idx)}
-                      className="rounded border border-red-200 bg-red-50 p-1 text-red-600 hover:bg-red-100"
-                      title="মুছে ফেলুন"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("courses", idx, -1)}
+                    onMoveDown={() => moveListItem("courses", idx, 1)}
+                    onRemove={() => removeListItem("courses", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.courses.length - 1}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বিষয়ের নাম / শিরোনাম
-                    </label>
-                    <input
-                      type="text"
-                      value={course.title}
-                      onChange={(e) => updateCourse(idx, { title: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      সংক্ষিপ্ত স্লোগান (Subtitle)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.subtitle}
-                      onChange={(e) => updateCourse(idx, { subtitle: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      কার্ডের রঙের থিম
-                    </label>
+                  <TextField
+                    label="কোর্সের নাম"
+                    value={course.title}
+                    onChange={(v) => updateList("courses", idx, { title: v })}
+                  />
+                  <TextField
+                    label="সংক্ষিপ্ত বিবরণ (subtitle)"
+                    value={course.subtitle}
+                    onChange={(v) => updateList("courses", idx, { subtitle: v })}
+                  />
+                  <Field label="কার্ড হেডারের রঙ">
                     <select
-                      value={course.colorTheme}
+                      value={course.headerColor}
                       onChange={(e) =>
-                        updateCourse(idx, {
-                          colorTheme: e.target.value as CourseColorTheme,
+                        updateList("courses", idx, {
+                          headerColor: e.target.value as CourseHeaderColor,
                         })
                       }
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                      className={inputCls}
                     >
-                      {COURSE_THEME_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
+                      {COURSE_HEADER_COLOR_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বিষয়ের আইকন প্রতীক
-                    </label>
+                  </Field>
+                  <Field label="আইকন প্রতীক">
                     <select
                       value={course.symbol}
                       onChange={(e) =>
-                        updateCourse(idx, {
+                        updateList("courses", idx, {
                           symbol: e.target.value as CourseSymbolType,
                         })
                       }
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                      className={inputCls}
                     >
                       {COURSE_SYMBOL_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
-                  </div>
+                  </Field>
                 </div>
 
-                {/* 3 Bullet Points & Button Text */}
+                <TextField
+                  label="বিষয়সমূহের ট্যাগ (• দিয়ে আলাদা করুন)"
+                  value={course.subjects}
+                  onChange={(v) => updateList("courses", idx, { subjects: v })}
+                />
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বুলেট পয়েন্ট ১ (যেমন: ক্লাস সংখ্যা)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.bullet1}
-                      onChange={(e) => updateCourse(idx, { bullet1: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বুলেট পয়েন্ট ২ (যেমন: মডেল টেস্ট)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.bullet2}
-                      onChange={(e) => updateCourse(idx, { bullet2: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বুলেট পয়েন্ট ৩ (যেমন: প্রস্তুতির ধরন)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.bullet3}
-                      onChange={(e) => updateCourse(idx, { bullet3: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      বাটনের লেখা
-                    </label>
-                    <input
-                      type="text"
-                      value={course.buttonText}
-                      onChange={(e) =>
-                        updateCourse(idx, { buttonText: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Custom Image + Modal Info */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      কাস্টম ব্যানার ছবি URL (ঐচ্ছিক)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.imageUrl || ""}
-                      onChange={(e) => updateCourse(idx, { imageUrl: e.target.value })}
-                      placeholder="খালি রাখলে ডিফল্ট গ্রাফিক্স দেখাবে"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      শ্রেণি / টার্গেট ব্যাচ (পপ-আপে দেখাবে)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.targetClass}
-                      onChange={(e) =>
-                        updateCourse(idx, { targetClass: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      ক্লাস শিডিউল (পপ-আপে দেখাবে)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.schedule}
-                      onChange={(e) => updateCourse(idx, { schedule: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      কোর্স ফি তথ্য (পপ-আপে দেখাবে)
-                    </label>
-                    <input
-                      type="text"
-                      value={course.feeLabel}
-                      onChange={(e) => updateCourse(idx, { feeLabel: e.target.value })}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    বিস্তারিত বিবরণ ("বিস্তারিত দেখুন" বাটনে ক্লিক করলে দেখাবে)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={course.description}
-                    onChange={(e) =>
-                      updateCourse(idx, { description: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                  <TextField
+                    label="বুলেট ১"
+                    value={course.bullet1}
+                    onChange={(v) => updateList("courses", idx, { bullet1: v })}
+                  />
+                  <TextField
+                    label="বুলেট ২"
+                    value={course.bullet2}
+                    onChange={(v) => updateList("courses", idx, { bullet2: v })}
+                  />
+                  <TextField
+                    label="বুলেট ৩"
+                    value={course.bullet3}
+                    onChange={(v) => updateList("courses", idx, { bullet3: v })}
+                  />
+                  <TextField
+                    label="বাটন টেক্সট"
+                    value={course.buttonText}
+                    onChange={(v) => updateList("courses", idx, { buttonText: v })}
                   />
                 </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <TextField
+                    label="টার্গেট শ্রেণি"
+                    value={course.targetClass}
+                    onChange={(v) => updateList("courses", idx, { targetClass: v })}
+                  />
+                  <TextField
+                    label="ক্লাসের সময়সূচি"
+                    value={course.schedule}
+                    onChange={(v) => updateList("courses", idx, { schedule: v })}
+                  />
+                  <TextField
+                    label="ফি সংক্রান্ত লেখা"
+                    value={course.feeLabel}
+                    onChange={(v) => updateList("courses", idx, { feeLabel: v })}
+                  />
+                </div>
+
+                <TextArea
+                  label="বিস্তারিত বিবরণ (মডালে দেখাবে)"
+                  value={course.description}
+                  onChange={(v) => updateList("courses", idx, { description: v })}
+                  rows={3}
+                />
+
+                <LandingImagePicker
+                  label="কার্ড হেডারের ছবি (ঐচ্ছিক — না দিলে রঙিন হেডার দেখাবে)"
+                  url={course.imageUrl ?? ""}
+                  onChange={(url) => updateList("courses", idx, { imageUrl: url })}
+                  aspect="wide"
+                />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ==================== TAB: HERO & HEADER ==================== */}
-      {activeTab === "hero" && (
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-          <h2 className="text-sm font-bold">হিরো ব্যানার ও উপরের নেভিগেশন বার</h2>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                উপরের ট্যাগলাইন (যেমন: স্বপ্ন দেখো • প্রস্তুতি নাও • সফল হও)
-              </label>
-              <input
-                type="text"
-                value={config.heroTagline}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroTagline: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                উপরের ডানপাশের লগইন বাটন টেক্সট
-              </label>
-              <input
-                type="text"
-                value={config.loginBtnText}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, loginBtnText: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                প্রধান শিরোনাম ১ম অংশ (সাদা রঙের লেখা)
-              </label>
-              <input
-                type="text"
-                value={config.heroTitleLine1}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroTitleLine1: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                প্রধান শিরোনাম ২য় অংশ (সবুজ রঙের লেখা)
-              </label>
-              <input
-                type="text"
-                value={config.heroTitleLine2}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroTitleLine2: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                সাব-হেডিং (যেমন: বিজ্ঞানভিত্তিক শিক্ষা, উজ্জ্বল ভবিষ্যৎ)
-              </label>
-              <input
-                type="text"
-                value={config.heroSubtitleHeading}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroSubtitleHeading: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ডানপাশের অনুপ্রেরণামূলক উক্তি (যেমন: “জ্ঞানই সফলতার চাবিকাঠি”)
-              </label>
-              <input
-                type="text"
-                value={config.heroQuote}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroQuote: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">
-              হিরো ব্যানারের মূল বিবরণ
-            </label>
-            <textarea
-              rows={3}
-              value={config.heroDescription}
-              onChange={(e) =>
-                setConfig((p) => ({ ...p, heroDescription: e.target.value }))
-              }
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                প্রথম বাটন টেক্সট (সবুজ বাটন)
-              </label>
-              <input
-                type="text"
-                value={config.heroPrimaryBtnText}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroPrimaryBtnText: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                দ্বিতীয় বাটন টেক্সট (প্লে বাটন)
-              </label>
-              <input
-                type="text"
-                value={config.heroSecondaryBtnText}
-                onChange={(e) =>
-                  setConfig((p) => ({
-                    ...p,
-                    heroSecondaryBtnText: e.target.value,
-                  }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                হিরো ব্যানারের কাস্টম ছবি URL (ঐচ্ছিক)
-              </label>
-              <input
-                type="text"
-                value={config.heroImageUrl}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, heroImageUrl: e.target.value }))
-                }
-                placeholder="খালি রাখলে ডিফল্ট বই ও গ্রাফিক্স দেখাবে"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================== TAB: 6 FEATURES STRIP ==================== */}
+      {/* ==================== TAB: FEATURES ==================== */}
       {activeTab === "features" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold">
-                হিরো ব্যানারের নিচের ৬টি মূল বৈশিষ্ট্য ({config.features.length}টি)
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                হিরো ব্যানারের ঠিক নিচে সাদা স্ট্রিপে যে ৬টি বিশেষ বৈশিষ্ট্য দেখানো হয়
-              </p>
-            </div>
+            <h2 className="text-sm font-bold">মূল বৈশিষ্ট্য স্ট্রিপ ({config.features.length}টি)</h2>
             <button
               type="button"
-              onClick={addFeature}
+              onClick={() =>
+                addListItem("features", {
+                  id: `feat-${Date.now()}`,
+                  title: "নতুন বৈশিষ্ট্য",
+                  description: "সংক্ষিপ্ত বিবরণ লিখুন",
+                  iconName: "graduation",
+                } as LandingFeature)
+              }
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>নতুন বৈশিষ্ট্য</span>
+              <span>বৈশিষ্ট্য যোগ করুন</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {config.features.map((feat, idx) => (
-              <div
-                key={feat.id}
-                className="rounded-xl border border-border bg-card p-4 space-y-3"
-              >
+              <div key={feat.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-primary">
-                    বৈশিষ্ট্য #{idx + 1}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeFeature(idx)}
-                    className="rounded p-1 text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <span className="text-[11px] font-bold text-muted-foreground">বৈশিষ্ট্য {idx + 1}</span>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("features", idx, -1)}
+                    onMoveDown={() => moveListItem("features", idx, 1)}
+                    onRemove={() => removeListItem("features", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.features.length - 1}
+                  />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    শিরোনাম
-                  </label>
-                  <input
-                    type="text"
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <TextField
+                    label="শিরোনাম"
                     value={feat.title}
-                    onChange={(e) => updateFeature(idx, { title: e.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
+                    onChange={(v) => updateList("features", idx, { title: v })}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    সংক্ষিপ্ত বিবরণ
-                  </label>
-                  <input
-                    type="text"
+                  <TextField
+                    label="সংক্ষিপ্ত বিবরণ"
                     value={feat.description}
-                    onChange={(e) =>
-                      updateFeature(idx, { description: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                    onChange={(v) => updateList("features", idx, { description: v })}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-1">আইকন</label>
-                  <select
-                    value={feat.iconName}
-                    onChange={(e) =>
-                      updateFeature(idx, { iconName: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                  >
-                    {FEATURE_ICON_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Field label="আইকন">
+                    <select
+                      value={feat.iconName}
+                      onChange={(e) => updateList("features", idx, { iconName: e.target.value })}
+                      className={inputCls}
+                    >
+                      {FEATURE_ICON_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </Field>
                 </div>
               </div>
             ))}
@@ -976,151 +791,192 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
         </div>
       )}
 
-      {/* ==================== TAB: ABOUT US & 2x2 STATS ==================== */}
+      {/* ==================== TAB: ABOUT + STATS ==================== */}
       {activeTab === "about" && (
-        <div className="space-y-5">
-          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-            <h2 className="text-sm font-bold">আমাদের সম্পর্কে (About Us) সেকশন</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  উপরের ছোট ট্যাগ
-                </label>
-                <input
-                  type="text"
-                  value={config.aboutTag}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, aboutTag: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  শিরোনাম
-                </label>
-                <input
-                  type="text"
-                  value={config.aboutTitle}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, aboutTitle: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  বাটনের লেখা
-                </label>
-                <input
-                  type="text"
-                  value={config.aboutBtnText}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, aboutBtnText: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  বামপাশের কাস্টম ছবি URL (ঐচ্ছিক)
-                </label>
-                <input
-                  type="text"
-                  value={config.aboutImageUrl}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, aboutImageUrl: e.target.value }))
-                  }
-                  placeholder="খালি রাখলে Dream Learn Achieve গ্রাফিক্স দেখাবে"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                সংক্ষিপ্ত বিবরণ (হোমপেজে দেখাবে)
-              </label>
-              <textarea
-                rows={3}
-                value={config.aboutDescription}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, aboutDescription: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+        <div className="space-y-4">
+          {/* Dark about section */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">গাঢ় নীল "কেন আমরা" সেকশন</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="সেকশনের শিরোনাম"
+                value={config.aboutSectionTitle}
+                onChange={(v) => patch({ aboutSectionTitle: v })}
+              />
+              <TextField
+                label="ডেকোরেটিভ ইংরেজি লেখা"
+                value={config.aboutDecorText}
+                onChange={(v) => patch({ aboutDecorText: v })}
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                অতিরিক্ত বিস্তারিত বিবরণ ("আরও জানুন" বাটনে ক্লিক করলে দেখাবে)
-              </label>
-              <textarea
-                rows={3}
-                value={config.aboutDetails}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, aboutDetails: e.target.value }))
+            <TextArea
+              label="সেকশনের বর্ণনা"
+              value={config.aboutSectionDescription}
+              onChange={(v) => patch({ aboutSectionDescription: v })}
+              rows={3}
+            />
+            <div className="flex items-center justify-between pt-1">
+              <h3 className="text-xs font-bold">আইকন সারি ({config.aboutFeatures.length}টি)</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  addListItem("aboutFeatures", {
+                    id: `af-${Date.now()}`,
+                    title: "নতুন আইটেম",
+                    iconName: "graduation",
+                  } as LandingAboutFeature)
                 }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>আইকন যোগ করুন</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {config.aboutFeatures.map((af, idx) => (
+                <div key={af.id} className="flex items-end gap-2 rounded-lg border border-border p-2.5">
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <TextField
+                      label="লেবেল"
+                      value={af.title}
+                      onChange={(v) => updateList("aboutFeatures", idx, { title: v })}
+                    />
+                    <Field label="আইকন">
+                      <select
+                        value={af.iconName}
+                        onChange={(e) => updateList("aboutFeatures", idx, { iconName: e.target.value })}
+                        className={inputCls}
+                      >
+                        {FEATURE_ICON_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("aboutFeatures", idx, -1)}
+                    onMoveDown={() => moveListItem("aboutFeatures", idx, 1)}
+                    onRemove={() => removeListItem("aboutFeatures", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.aboutFeatures.length - 1}
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* 2x2 Stats Grid Editor */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          {/* Light about + stats */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">আমাদের সম্পর্কে + পরিসংখ্যান সেকশন</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="ছোট ট্যাগ"
+                value={config.aboutTag}
+                onChange={(v) => patch({ aboutTag: v })}
+              />
+              <TextField
+                label="শিরোনাম"
+                value={config.aboutTitle}
+                onChange={(v) => patch({ aboutTitle: v })}
+              />
+              <TextField
+                label="বাটন টেক্সট"
+                value={config.aboutBtnText}
+                onChange={(v) => patch({ aboutBtnText: v })}
+              />
+            </div>
+            <TextArea
+              label="মূল বর্ণনা"
+              value={config.aboutDescription}
+              onChange={(v) => patch({ aboutDescription: v })}
+              rows={3}
+            />
+            <TextArea
+              label="বিস্তারিত বর্ণনা (মডালে দেখাবে)"
+              value={config.aboutDetails}
+              onChange={(v) => patch({ aboutDetails: v })}
+              rows={3}
+            />
+            <LandingImagePicker
+              label="ক্যাম্পাস / প্রতিষ্ঠানের ছবি"
+              url={config.aboutImageUrl}
+              onChange={(url) => patch({ aboutImageUrl: url })}
+              aspect="wide"
+              hint="গোলাকার (blob) আকৃতিতে দেখানো হবে।"
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold">
-                ডানপাশের পরিসংখ্যান বক্স ({config.stats.length}টি)
-              </h2>
+              <h3 className="text-xs font-bold">পরিসংখ্যান বক্স ({config.stats.length}টি)</h3>
               <button
                 type="button"
-                onClick={addStat}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                onClick={() =>
+                  addListItem("stats", {
+                    id: `st-${Date.now()}`,
+                    value: "১০০+",
+                    label: "নতুন পরিসংখ্যান",
+                    iconName: "award",
+                    iconColor: "blue",
+                  } as LandingStat)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>নতুন কার্ড</span>
+                <span>পরিসংখ্যান যোগ করুন</span>
               </button>
             </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {config.stats.map((st, idx) => (
-                <div
-                  key={st.id}
-                  className="rounded-lg border border-border bg-background p-3 space-y-2"
-                >
+                <div key={st.id} className="rounded-lg border border-border p-3 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-muted-foreground">
-                      পরিসংখ্যান #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeStat(idx)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <span className="text-[11px] font-bold text-muted-foreground">পরিসংখ্যান {idx + 1}</span>
+                    <ListRowActions
+                      onMoveUp={() => moveListItem("stats", idx, -1)}
+                      onMoveDown={() => moveListItem("stats", idx, 1)}
+                      onRemove={() => removeListItem("stats", idx)}
+                      upDisabled={idx === 0}
+                      downDisabled={idx === config.stats.length - 1}
+                    />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      সংখ্যা (যেমন: ৫,০০০+)
-                    </label>
-                    <input
-                      type="text"
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextField
+                      label="মান (যেমন ৩০+)"
                       value={st.value}
-                      onChange={(e) => updateStat(idx, { value: e.target.value })}
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
+                      onChange={(v) => updateList("stats", idx, { value: v })}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      লেবেল (যেমন: সন্তুষ্ট শিক্ষার্থী)
-                    </label>
-                    <input
-                      type="text"
+                    <TextField
+                      label="লেবেল"
                       value={st.label}
-                      onChange={(e) => updateStat(idx, { label: e.target.value })}
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                      onChange={(v) => updateList("stats", idx, { label: v })}
                     />
+                    <Field label="আইকন">
+                      <select
+                        value={st.iconName}
+                        onChange={(e) => updateList("stats", idx, { iconName: e.target.value })}
+                        className={inputCls}
+                      >
+                        {FEATURE_ICON_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="আইকনের রঙ">
+                      <select
+                        value={st.iconColor}
+                        onChange={(e) =>
+                          updateList("stats", idx, {
+                            iconColor: e.target.value as WidgetAccentColor,
+                          })
+                        }
+                        className={inputCls}
+                      >
+                        {WIDGET_COLOR_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Field>
                   </div>
                 </div>
               ))}
@@ -1129,271 +985,169 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
         </div>
       )}
 
-      {/* ==================== TAB: NOTICES & TESTIMONIALS ==================== */}
+      {/* ==================== TAB: NOTICES + TESTIMONIALS ==================== */}
       {activeTab === "notices" && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left: Recent Notices */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-emerald-600" />
-                <h2 className="text-sm font-bold">
-                  সাম্প্রতিক নোটিশ ({config.notices.length}টি)
-                </h2>
-              </div>
+        <div className="space-y-4">
+          {/* Notices */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="নোটিশ সেকশনের শিরোনাম"
+                value={config.noticesSectionTitle}
+                onChange={(v) => patch({ noticesSectionTitle: v })}
+              />
+              <TextField
+                label="ডানপাশের বাটন টেক্সট"
+                value={config.noticesViewAllText}
+                onChange={(v) => patch({ noticesViewAllText: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <h3 className="text-xs font-bold">নোটিশসমূহ ({config.notices.length}টি)</h3>
               <button
                 type="button"
-                onClick={addNotice}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                onClick={() =>
+                  addListItem("notices", {
+                    id: `nt-${Date.now()}`,
+                    day: "০১",
+                    month: "জানুয়ারি",
+                    title: "নতুন নোটিশের শিরোনাম",
+                    details: "নোটিশের বিস্তারিত বিবরণ এখানে লিখুন...",
+                  } as LandingNotice)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>নতুন নোটিশ</span>
+                <span>নোটিশ যোগ করুন</span>
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  সেকশন শিরোনাম
-                </label>
-                <input
-                  type="text"
-                  value={config.noticesSectionTitle}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      noticesSectionTitle: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  ডানপাশের বাটন টেক্সট
-                </label>
-                <input
-                  type="text"
-                  value={config.noticesViewAllText}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      noticesViewAllText: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
-                />
-              </div>
-            </div>
-
             <div className="space-y-3">
-              {config.notices.map((nt, idx) => (
-                <div
-                  key={nt.id}
-                  className="rounded-lg border border-border bg-background p-3 space-y-2.5"
-                >
+              {config.notices.map((notice, idx) => (
+                <div key={notice.id} className="rounded-lg border border-border p-3 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-700">
-                      নোটিশ #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeNotice(idx)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <span className="text-[11px] font-bold text-muted-foreground">নোটিশ {idx + 1}</span>
+                    <ListRowActions
+                      onMoveUp={() => moveListItem("notices", idx, -1)}
+                      onMoveDown={() => moveListItem("notices", idx, 1)}
+                      onRemove={() => removeListItem("notices", idx)}
+                      upDisabled={idx === 0}
+                      downDisabled={idx === config.notices.length - 1}
+                    />
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold mb-0.5">
-                        তারিখ (দিন)
-                      </label>
-                      <input
-                        type="text"
-                        value={nt.day}
-                        onChange={(e) => updateNotice(idx, { day: e.target.value })}
-                        placeholder="২৫"
-                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-semibold mb-0.5">
-                        মাস
-                      </label>
-                      <input
-                        type="text"
-                        value={nt.month}
-                        onChange={(e) =>
-                          updateNotice(idx, { month: e.target.value })
-                        }
-                        placeholder="জুলাই"
-                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                    <TextField
+                      label="দিন (বাংলা)"
+                      value={notice.day}
+                      onChange={(v) => updateList("notices", idx, { day: v })}
+                    />
+                    <TextField
+                      label="মাস (বাংলা)"
+                      value={notice.month}
+                      onChange={(v) => updateList("notices", idx, { month: v })}
+                    />
+                    <div className="sm:col-span-2">
+                      <TextField
+                        label="শিরোনাম"
+                        value={notice.title}
+                        onChange={(v) => updateList("notices", idx, { title: v })}
                       />
                     </div>
                   </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      নোটিশের শিরোনাম
-                    </label>
-                    <input
-                      type="text"
-                      value={nt.title}
-                      onChange={(e) => updateNotice(idx, { title: e.target.value })}
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      বিস্তারিত বিবরণ (ক্লিক করলে পপ-আপে দেখাবে)
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={nt.details}
-                      onChange={(e) =>
-                        updateNotice(idx, { details: e.target.value })
-                      }
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
-                    />
-                  </div>
+                  <TextArea
+                    label="বিস্তারিত বিবরণ (ক্লিক করলে দেখাবে)"
+                    value={notice.details}
+                    onChange={(v) => updateList("notices", idx, { details: v })}
+                    rows={2}
+                  />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right: Student Testimonials */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquareQuote className="h-4 w-4 text-emerald-600" />
-                <h2 className="text-sm font-bold">
-                  শিক্ষার্থীদের মতামত ({config.testimonials.length}টি)
-                </h2>
-              </div>
+          {/* Testimonials */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="মতামত সেকশনের শিরোনাম"
+                value={config.testimonialsSectionTitle}
+                onChange={(v) => patch({ testimonialsSectionTitle: v })}
+              />
+              <TextField
+                label="ডানপাশের বাটন টেক্সট"
+                value={config.testimonialsViewAllText}
+                onChange={(v) => patch({ testimonialsViewAllText: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <h3 className="text-xs font-bold">শিক্ষার্থীদের মতামত ({config.testimonials.length}টি)</h3>
               <button
                 type="button"
-                onClick={addTestimonial}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                onClick={() =>
+                  addListItem("testimonials", {
+                    id: `tm-${Date.now()}`,
+                    studentName: "শিক্ষার্থীর নাম",
+                    studentBatch: "HSC 2025, বিজ্ঞান বিভাগ",
+                    comment: "একাডেমি সম্পর্কে মতামত এখানে লিখুন...",
+                    rating: 5,
+                    avatarUrl: "",
+                  } as LandingTestimonial)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>নতুন মতামত</span>
+                <span>মতামত যোগ করুন</span>
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  সেকশন শিরোনাম
-                </label>
-                <input
-                  type="text"
-                  value={config.testimonialsSectionTitle}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      testimonialsSectionTitle: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold mb-1">
-                  ডানপাশের বাটন টেক্সট
-                </label>
-                <input
-                  type="text"
-                  value={config.testimonialsViewAllText}
-                  onChange={(e) =>
-                    setConfig((p) => ({
-                      ...p,
-                      testimonialsViewAllText: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
-                />
-              </div>
-            </div>
-
             <div className="space-y-3">
               {config.testimonials.map((tm, idx) => (
-                <div
-                  key={tm.id}
-                  className="rounded-lg border border-border bg-background p-3 space-y-2.5"
-                >
+                <div key={tm.id} className="rounded-lg border border-border p-3 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-700">
-                      মতামত #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeTestimonial(idx)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold mb-0.5">
-                        শিক্ষার্থীর নাম
-                      </label>
-                      <input
-                        type="text"
-                        value={tm.studentName}
-                        onChange={(e) =>
-                          updateTestimonial(idx, { studentName: e.target.value })
-                        }
-                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold mb-0.5">
-                        ব্যাচ ও বিভাগ
-                      </label>
-                      <input
-                        type="text"
-                        value={tm.studentBatch}
-                        onChange={(e) =>
-                          updateTestimonial(idx, { studentBatch: e.target.value })
-                        }
-                        className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      শিক্ষার্থীর মন্তব্য / রিভিউ
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={tm.comment}
-                      onChange={(e) =>
-                        updateTestimonial(idx, { comment: e.target.value })
-                      }
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                    <span className="text-[11px] font-bold text-muted-foreground">মতামত {idx + 1}</span>
+                    <ListRowActions
+                      onMoveUp={() => moveListItem("testimonials", idx, -1)}
+                      onMoveDown={() => moveListItem("testimonials", idx, 1)}
+                      onRemove={() => removeListItem("testimonials", idx)}
+                      upDisabled={idx === 0}
+                      downDisabled={idx === config.testimonials.length - 1}
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold mb-0.5">
-                      শিক্ষার্থীর ছবি URL (ঐচ্ছিক)
-                    </label>
-                    <input
-                      type="text"
-                      value={tm.avatarUrl || ""}
-                      onChange={(e) =>
-                        updateTestimonial(idx, { avatarUrl: e.target.value })
-                      }
-                      placeholder="খালি রাখলে নামের আদ্যক্ষর অ্যাভাটার দেখাবে"
-                      className="w-full rounded border border-border px-2.5 py-1.5 text-xs"
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <TextField
+                      label="শিক্ষার্থীর নাম"
+                      value={tm.studentName}
+                      onChange={(v) => updateList("testimonials", idx, { studentName: v })}
                     />
+                    <TextField
+                      label="ব্যাচ / পরিচয়"
+                      value={tm.studentBatch}
+                      onChange={(v) => updateList("testimonials", idx, { studentBatch: v })}
+                    />
+                    <Field label="রেটিং (১-৫)">
+                      <select
+                        value={String(tm.rating)}
+                        onChange={(e) =>
+                          updateList("testimonials", idx, { rating: Number(e.target.value) })
+                        }
+                        className={inputCls}
+                      >
+                        {[1, 2, 3, 4, 5].map((r) => (
+                          <option key={r} value={r}>{"⭐".repeat(r)}</option>
+                        ))}
+                      </select>
+                    </Field>
                   </div>
+                  <TextArea
+                    label="মতামত"
+                    value={tm.comment}
+                    onChange={(v) => updateList("testimonials", idx, { comment: v })}
+                    rows={2}
+                  />
+                  <LandingImagePicker
+                    label="শিক্ষার্থীর ছবি (ঐচ্ছিক)"
+                    url={tm.avatarUrl ?? ""}
+                    onChange={(url) => updateList("testimonials", idx, { avatarUrl: url })}
+                    hint="না দিলে নামের প্রথম অক্ষর দিয়ে বৃত্তাকার অবতার দেখাবে।"
+                  />
                 </div>
               ))}
             </div>
@@ -1401,94 +1155,413 @@ export function WebsiteEditor({ initialConfig }: WebsiteEditorProps) {
         </div>
       )}
 
-      {/* ==================== TAB: FOOTER & CONTACT ==================== */}
+      {/* ==================== TAB: FOOTER ==================== */}
       {activeTab === "footer" && (
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-          <h2 className="text-sm font-bold">ফুটার, ঠিকানা ও যোগাযোগের তথ্য</h2>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ঠিকানা
-              </label>
-              <input
-                type="text"
-                value={config.contactAddress}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, contactAddress: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ফোন নম্বর
-              </label>
-              <input
-                type="text"
-                value={config.contactPhone}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, contactPhone: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ইমেইল ঠিকানা
-              </label>
-              <input
-                type="text"
-                value={config.contactEmail}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, contactEmail: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ফুটার ট্যাগলাইন (যেমন: জ্ঞান | চর্চা | সাফল্য)
-              </label>
-              <input
-                type="text"
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">ফুটার (নিচের অংশ)</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="ট্যাগলাইন"
                 value={config.footerTagline}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, footerTagline: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                onChange={(v) => patch({ footerTagline: v })}
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                ডানপাশের স্লোগান (যেমন: শিক্ষায় জয়ে, জীবনে জয়ে)
-              </label>
-              <input
-                type="text"
+              <TextField
+                label="নিচের মোটো লেখা"
                 value={config.footerMotto}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, footerMotto: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                onChange={(v) => patch({ footerMotto: v })}
+              />
+              <TextField
+                label="কপিরাইট লেখা"
+                value={config.copyrightText}
+                onChange={(v) => patch({ copyrightText: v })}
+              />
+              <TextField
+                label="ওয়াটারমার্ক (ডানপাশে হালকা লেখা)"
+                value={config.footerWatermark}
+                onChange={(v) => patch({ footerWatermark: v })}
               />
             </div>
+            <TextArea
+              label="প্রতিষ্ঠান পরিচিতি (ফুটারে)"
+              value={config.footerAboutText}
+              onChange={(v) => patch({ footerAboutText: v })}
+              rows={2}
+            />
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold mb-1">
-                কপিরাইট টেক্সট
-              </label>
-              <input
-                type="text"
-                value={config.copyrightText}
-                onChange={(e) =>
-                  setConfig((p) => ({ ...p, copyrightText: e.target.value }))
-                }
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+          {/* Contact */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">যোগাযোগের তথ্য</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <TextField
+                label="যোগাযোগ কলামের শিরোনাম"
+                value={config.contactTitle}
+                onChange={(v) => patch({ contactTitle: v })}
               />
+              <TextField
+                label="ঠিকানা"
+                value={config.contactAddress}
+                onChange={(v) => patch({ contactAddress: v })}
+              />
+              <TextField
+                label="ফোন নম্বর"
+                value={config.contactPhone}
+                onChange={(v) => patch({ contactPhone: v })}
+              />
+              <TextField
+                label="ইমেইল"
+                value={config.contactEmail}
+                onChange={(v) => patch({ contactEmail: v })}
+              />
+            </div>
+            <h3 className="text-xs font-bold pt-1">সোশ্যাল মিডিয়া লিংক</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="Facebook লিংক"
+                value={config.facebookUrl}
+                onChange={(v) => patch({ facebookUrl: v })}
+                placeholder="https://facebook.com/..."
+              />
+              <TextField
+                label="YouTube লিংক"
+                value={config.youtubeUrl}
+                onChange={(v) => patch({ youtubeUrl: v })}
+                placeholder="https://youtube.com/..."
+              />
+              <TextField
+                label="Instagram লিংক"
+                value={config.instagramUrl}
+                onChange={(v) => patch({ instagramUrl: v })}
+                placeholder="https://instagram.com/..."
+              />
+              <TextField
+                label="Telegram লিংক"
+                value={config.telegramUrl}
+                onChange={(v) => patch({ telegramUrl: v })}
+                placeholder="https://t.me/..."
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              খালি রাখলে ওই সোশ্যাল আইকনটি ফুটারে দেখানো হবে না।
+            </p>
+          </div>
+
+          {/* Newsletter */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">নিউজলেটার</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <TextField
+                label="শিরোনাম"
+                value={config.newsletterTitle}
+                onChange={(v) => patch({ newsletterTitle: v })}
+              />
+              <TextField
+                label="সাব-টাইটেল"
+                value={config.newsletterSubtitle}
+                onChange={(v) => patch({ newsletterSubtitle: v })}
+              />
+              <TextField
+                label="ইনপুট প্লেসহোল্ডার"
+                value={config.newsletterPlaceholder}
+                onChange={(v) => patch({ newsletterPlaceholder: v })}
+              />
+            </div>
+          </div>
+
+          {/* Quick + support links */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="দ্রুত লিংক কলামের শিরোনাম"
+                value={config.quickLinksTitle}
+                onChange={(v) => patch({ quickLinksTitle: v })}
+              />
+              <TextField
+                label="সহায়তা কলামের শিরোনাম"
+                value={config.supportLinksTitle}
+                onChange={(v) => patch({ supportLinksTitle: v })}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              দ্রুত লিংক কলামে উপরের মেনু আইটেমগুলোই দেখানো হয়। নিচে সহায়তা কলামের লিংকগুলো সম্পাদনা করুন:
+            </p>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold">সহায়তা লিংক ({config.supportLinks.length}টি)</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  addListItem("supportLinks", {
+                    id: `sl-${Date.now()}`,
+                    label: "নতুন লিংক",
+                    href: "#home",
+                  } as LandingNavItem)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>লিংক যোগ করুন</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {config.supportLinks.map((item, idx) => (
+                <div key={item.id} className="flex items-end gap-2 rounded-lg border border-border p-2.5">
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <TextField
+                      label="নাম"
+                      value={item.label}
+                      onChange={(v) => updateList("supportLinks", idx, { label: v })}
+                    />
+                    <TextField
+                      label="লিংক"
+                      value={item.href}
+                      onChange={(v) => updateList("supportLinks", idx, { href: v })}
+                    />
+                  </div>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("supportLinks", idx, -1)}
+                    onMoveDown={() => moveListItem("supportLinks", idx, 1)}
+                    onRemove={() => removeListItem("supportLinks", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.supportLinks.length - 1}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ==================== TAB: HERO + NAV ==================== */}
+      {activeTab === "hero" && (
+        <div className="space-y-4">
+          {/* Hero texts */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">হিরো ব্যানার (উপরের বড় অংশ)</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="অবস্থান ব্যাজ (উপরে ছোট চিপ)"
+                value={config.heroBadgeText}
+                onChange={(v) => patch({ heroBadgeText: v })}
+              />
+              <TextField
+                label="ট্যাগলাইন (ডট দিয়ে আলাদা)"
+                value={config.heroTagline}
+                onChange={(v) => patch({ heroTagline: v })}
+              />
+              <TextField
+                label="বড় শিরোনাম — ১ম অংশ (সাদা)"
+                value={config.heroTitleLine1}
+                onChange={(v) => patch({ heroTitleLine1: v })}
+              />
+              <TextField
+                label="বড় শিরোনাম — ২য় অংশ (গ্রেডিয়েন্ট রঙ)"
+                value={config.heroTitleLine2}
+                onChange={(v) => patch({ heroTitleLine2: v })}
+              />
+              <TextField
+                label="প্রাইমারি বাটন টেক্সট"
+                value={config.heroPrimaryBtnText}
+                onChange={(v) => patch({ heroPrimaryBtnText: v })}
+              />
+              <TextField
+                label="সেকেন্ডারি বাটন টেক্সট"
+                value={config.heroSecondaryBtnText}
+                onChange={(v) => patch({ heroSecondaryBtnText: v })}
+              />
+              <TextField
+                label="ডেকোরেটিভ ইংরেজি লেখা (italic)"
+                value={config.heroDecorText}
+                onChange={(v) => patch({ heroDecorText: v })}
+              />
+            </div>
+            <TextArea
+              label="হিরোর বর্ণনা"
+              value={config.heroDescription}
+              onChange={(v) => patch({ heroDescription: v })}
+              rows={3}
+            />
+            <LandingImagePicker
+              label="হিরো ব্যাকগ্রাউন্ড ছবি"
+              url={config.heroImageUrl}
+              onChange={(url) => patch({ heroImageUrl: url })}
+              aspect="wide"
+              hint="সুপারিত: 1344x768 বা তার চেয়ে বড় ল্যান্ডস্কেপ ছবি।"
+            />
+          </div>
+
+          {/* Quick chips */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold">দ্রুত প্রবেশ চিপ ({config.heroChips.length}টি)</h2>
+              <button
+                type="button"
+                onClick={() =>
+                  addListItem("heroChips", {
+                    id: `chip-${Date.now()}`,
+                    label: "নতুন চিপ",
+                  } as LandingHeroChip)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>চিপ যোগ করুন</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {config.heroChips.map((chip, idx) => (
+                <div key={chip.id} className="flex items-end gap-2 rounded-lg border border-border p-2.5">
+                  <div className="flex-1">
+                    <TextField
+                      label={`চিপ ${idx + 1}`}
+                      value={chip.label}
+                      onChange={(v) => updateList("heroChips", idx, { label: v })}
+                    />
+                  </div>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("heroChips", idx, -1)}
+                    onMoveDown={() => moveListItem("heroChips", idx, 1)}
+                    onRemove={() => removeListItem("heroChips", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.heroChips.length - 1}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Hero widget items */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold">হিরোর ভাসমান কার্ড ({config.heroWidget.length}টি ঘর)</h2>
+              <button
+                type="button"
+                onClick={() =>
+                  addListItem("heroWidget", {
+                    id: `hw-${Date.now()}`,
+                    title: "১০০+",
+                    subtitle: "নতুন পরিসংখ্যান",
+                    iconName: "award",
+                    color: "blue",
+                  } as LandingHeroWidgetItem)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>ঘর যোগ করুন</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {config.heroWidget.map((item, idx) => (
+                <div key={item.id} className="rounded-lg border border-border p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-muted-foreground">ঘর {idx + 1}</span>
+                    <ListRowActions
+                      onMoveUp={() => moveListItem("heroWidget", idx, -1)}
+                      onMoveDown={() => moveListItem("heroWidget", idx, 1)}
+                      onRemove={() => removeListItem("heroWidget", idx)}
+                      upDisabled={idx === 0}
+                      downDisabled={idx === config.heroWidget.length - 1}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextField
+                      label="বড় সংখ্যা"
+                      value={item.title}
+                      onChange={(v) => updateList("heroWidget", idx, { title: v })}
+                    />
+                    <TextField
+                      label="নিচের লেখা"
+                      value={item.subtitle}
+                      onChange={(v) => updateList("heroWidget", idx, { subtitle: v })}
+                    />
+                    <Field label="আইকন">
+                      <select
+                        value={item.iconName}
+                        onChange={(e) => updateList("heroWidget", idx, { iconName: e.target.value })}
+                        className={inputCls}
+                      >
+                        {FEATURE_ICON_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="রঙ">
+                      <select
+                        value={item.color}
+                        onChange={(e) =>
+                          updateList("heroWidget", idx, {
+                            color: e.target.value as WidgetAccentColor,
+                          })
+                        }
+                        className={inputCls}
+                      >
+                        {WIDGET_COLOR_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Navbar */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h2 className="text-sm font-bold">উপরের মেনু (নেভিগেশন)</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField
+                label="লগইন বাটন টেক্সট"
+                value={config.loginBtnText}
+                onChange={(v) => patch({ loginBtnText: v })}
+              />
+              <TextField
+                label="রেজিস্ট্রেশন বাটন টেক্সট"
+                value={config.registerBtnText}
+                onChange={(v) => patch({ registerBtnText: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <h3 className="text-xs font-bold">মেনু আইটেম ({config.navItems.length}টি)</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  addListItem("navItems", {
+                    id: `nav-${Date.now()}`,
+                    label: "নতুন মেনু",
+                    href: "#home",
+                  } as LandingNavItem)
+                }
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>মেনু যোগ করুন</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {config.navItems.map((item, idx) => (
+                <div key={item.id} className="flex items-end gap-2 rounded-lg border border-border p-2.5">
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <TextField
+                      label="নাম"
+                      value={item.label}
+                      onChange={(v) => updateList("navItems", idx, { label: v })}
+                    />
+                    <TextField
+                      label="লিংক"
+                      value={item.href}
+                      onChange={(v) => updateList("navItems", idx, { href: v })}
+                    />
+                  </div>
+                  <ListRowActions
+                    onMoveUp={() => moveListItem("navItems", idx, -1)}
+                    onMoveDown={() => moveListItem("navItems", idx, 1)}
+                    onRemove={() => removeListItem("navItems", idx)}
+                    upDisabled={idx === 0}
+                    downDisabled={idx === config.navItems.length - 1}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>

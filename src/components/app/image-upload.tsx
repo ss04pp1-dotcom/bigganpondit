@@ -69,7 +69,7 @@ export function ImageUpload({
   compact = false,
   disabled = false,
 }: {
-  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg" | "publication-logo";
+  type: "logo" | "signature" | "student-photo" | "teacher-photo" | "banner" | "director-photo" | "director-signature" | "card-bg" | "publication-logo" | "landing";
   studentId?: number;
   teacherId?: number;
   currentUrl?: string | null;
@@ -93,7 +93,7 @@ export function ImageUpload({
   async function pick(file: File) {
     if (disabled) return;
     const maxBytes =
-      type === "banner"
+      type === "banner" || type === "landing"
         ? 15 * 1024 * 1024
         : type === "publication-logo" || type === "logo" || type === "card-bg"
         ? 15 * 1024 * 1024
@@ -103,7 +103,7 @@ export function ImageUpload({
         title:
           type === "banner"
             ? "ব্যানার ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
-            : type === "publication-logo" || type === "logo" || type === "card-bg"
+            : type === "publication-logo" || type === "logo" || type === "card-bg" || type === "landing"
             ? "ফাইলটি অনেক বড় (সর্বোচ্চ ১৫ MB)।"
             : "ফাইলটি অনেক বড় (সর্বোচ্চ ৫ MB)।",
         variant: "destructive",
@@ -140,7 +140,7 @@ export function ImageUpload({
   }
 
   const maxSizeText =
-    type === "banner" || type === "publication-logo" || type === "logo" || type === "card-bg"
+    type === "banner" || type === "publication-logo" || type === "logo" || type === "card-bg" || type === "landing"
       ? "সর্বোচ্চ ১৫ MB"
       : "সর্বোচ্চ ৫ MB";
 

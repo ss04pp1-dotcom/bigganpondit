@@ -80,6 +80,8 @@ export async function POST(req: Request) {
         ? 15 * 1024 * 1024 // 15 MB
         : type === "publication-logo" || type === "logo" || type === "card-bg"
         ? 15 * 1024 * 1024 // 15 MB
+        : type === "landing"
+        ? 15 * 1024 * 1024 // 15 MB — public landing page images (hero/campus/course/avatar)
         : MAX_UPLOAD_BYTES; // 5 MB
     if (file.size > maxBytes) throw new ApiError(400, MSG.fileTooLarge);
 
@@ -223,6 +225,18 @@ export async function POST(req: Request) {
       await bucket.put(key, bytes);
       await db.prepare("UPDATE student_requests SET photo_key = ?, updated_at = datetime('now') WHERE id = ?").bind(key, requestId).run();
       if (reqRow.photo_key) await bucket.delete(reqRow.photo_key).catch(() => {});
+      return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "landing") {
+      // Public landing page images: hero background, campus photo, course card
+      // banners, testimonial avatars. Admin / Director only. The returned URL is
+      // stored inside the landing_page_config setting JSON.
+      if (user.role !== "ADMIN" && user.role !== "DIRECTOR") {
+        throw new ApiError(403, MSG.noPermissionView);
+      }
+      const key = `academy/landing/img-${uuid}.${detected}`;
+      await bucket.put(key, bytes);
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
     }
 

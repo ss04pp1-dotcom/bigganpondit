@@ -30,12 +30,14 @@ export async function GET(req: Request, ctx: Ctx) {
     const obj = await bucket.get(key);
     if (!obj) return fail(404, "এই তথ্য পাওয়া যায়নি।");
 
-    // ---- public: academy logo, publication logo, banners & result card backgrounds (branding) ----
+    // ---- public: academy logo, publication logo, banners, result card
+    // backgrounds & public landing page images (hero/campus/course/avatars) ----
     if (
       key.startsWith("academy/logos/") ||
       key.startsWith("academy/publication/") ||
       key.startsWith("academy/banners/") ||
-      key.startsWith("academy/card-bg/")
+      key.startsWith("academy/card-bg/") ||
+      key.startsWith("academy/landing/")
     ) {
       return new Response(obj.data as unknown as BodyInit, {
         headers: {

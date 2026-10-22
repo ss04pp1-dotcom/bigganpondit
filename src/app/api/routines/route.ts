@@ -122,7 +122,15 @@ export async function GET(req: NextRequest) {
              WHERE s.id = ?`
           )
           .bind(user.studentId)
-          .first()
+          .first<{
+            id: number;
+            class_name: string;
+            division: string | null;
+            section: string | null;
+            roll: number | null;
+            batch_id: number | null;
+            batch_name: string | null;
+          }>()
           .catch(() => null);
       }
 

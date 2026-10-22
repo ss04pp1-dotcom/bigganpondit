@@ -35,7 +35,7 @@ export async function PUT(req: Request) {
     } | null;
 
     if (!body) {
-      return fail("অবৈধ তথ্য প্রেরণ করা হয়েছে।", 400);
+      return fail(400, "অবৈধ তথ্য প্রেরণ করা হয়েছে।");
     }
 
     if (body.resetToDefault) {
@@ -47,7 +47,7 @@ export async function PUT(req: Request) {
     }
 
     if (!body.config || typeof body.config !== "object") {
-      return fail("হোমপেজের কনফিগারেশন তথ্য পাওয়া যায়নি।", 400);
+      return fail(400, "হোমপেজের কনফিগারেশন তথ্য পাওয়া যায়নি।");
     }
 
     const sanitized = parseLandingConfig(JSON.stringify(body.config));

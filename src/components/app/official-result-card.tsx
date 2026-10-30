@@ -375,19 +375,25 @@ export function OfficialResultCard({
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    // Fail count: use s.failCount if provided; otherwise check for compulsory fail
-    const failsInSub = s.failCount !== undefined
+    // Fail count:
+    // If s.failCount is explicitly provided as > 0, use it.
+    // Otherwise, if s.grade === "F" and !s.isFourth, and the student either scored marks (s.obtained > 0)
+    // or had no absences (!att.startsWith("A")), count it as 1 fail!
+    const failsInSub = (typeof s.failCount === "number" && s.failCount > 0)
       ? s.failCount
-      : (s.grade === "F" && !s.isFourth && (!att.startsWith("A") || s.obtained > 0) ? 1 : 0);
+      : (s.grade === "F" && !s.isFourth && (!att.startsWith("A") || (s.obtained !== undefined && s.obtained > 0)) ? 1 : 0);
     totalFails += failsInSub;
   }
 
   const calculatedFine = totalAbsenceCount * 20 + totalFails * 50;
+  const fineNum = parseFloat(String(fine || "").replace(/[^0-9.]/g, "")) || 0;
   // "০০/-" means "explicitly zero fine" (annual cards) — display it as-is.
-  // If fine was passed as "0.00৳" or "0৳" while calculatedFine > 0, prefer calculatedFine so fails are never dropped.
-  const fineDisplay = fine !== undefined && fine !== null
-    ? (fine === "০০/-" || fine === "00/-" ? fine : (fine === "0.00৳" || fine === "0৳" || fine === "0") && calculatedFine > 0 ? `${calculatedFine}.00৳` : fine)
-    : `${calculatedFine}.00৳`;
+  // If calculatedFine > fineNum, ALWAYS show the higher calculatedFine so fail fines are NEVER omitted!
+  const fineDisplay = (fine === "০০/-" || fine === "00/-")
+    ? fine
+    : calculatedFine > fineNum
+    ? `${calculatedFine}.00৳`
+    : (fine !== undefined && fine !== null ? fine : `${calculatedFine}.00৳`);
 
   /* ---------- টেবিল সারি তৈরি (শিক্ষক-গ্রুপ → গ্যাপ → ফাঁকা সারি) ---------- */
   const groups: { name: string; short: string; subs: OfficialSubjectRow[] }[] = [];

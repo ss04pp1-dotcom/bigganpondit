@@ -14,6 +14,10 @@ describe("Result Card Fail and Absence Fine Calculation", () => {
     await db.prepare("DELETE FROM exams WHERE year = ? AND month = ?").bind(year, month).run();
     await db.prepare("DELETE FROM fee_items WHERE student_id = 601 AND month = ? AND year = ?").bind(month, year).run();
 
+    // Ensure user 601 and student 601 exist
+    await db.prepare("INSERT OR IGNORE INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)").bind(601, "টেস্ট ১", "test601", "hash", "STUDENT").run();
+    await db.prepare("INSERT OR IGNORE INTO students (id, user_id, name, roll, class_id) VALUES (?, ?, ?, ?, ?)").bind(601, 601, "টেস্ট শিক্ষার্থী ১", 601, 1).run();
+
     // Setup subjects: Subject 1 (Compulsory), Subject 2 (Compulsory), Subject 3 (4th Subject)
     await db.prepare("INSERT OR IGNORE INTO subjects (id, class_id, name, is_fourth_subject) VALUES (?, ?, ?, ?)").bind(101, 1, "পদার্থবিজ্ঞান", 0).run();
     await db.prepare("INSERT OR IGNORE INTO subjects (id, class_id, name, is_fourth_subject) VALUES (?, ?, ?, ?)").bind(102, 1, "রসায়ন", 0).run();
@@ -83,21 +87,16 @@ describe("Result Card Fail and Absence Fine Calculation", () => {
         }
       }
 
-      if (s.grade === "F" && !s.isFourth && subFails === 0 && subAbsences === 0) {
-        subFails = 1;
+      if (s.grade === "F" && !s.isFourth && subFails === 0) {
+        if (s.obtained > 0 || subAbsences === 0 || (exams.length > 0 && exams.some((e) => e.attendance !== "ABSENT"))) {
+          subFails = 1;
+        }
       }
 
       totalStudentAbsences += subAbsences;
       totalStudentFails += subFails;
     }
 
-    // Expected:
-    // Subject 101: 0 absences, 1 fail
-    // Subject 102: 1 absence, 1 fail (absence in exam 2 does NOT cancel fail in exam 3!)
-    // Subject 103 (4th subject): 0 fails counted
-    // Total absences = 1 (20৳)
-    // Total fails = 2 (2 * 50 = 100৳)
-    // Total fine = 120৳
     expect(totalStudentAbsences).toBe(1);
     expect(totalStudentFails).toBe(2);
 
@@ -107,5 +106,78 @@ describe("Result Card Fail and Absence Fine Calculation", () => {
     // Clean up
     await db.prepare("DELETE FROM marks WHERE student_id = 601").run();
     await db.prepare("DELETE FROM exams WHERE year = ? AND month = ?").bind(year, month).run();
+  });
+
+  it("accurately handles Mariam's exact case: 1 absent exam (A1) + 1 passed exam but failed overall subject", async () => {
+    const db = await getDb();
+    const month = 10;
+    const year = 2026;
+
+    await db.prepare("DELETE FROM marks WHERE student_id = 602").run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 104").bind(year, month).run();
+    await db.prepare("INSERT OR IGNORE INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)").bind(602, "মোছাঃ মরিয়ম খাতুন (খুশি)", "mariam602", "hash", "STUDENT").run();
+    await db.prepare("INSERT OR IGNORE INTO students (id, user_id, name, roll, class_id) VALUES (?, ?, ?, ?, ?)").bind(602, 602, "মোছাঃ মরিয়ম খাতুন (খুশি)", 602, 1).run();
+    await db.prepare("INSERT OR IGNORE INTO subjects (id, class_id, name, is_fourth_subject) VALUES (?, ?, ?, ?)").bind(104, 1, "ইংরেজি", 0).run();
+
+    // Exam 1: Total 20, ABSENT
+    const e1 = await db.prepare(
+      "INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind("ইংরেজি পরীক্ষা ১", 1, 104, 20, month, year, "2026-10-05", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e1.meta.last_row_id, 602, 0, "ABSENT").run();
+
+    // Exam 2: Total 48, PRESENT, obtained 16.66 (individually 34.7% >= 33%, but combined 16.66/68 = 24.5% = F)
+    const e2 = await db.prepare(
+      "INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind("ইংরেজি পরীক্ষা ২", 1, 104, 48, month, year, "2026-10-15", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e2.meta.last_row_id, 602, 16.66, "PRESENT").run();
+
+    const report = await buildMonthlyReport(db, {
+      studentId: 602,
+      month,
+      year,
+      mode: "MONTHLY",
+      publishedOnly: true,
+    });
+
+    expect(report).not.toBeNull();
+    const englishSub = report!.subjects.find(s => s.subjectId === 104);
+    expect(englishSub).toBeDefined();
+    expect(englishSub!.grade).toBe("F");
+    expect(englishSub!.obtained).toBeCloseTo(16.66, 1);
+    expect(englishSub!.totalMarks).toBe(68);
+
+    const exams = report?.examRowsBySubject?.get(104) ?? [];
+    let subAbsences = 0;
+    let subFails = 0;
+
+    for (const e of exams) {
+      const isFourth = Boolean(englishSub!.isFourth || e.subjectIsFourth);
+      const isAbsent = e.attendance === "ABSENT";
+      if (isAbsent) {
+        subAbsences++;
+      }
+      if (!isAbsent || e.obtained > 0) {
+        const isFail = e.grade === "F" || (e.total > 0 && (e.obtained / e.total) * 100 < 33);
+        if (isFail && !isFourth) {
+          subFails++;
+        }
+      }
+    }
+
+    if (englishSub!.grade === "F" && !englishSub!.isFourth && subFails === 0) {
+      if (englishSub!.obtained > 0 || subAbsences === 0 || (exams.length > 0 && exams.some((e) => e.attendance !== "ABSENT"))) {
+        subFails = 1;
+      }
+    }
+
+    expect(subAbsences).toBe(1);
+    expect(subFails).toBe(1);
+
+    const totalFine = (subAbsences * 20) + (subFails * 50);
+    expect(totalFine).toBe(70);
+
+    // Clean up
+    await db.prepare("DELETE FROM marks WHERE student_id = 602").run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 104").bind(year, month).run();
   });
 });

@@ -231,10 +231,12 @@ export async function GET(req: Request) {
 
           if (exams.length > 0) {
             for (const e of exams) {
-              if (e.attendance === "ABSENT") {
+              const isFourth = Boolean(s.isFourth || e.subjectIsFourth);
+              const isAbsent = e.attendance === "ABSENT";
+              if (isAbsent) {
                 subAbsences++;
-              } else {
-                const isFourth = Boolean(s.isFourth || e.subjectIsFourth);
+              }
+              if (!isAbsent || e.obtained > 0) {
                 const isFail = e.grade === "F" || (e.total > 0 && (e.obtained / e.total) * 100 < 33);
                 if (isFail && !isFourth) {
                   subFails++;
@@ -251,9 +253,14 @@ export async function GET(req: Request) {
             }
           }
 
-          // If the aggregated subject is Grade F and compulsory, ensure at least 1 fail is registered if no absences
-          if (s.grade === "F" && !s.isFourth && subFails === 0 && subAbsences === 0) {
-            subFails = 1;
+          // If the aggregated subject is Grade F and compulsory:
+          // Ensure at least 1 fail is registered if the student participated (s.obtained > 0),
+          // had any non-absent exam, or was present with 0 marks (subAbsences === 0).
+          // Having an absence in one test (e.g. A1) must not suppress the 50৳ fail fine for the failed subject.
+          if (s.grade === "F" && !s.isFourth && subFails === 0) {
+            if (s.obtained > 0 || subAbsences === 0 || (exams.length > 0 && exams.some((e) => e.attendance !== "ABSENT"))) {
+              subFails = 1;
+            }
           }
 
           totalStudentAbsences += subAbsences;

@@ -226,15 +226,40 @@ export async function GET(req: Request) {
         const officialSubjects = (report?.subjects ?? []).map((s) => {
           const t = teacherMap.get(s.subjectId);
           const exams = report?.examRowsBySubject?.get(s.subjectId) ?? [];
-          const absCount = exams.filter((e) => e.attendance === "ABSENT").length;
-          totalStudentAbsences += absCount;
-          // Absent subjects already incur the absence fine — do NOT also
-          // charge the fail fine for the same missed exam (was 20 + 50 = 70৳
-          // per absence).
-          if (s.grade === "F" && !s.isFourth && absCount === 0) {
-            totalStudentFails++;
+          let subAbsences = 0;
+          let subFails = 0;
+
+          if (exams.length > 0) {
+            for (const e of exams) {
+              if (e.attendance === "ABSENT") {
+                subAbsences++;
+              } else {
+                const isFourth = Boolean(s.isFourth || e.subjectIsFourth);
+                const isFail = e.grade === "F" || (e.total > 0 && (e.obtained / e.total) * 100 < 33);
+                if (isFail && !isFourth) {
+                  subFails++;
+                }
+              }
+            }
+          } else {
+            const isFourth = Boolean(s.isFourth);
+            if (s.attendance && s.attendance.startsWith("A")) {
+              subAbsences += parseInt(s.attendance.substring(1), 10) || 1;
+            }
+            if (s.grade === "F" && !isFourth) {
+              subFails++;
+            }
           }
-          const attendance = absCount > 0 ? (absCount === 1 ? "A1" : `A${absCount}`) : "P";
+
+          // If the aggregated subject is Grade F and compulsory, ensure at least 1 fail is registered if no absences
+          if (s.grade === "F" && !s.isFourth && subFails === 0 && subAbsences === 0) {
+            subFails = 1;
+          }
+
+          totalStudentAbsences += subAbsences;
+          totalStudentFails += subFails;
+
+          const attendance = subAbsences > 0 ? (subAbsences === 1 ? "A1" : `A${subAbsences}`) : "P";
 
           return {
             subjectId: s.subjectId,
@@ -248,6 +273,7 @@ export async function GET(req: Request) {
             gpa: s.gpa,
             isFourth: s.isFourth,
             attendance,
+            failCount: subFails,
           };
         });
 
@@ -264,7 +290,21 @@ export async function GET(req: Request) {
           ? monthlySummary.entries.find((e: any) => e.studentId === st.id)?.position
           : undefined;
 
-        const calculatedFine = (totalStudentAbsences * 20) + (totalStudentFails * 50);
+        // Check if fine items are recorded in the fee ledger for this student/month/year
+        const feeRow = await db
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as fine_amount
+             FROM fee_items
+             WHERE student_id = ? AND month = ? AND (year = ? OR year IS NULL)
+               AND category IN ('ABSENT_FINE', 'FAIL_FINE', 'OTHER_FINE')`
+          )
+          .bind(st.id, month, year)
+          .first<{ fine_amount: number }>()
+          .catch(() => null);
+
+        const dynamicFine = (totalStudentAbsences * 20) + (totalStudentFails * 50);
+        const recordedFine = Number(feeRow?.fine_amount || 0);
+        const finalFine = Math.max(dynamicFine, recordedFine);
 
         const teacherRemarks = await getStudentMonthlyComments(db, {
           studentId: st.id,
@@ -286,7 +326,7 @@ export async function GET(req: Request) {
           overall,
           // FIX: real position with proper Bangla ordinals — never a fake "১ম"
           position: banglaOrdinal(position),
-          fine: `${calculatedFine}.00৳`,
+          fine: `${finalFine}.00৳`,
           topStudent,
           teacherRemarks,
         });

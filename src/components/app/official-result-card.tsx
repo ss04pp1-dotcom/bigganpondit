@@ -27,6 +27,7 @@ export interface OfficialSubjectRow {
   gpa: number;
   isFourth?: boolean;
   attendance?: string; // P, A1, A2...
+  failCount?: number;
 }
 
 export interface DirectorOption {
@@ -369,25 +370,24 @@ export function OfficialResultCard({
   let totalAbsenceCount = 0;
   let totalFails = 0;
   for (const s of subjects) {
-    // SECURITY/DATA: never infer "absent" from a 0 mark — a PRESENT student
-    // who legitimately scored 0 was previously fabricated as absent (A1) and
-    // fined 20৳. Missing attendance data simply defaults to PRESENT.
     const att = s.attendance || "P";
     if (att.startsWith("A")) {
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    // Absent subjects already incur the absence fine — do NOT also charge the
-    // fail fine for the same missed exam (was 20 + 50 = 70৳ per absence).
-    if (s.grade === "F" && !s.isFourth && !att.startsWith("A")) {
-      totalFails++;
-    }
+    // Fail count: use s.failCount if provided; otherwise check for compulsory fail
+    const failsInSub = s.failCount !== undefined
+      ? s.failCount
+      : (s.grade === "F" && !s.isFourth && (!att.startsWith("A") || s.obtained > 0) ? 1 : 0);
+    totalFails += failsInSub;
   }
 
   const calculatedFine = totalAbsenceCount * 20 + totalFails * 50;
-  // "০০/-" means "explicitly zero fine" (annual cards) — display it as-is,
-  // never treat it as a trigger to auto-compute a fabricated fine.
-  const fineDisplay = fine !== undefined && fine !== null ? fine : `${calculatedFine}.00৳`;
+  // "০০/-" means "explicitly zero fine" (annual cards) — display it as-is.
+  // If fine was passed as "0.00৳" or "0৳" while calculatedFine > 0, prefer calculatedFine so fails are never dropped.
+  const fineDisplay = fine !== undefined && fine !== null
+    ? (fine === "০০/-" || fine === "00/-" ? fine : (fine === "0.00৳" || fine === "0৳" || fine === "0") && calculatedFine > 0 ? `${calculatedFine}.00৳` : fine)
+    : `${calculatedFine}.00৳`;
 
   /* ---------- টেবিল সারি তৈরি (শিক্ষক-গ্রুপ → গ্যাপ → ফাঁকা সারি) ---------- */
   const groups: { name: string; short: string; subs: OfficialSubjectRow[] }[] = [];

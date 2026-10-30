@@ -411,7 +411,7 @@ export function OfficialResultCard({
   const n = subjects.length;
   const blankCount = Math.max(0, MIN_ROWS - n);
   const rows: BodyRow[] = [];
-  groups.forEach((g, gi) => {
+  groups.forEach((g) => {
     g.subs.forEach((sub, si) =>
       rows.push({
         kind: "sub",
@@ -419,13 +419,11 @@ export function OfficialResultCard({
         teacher: si === 0 ? { name: g.name, short: g.short, span: g.subs.length } : undefined,
       }),
     );
-    if (gi < groups.length - 1 || blankCount > 0) rows.push({ kind: "gap" });
   });
   for (let i = 0; i < blankCount; i++) rows.push({ kind: "blank" });
 
-  const gapCount = rows.filter((r) => r.kind === "gap").length;
   const dataRows = Math.max(MIN_ROWS, n);
-  const rowH = Math.floor(((BODY_H - gapCount * GAP_H) / dataRows) * 2) / 2;
+  const rowH = Math.floor((BODY_H / dataRows) * 2) / 2;
 
   const posText = position ? (typeof position === "number" ? bn(position) : position) : "১ম";
   const nameLen = student.name.length;

@@ -1098,12 +1098,14 @@ table:not(.rc-tbl) tbody tr:hover { background: #f7fbff !important; }
   padding: 0 3px;
 }
 .rc-tbl tr.rc-gap {
-  height: 14px;
+  height: 0px;
+  display: none;
 }
 .rc-tbl tr.rc-gap td {
-  background: #fff;
+  background: transparent;
   padding: 0;
-  height: 14px;
+  height: 0px;
+  border: none !important;
 }
 .rc-tbl td.rc-top {
   background: #fff9db;

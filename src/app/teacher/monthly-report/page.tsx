@@ -98,6 +98,31 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
     ? await getStudentMonthlyComments(db, { studentId, month, year, mode })
     : [];
 
+  let currentTeacherId = user.teacherId;
+  if (!currentTeacherId) {
+    const tRow = await db
+      .prepare("SELECT id, short_name, signature_key FROM teachers WHERE user_id = ?")
+      .bind(user.id)
+      .first<{ id: number; short_name: string; signature_key: string | null }>()
+      .catch(() => null);
+    if (tRow?.id) {
+      currentTeacherId = tRow.id;
+    } else {
+      const shortName = user.role === "ADMIN" ? "অ্যাডমিন" : user.role === "DIRECTOR" ? "পরিচালক" : (user.name || "শিক্ষক").slice(0, 6);
+      await db
+        .prepare("INSERT OR IGNORE INTO teachers (user_id, short_name, signature_key) VALUES (?, ?, ?)")
+        .bind(user.id, shortName, user.signatureKey || null)
+        .run()
+        .catch(() => null);
+      const created = await db
+        .prepare("SELECT id FROM teachers WHERE user_id = ?")
+        .bind(user.id)
+        .first<{ id: number }>()
+        .catch(() => null);
+      currentTeacherId = created?.id;
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="no-print">
@@ -131,14 +156,16 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
         <div className="space-y-4">
           <div className="no-print">
             <TeacherMonthlyCommentManager
+              key={`teacher-comment-${studentId}-${month}-${year}-${mode}`}
               studentId={report.student.studentId || (report.student as any).id || studentId!}
               studentName={report.student.name}
               month={month}
               year={year}
               mode={mode}
               currentTeacher={{
-                teacherId: user.teacherId ?? 0,
+                teacherId: currentTeacherId ?? 0,
                 name: user.name,
+                role: user.role,
                 shortName: user.shortName,
                 signatureKey: user.signatureKey,
               }}
@@ -184,6 +211,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
               grade: report.overall.grade,
             }}
             position={position}
+            teacherRemarks={teacherRemarks}
             directorInfo={dirInfo}
             academyName={academyName}
             logoUrl={logoKey ? `/api/files/${logoKey}` : null}

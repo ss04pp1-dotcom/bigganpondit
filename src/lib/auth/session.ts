@@ -107,16 +107,18 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
     out.signatureKey = dirCheck.signature_key;
   }
 
-  if (out.role === "TEACHER") {
+  if (out.role === "TEACHER" || out.role === "ADMIN" || out.role === "DIRECTOR") {
     let t = await db
       .prepare("SELECT * FROM teachers WHERE user_id = ?")
       .bind(user.id)
       .first<TeacherRow>()
       .catch(() => null);
     if (!t) {
+      const defaultShort = out.role === "ADMIN" ? "অ্যাডমিন" : out.role === "DIRECTOR" ? "পরিচালক" : (user.name || "শিক্ষক").slice(0, 6);
+      const sigKey = out.signatureKey || null;
       await db
-        .prepare("INSERT OR IGNORE INTO teachers (user_id, short_name) VALUES (?, ?)")
-        .bind(user.id, (user.name || "শিক্ষক").slice(0, 4))
+        .prepare("INSERT OR IGNORE INTO teachers (user_id, short_name, signature_key) VALUES (?, ?, ?)")
+        .bind(user.id, defaultShort, sigKey)
         .run()
         .catch(() => null);
       t = await db
@@ -127,8 +129,10 @@ async function fetchUserByToken(db: D1Database, token: string): Promise<CurrentU
     }
     if (t) {
       out.teacherId = t.id;
-      out.shortName = t.short_name;
-      out.signatureKey = t.signature_key;
+      out.shortName = t.short_name || out.shortName;
+      if (!out.signatureKey && t.signature_key) {
+        out.signatureKey = t.signature_key;
+      }
       out.photoKey = t.photo_key;
     }
   } else if (user.role === "STUDENT") {

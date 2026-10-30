@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,7 @@ interface TeacherMonthlyCommentManagerProps {
   currentTeacher: {
     teacherId: number;
     name: string;
+    role?: string;
     shortName?: string | null;
     signatureKey?: string | null;
   };
@@ -45,14 +46,26 @@ export function TeacherMonthlyCommentManager({
   onCommentsChange,
 }: TeacherMonthlyCommentManagerProps) {
   const router = useRouter();
-  const [comments, setComments] = useState<TeacherRemarkItem[]>(initialComments);
+  const [comments, setComments] = useState<TeacherRemarkItem[]>(initialComments || []);
 
-  // Check if current teacher already has a comment
-  const myComment = comments.find((c) => c.teacherId === currentTeacher.teacherId);
+  // Check if current teacher already has a comment for this student
+  const myComment = (comments || []).find(
+    (c) => Number(c.teacherId) === Number(currentTeacher?.teacherId)
+  );
   const [text, setText] = useState<string>(myComment ? myComment.comment : "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // CRITICAL: Synchronize state whenever switching student, month, year, mode or initialComments!
+  // This guarantees comments from one student NEVER leak into another student!
+  useEffect(() => {
+    const list = initialComments || [];
+    setComments(list);
+    const mine = list.find((c) => Number(c.teacherId) === Number(currentTeacher?.teacherId));
+    setText(mine ? mine.comment : "");
+    setMessage(null);
+  }, [studentId, month, year, mode, initialComments, currentTeacher?.teacherId]);
 
   const handleSave = async () => {
     if (!text.trim()) {
@@ -167,7 +180,8 @@ export function TeacherMonthlyCommentManager({
             <p className="text-[12px] font-semibold text-slate-700">সংরক্ষিত মন্তব্যসমূহ:</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {comments.map((c) => {
-                const isMine = c.teacherId === currentTeacher.teacherId;
+                const isMine = Number(c.teacherId) === Number(currentTeacher?.teacherId);
+                const canDelete = isMine || currentTeacher?.role === "ADMIN" || currentTeacher?.role === "DIRECTOR";
                 return (
                   <div
                     key={c.id || c.teacherId}
@@ -191,7 +205,7 @@ export function TeacherMonthlyCommentManager({
                       </div>
                       <div className="flex items-center gap-2">
                         {c.date && <span className="text-[11px] text-muted-foreground">{c.date}</span>}
-                        {isMine && c.id && (
+                        {canDelete && c.id && (
                           <Button
                             type="button"
                             variant="ghost"

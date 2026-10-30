@@ -55,10 +55,16 @@ export function MonthlyReportFilter({
   const [loading, setLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Reset loading once searchParams change
+  // Reset loading and sync inputs once searchParams change
   useEffect(() => {
     setLoading(false);
-  }, [searchParams]);
+    setSelectedStudent(studentId ? String(studentId) : "all");
+    setClassName(initialClassName);
+    if (initialDivision) setDivision(initialDivision);
+    setMode(initialMode);
+    setMonth(String(initialMonth));
+    setYear(String(initialYear));
+  }, [searchParams, studentId, initialClassName, initialDivision, initialMode, initialMonth, initialYear]);
 
   const requiresDiv = className === "9" || className === "10";
 

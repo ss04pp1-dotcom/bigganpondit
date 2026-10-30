@@ -58,6 +58,14 @@ export interface StudentMarksheetProps {
     signatureUrl?: string | null;
     institution?: string | null;
   };
+  teacherRemarks?: Array<{
+    id?: number;
+    teacherName: string;
+    teacherShortName?: string | null;
+    comment: string;
+    date?: string;
+    signatureUrl?: string | null;
+  }>;
   academyName: string;
   logoUrl: string | null;
 }
@@ -70,6 +78,7 @@ export function StudentMarksheet({
   overall,
   position,
   directorInfo,
+  teacherRemarks,
   academyName,
   logoUrl,
 }: StudentMarksheetProps) {
@@ -362,6 +371,40 @@ export function StudentMarksheet({
               </div>
             </div>
           </div>
+
+          {/* শিক্ষকদের মন্তব্য ও পর্যবেক্ষণ (যদি থাকে) */}
+          {teacherRemarks && teacherRemarks.length > 0 && (
+            <div className="print-avoid-break rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2 mt-2">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                <span>শিক্ষকদের মাসিক মূল্যায়ন ও মন্তব্য ({teacherRemarks.length} জন)</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {teacherRemarks.map((r, i) => (
+                  <div key={r.id || i} className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1 text-[11px]">
+                      <span className="font-bold text-slate-800">
+                        {r.teacherName} {r.teacherShortName ? `(${r.teacherShortName})` : ""}
+                      </span>
+                      {r.date && <span className="text-slate-400 text-[10px]">{r.date}</span>}
+                    </div>
+                    <p className="text-[12px] text-slate-700 italic leading-relaxed">
+                      &ldquo;{r.comment}&rdquo;
+                    </p>
+                    {r.signatureUrl && (
+                      <div className="pt-0.5 flex items-center justify-end">
+                        <img
+                          src={r.signatureUrl}
+                          alt={r.teacherName}
+                          className="h-4 max-w-[60px] object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ৫. স্বাক্ষর ও সিল অংশ */}
           <PrintSignatures

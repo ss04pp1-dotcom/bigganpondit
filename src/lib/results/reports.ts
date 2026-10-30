@@ -687,10 +687,12 @@ export async function getStudentMonthlyComments(
     await db
       .prepare(
         `SELECT c.id, c.student_id, c.teacher_id, c.comment, c.created_at, c.updated_at,
-                t.short_name, t.signature_key, COALESCE(u.name, t.short_name, 'শিক্ষক') as teacher_name
+                t.short_name, COALESCE(t.signature_key, dir.signature_key) as signature_key,
+                COALESCE(u.name, t.short_name, 'শিক্ষক') as teacher_name
          FROM student_monthly_comments c
          LEFT JOIN teachers t ON t.id = c.teacher_id
          LEFT JOIN users u ON u.id = t.user_id
+         LEFT JOIN directors dir ON dir.user_id = u.id
          WHERE c.student_id = ? AND c.month = ? AND c.year = ? AND c.mode = ?
          ORDER BY c.created_at ASC`
       )

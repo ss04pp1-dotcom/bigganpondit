@@ -50,9 +50,9 @@ export async function POST(req: Request) {
       throw new ApiError(400, "শিক্ষার্থী, মাস, বছর এবং মন্তব্য প্রদান করা আবশ্যক।");
     }
 
-    let teacherId = user.teacherId || (body.teacherId ? Number(body.teacherId) : undefined);
+    // Resolve teacher record specifically for the logged in user (never steal another teacher's ID!)
+    let teacherId = user.teacherId;
     if (!teacherId || isNaN(teacherId)) {
-      // Find teacher id for user if director or admin or teacher without cached teacherId
       const tRow = await db
         .prepare("SELECT id FROM teachers WHERE user_id = ?")
         .bind(user.id)
@@ -60,22 +60,17 @@ export async function POST(req: Request) {
         .catch(() => null);
       if (tRow?.id) {
         teacherId = tRow.id;
-      }
-    }
-
-    if (!teacherId || isNaN(teacherId)) {
-      // Fallback: look up any teacher
-      const anyTeacher = await db
-        .prepare("SELECT id FROM teachers ORDER BY id ASC LIMIT 1")
-        .first<{ id: number }>()
-        .catch(() => null);
-      if (anyTeacher?.id) {
-        teacherId = anyTeacher.id;
       } else {
-        // Auto-create teacher record for current user
+        const shortName =
+          user.role === "ADMIN"
+            ? "অ্যাডমিন"
+            : user.role === "DIRECTOR"
+            ? "পরিচালক"
+            : (user.name || "শিক্ষক").slice(0, 6);
+        const sigKey = user.signatureKey || null;
         await db
-          .prepare("INSERT INTO teachers (user_id, short_name) VALUES (?, ?)")
-          .bind(user.id, (user.name || "শিক্ষক").slice(0, 4))
+          .prepare("INSERT OR IGNORE INTO teachers (user_id, short_name, signature_key) VALUES (?, ?, ?)")
+          .bind(user.id, shortName, sigKey)
           .run()
           .catch(() => null);
         const newTRow = await db

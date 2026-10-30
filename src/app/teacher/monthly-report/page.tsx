@@ -5,30 +5,21 @@ import {
   buildMonthlyClassSummary,
   buildMonthlyReport,
   getDirectorSignatureInfo,
-  getAllDirectorsList,
   getSubjectTeachersMap,
   getStudentMonthlyComments,
 } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
-import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
-import { OfficialResultCard } from "@/components/app/official-result-card";
+import { StudentMarksheet } from "@/components/students/student-marksheet";
 import { MonthlyReportFilter } from "@/components/reports/monthly-report-filter";
 import { TeacherMonthlyCommentManager } from "@/components/reports/teacher-monthly-comment-manager";
-import { CommentBox } from "@/components/reports/comment-box";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import {
   DEFAULT_ACADEMY_NAME,
-  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
   bn,
   classLabel,
   divisionLabel,
@@ -90,11 +81,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const dirInfo = await getDirectorSignatureInfo(db);
-  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
 
   const report = studentId && classId
@@ -134,6 +121,7 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
             month={month}
             year={year}
             curYear={curYear}
+            basePath="/teacher/monthly-report"
           />
         </CardContent>
       </Card>
@@ -158,16 +146,16 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
             />
           </div>
 
-          <OfficialResultCard
-            mode={mode}
-            month={month}
-            year={year}
+          <StudentMarksheet
+            title={mode === "MODEL" ? "মডেল টেস্ট একাডেমিক রিপোর্ট" : "মাসিক একাডেমিক রিপোর্ট ও মার্কশিট"}
+            sessionText={`${MONTHS_BN[month - 1]} ${bn(year)}`}
             student={{
               name: report.student.name,
               roll: report.student.roll,
               className: report.student.className,
               division: report.student.division,
               section: report.student.section,
+              photoKey: report.student.photoKey,
             }}
             subjects={(report.subjects ?? []).map((s) => {
               const t = teacherMap.get(s.subjectId);
@@ -188,18 +176,17 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                 attendance,
               };
             })}
-            overall={report.overall}
+            overall={{
+              totalMarks: report.overall.totalMarks,
+              obtained: report.overall.obtained,
+              percentage: report.overall.percentage ?? 0,
+              gpa: report.overall.gpa,
+              grade: report.overall.grade,
+            }}
             position={position}
             directorInfo={dirInfo}
-            availableDirectors={availableDirectors}
+            academyName={academyName}
             logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-            publicationLogoUrl={publicationLogoUrl}
-            publicationName={publicationName}
-            teacherRemarks={teacherRemarks}
-            defaultTab="ALL"
-            isAdmin={user.role === "ADMIN"}
-            canPrint={user.role === "ADMIN"}
-            showPrintButton={user.role === "ADMIN"}
           />
         </div>
       ) : (
@@ -247,7 +234,6 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
                       </table>
                     </div>
 
-                    {/* Point 08: All subjects/teachers summary -> Director signature only */}
                     <PrintSignatures
                       directorName={dirInfo.name}
                       directorSignatureUrl={dirInfo.signatureUrl}

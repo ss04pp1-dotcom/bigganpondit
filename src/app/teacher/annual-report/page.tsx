@@ -1,13 +1,11 @@
 import { requirePageUser } from "@/lib/auth/guards";
 import { getDb, getSetting } from "@/lib/db";
 import { getTeacherClasses } from "@/lib/permissions";
-import { buildStudentAnnualReport, getDirectorSignatureInfo, getAllDirectorsList } from "@/lib/results/reports";
+import { buildStudentAnnualReport, getDirectorSignatureInfo } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { StudentAvatar } from "@/components/app/student-avatar";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
-import { OfficialResultCard } from "@/components/app/official-result-card";
-import { getSubjectTeachersMap, getStudentExamRows } from "@/lib/results/reports";
 import { AnnualChart } from "@/components/app/annual-chart";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -15,18 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_ACADEMY_NAME,
-  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
   bn,
   classLabel,
   divisionLabel,
   fmtGpa,
   fmtPct,
-  gradeFromPercentage,
   currentYearDhaka,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -71,76 +65,14 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const dirInfo = await getDirectorSignatureInfo(db);
-  const availableDirectors = await getAllDirectorsList(db);
-  const teacherMap = await getSubjectTeachersMap(db);
-  const examRows = studentId ? await getStudentExamRows(db, { studentId, year, subjectIds: null }) : [];
-  const bySub = new Map<number, { name: string; isFourth: boolean; total: number; obtained: number }>();
-  for (const r of examRows) {
-    const cur = bySub.get(r.subjectId) ?? { name: r.subjectName, isFourth: r.subjectIsFourth, total: 0, obtained: 0 };
-    cur.total += r.total;
-    cur.obtained += r.obtained;
-    bySub.set(r.subjectId, cur);
-  }
-
-  // REAL per-subject class highest (published marks, whole class) — was
-  // previously fabricated as the subject's full marks.
-  const classHighestBySubject = new Map<number, number>();
-  {
-    const classRow = await db
-      .prepare("SELECT id FROM classes WHERE name = ?")
-      .bind(className)
-      .first<{ id: number }>()
-      .catch(() => null);
-    if (classRow?.id) {
-      const rows = (
-        (await db
-          .prepare(
-            `SELECT m.student_id, e.subject_id, SUM(m.obtained_marks) as obtained_marks
-             FROM marks m JOIN exams e ON e.id = m.exam_id JOIN students st ON st.id = m.student_id
-             WHERE st.class_id = ? AND e.year = ? AND COALESCE(e.is_published, 0) = 1
-             GROUP BY m.student_id, e.subject_id`
-          )
-          .bind(classRow.id, year)
-          .all<{ student_id: number; subject_id: number; obtained_marks: number }>()
-          .catch(() => null))?.results
-      ) ?? [];
-      for (const r of rows) {
-        const cur = classHighestBySubject.get(r.subject_id) ?? -1;
-        const ob = Number(r.obtained_marks) || 0;
-        if (ob > cur) classHighestBySubject.set(r.subject_id, ob);
-      }
-    }
-  }
-
-  const officialSubjects = [...bySub.entries()].map(([subId, s]) => {
-    const t = teacherMap.get(subId);
-    const pct = s.total > 0 ? (s.obtained / s.total) * 100 : 0;
-    // single source of truth for the grade scale (was a duplicated inline table)
-    const g = gradeFromPercentage(pct);
-    return {
-      subjectId: subId,
-      subjectName: s.name,
-      teacherName: t?.name ?? user.name,
-      teacherShortName: t?.shortName ?? user.shortName,
-      totalMarks: s.total,
-      classHighest: classHighestBySubject.get(subId) ?? s.obtained,
-      obtained: s.obtained,
-      grade: g.grade,
-      gpa: g.gpa,
-      isFourth: s.isFourth,
-    };
-  });
 
   return (
     <div className="space-y-4">
       <div className="no-print">
         <h1 className="text-xl font-bold">বার্ষিক রিপোর্ট</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          জানুয়ারি → ডিসেম্বর মাসিক পারফরম্যান্স + বহুরঙা লাইন গ্রাফ (প্রিন্টে পৃষ্ঠা ২-এ)।
+          জানুয়ারি → ডিসেম্বর মাসিক পারফরম্যান্স প্রতিবেদন + বহুরঙা লাইন গ্রাফ।
         </p>
       </div>
 
@@ -202,41 +134,46 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
 
       {report ? (
         <>
-          {/* 100% pixel-to-pixel Official Result Sheet & Booklet */}
-          <OfficialResultCard
-            mode="ANNUAL"
-            year={year}
-            student={{
-              name: report.student.name,
-              roll: report.student.roll,
-              className: report.student.className,
-              division: report.student.division,
-              section: report.student.section,
-            }}
-            subjects={officialSubjects}
-            overall={{
-              totalMarks: officialSubjects.reduce((acc, s) => acc + s.totalMarks, 0),
-              obtained: officialSubjects.reduce((acc, s) => acc + s.obtained, 0),
-              grade: report.annual.overall.grade ?? "—",
-              gpa: report.annual.overall.gpa ?? 0,
-              percentage: report.annual.overall.percentage ?? 0,
-            }}
-            directorInfo={dirInfo}
-            availableDirectors={availableDirectors}
-            logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-            publicationLogoUrl={publicationLogoUrl}
-            publicationName={publicationName}
-            defaultTab="SHEET"
-            isAdmin={user.role === "ADMIN"}
-            canPrint={user.role === "ADMIN"}
-            showPrintButton={user.role === "ADMIN"}
-          />
-        
-          <Card className="no-print">
-            <CardContent className="pt-4">
+          <Card className="print-area overflow-hidden border border-slate-300 bg-white shadow-sm">
+            <CardContent className="p-4 sm:p-6">
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: `
+                    @media print {
+                      @page {
+                        size: A4 portrait;
+                        margin: 10mm 12mm;
+                      }
+                      body {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        background: #fff !important;
+                      }
+                      .no-print {
+                        display: none !important;
+                      }
+                      .print-area {
+                        border: none !important;
+                        box-shadow: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                      }
+                      .print-page {
+                        page-break-after: always;
+                        break-after: page;
+                      }
+                      .print-avoid-break {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                      }
+                    }
+                  `,
+                }}
+              />
+
               <div className="a4-sheet !max-w-none !border-0 !p-0 !shadow-none">
                 {/* page 1: table */}
-                <div className="print-page">
+                <div className="print-page pb-6">
                   <ReportHeader
                     academyName={academyName}
                     logoUrl={logoKey ? `/api/files/${logoKey}` : null}
@@ -308,7 +245,6 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
                     </table>
                   </div>
 
-                  {/* Point 08: Page 1 Marksheet table signatures */}
                   <PrintSignatures
                     directorName={dirInfo.name}
                     directorSignatureUrl={dirInfo.signatureUrl}
@@ -322,13 +258,12 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
                 </div>
 
                 {/* page 2: graph */}
-                <div className="print-page mt-6 print:mt-0">
+                <div className="print-page pt-4 print:pt-0">
                   <div className="no-print mb-2 rounded-lg bg-muted/60 px-4 py-2 text-[12px] text-muted-foreground">
                     প্রিন্টে এই গ্রাফটি আলাদা পৃষ্ঠায় (পৃষ্ঠা ২) আসবে।
                   </div>
                   <p className="mb-2 text-center text-[15px] font-bold">মাসিক পারফরম্যান্স গ্রাফ — {report.student.name} ({bn(year)})</p>
                   <AnnualChart points={report.annual.months.map((m) => ({ month: m.month, percentage: m.percentage }))} />
-                  {/* Point 08: Single teacher annual report print -> Both Teacher + Director signatures */}
                   <PrintSignatures
                     directorName={dirInfo.name}
                     directorSignatureUrl={dirInfo.signatureUrl}
@@ -344,7 +279,7 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
             </CardContent>
           </Card>
           <div className="no-print flex justify-center">
-            <PrintButton label="প্রিন্ট করুন (A4) — গ্রাফ পৃষ্ঠা ২-এ" />
+            <PrintButton label="বার্ষিক রিপোর্ট প্রিন্ট করুন (A4)" />
           </div>
         </>
       ) : (

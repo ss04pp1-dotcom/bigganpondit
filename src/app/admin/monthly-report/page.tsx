@@ -4,25 +4,21 @@ import {
   buildMonthlyClassSummary,
   buildMonthlyReport,
   getDirectorSignatureInfo,
-  getAllDirectorsList,
   getSubjectTeachersMap,
   getStudentMonthlyComments,
 } from "@/lib/results/reports";
 import { ReportHeader } from "@/components/app/report-header";
 import { PrintButton } from "@/components/app/print-button";
 import { PrintSignatures } from "@/components/app/print-signatures";
-import { OfficialResultCard } from "@/components/app/official-result-card";
+import { StudentMarksheet } from "@/components/students/student-marksheet";
 import { MonthlyReportFilter } from "@/components/reports/monthly-report-filter";
 import { TeacherMonthlyCommentManager } from "@/components/reports/teacher-monthly-comment-manager";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   DEFAULT_ACADEMY_NAME,
-  DEFAULT_PUBLICATION_NAME,
   MONTHS_BN,
   SETTING_ACADEMY_LOGO,
   SETTING_ACADEMY_NAME,
-  SETTING_PUBLICATION_LOGO,
-  SETTING_PUBLICATION_NAME,
   bn,
   classLabel,
   divisionLabel,
@@ -78,11 +74,7 @@ export default async function AdminMonthlyReportPage({ searchParams }: { searchP
 
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
-  const pubLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
-  const publicationLogoUrl = pubLogoKey ? `/api/files/${pubLogoKey}` : null;
-  const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const dirInfo = await getDirectorSignatureInfo(db);
-  const availableDirectors = await getAllDirectorsList(db);
   const teacherMap = await getSubjectTeachersMap(db);
 
   // Admin sees all subjects (subjectIds: null)
@@ -105,7 +97,7 @@ export default async function AdminMonthlyReportPage({ searchParams }: { searchP
       <div className="no-print">
         <h1 className="text-xl font-bold">মাসিক রিপোর্ট (প্রশাসন)</h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          অ্যাডমিন প্যানেল থেকে সকল শ্রেণির প্রতিটি বিষয়ের বিশদ ফলাফল, শিক্ষক মন্তব্য এবং প্রিন্টযোগ্য অফিসিয়াল রেজাল্ট কার্ড।
+          অ্যাডমিন প্যানেল থেকে সকল শ্রেণির প্রতিটি বিষয়ের বিশদ ফলাফল, শিক্ষক মন্তব্য এবং একাডেমিক মার্কশিট রিপোর্ট।
         </p>
       </div>
 
@@ -128,7 +120,7 @@ export default async function AdminMonthlyReportPage({ searchParams }: { searchP
         </CardContent>
       </Card>
 
-      {/* individual report card & teacher remarks manager */}
+      {/* individual report: Academic Marksheet Report (Not Result Card) */}
       {report ? (
         <div className="space-y-4">
           <div className="no-print">
@@ -148,16 +140,16 @@ export default async function AdminMonthlyReportPage({ searchParams }: { searchP
             />
           </div>
 
-          <OfficialResultCard
-            mode={mode}
-            month={month}
-            year={year}
+          <StudentMarksheet
+            title={mode === "MODEL" ? "মডেল টেস্ট একাডেমিক রিপোর্ট" : "মাসিক একাডেমিক রিপোর্ট ও মার্কশিট"}
+            sessionText={`${MONTHS_BN[month - 1]} ${bn(year)}`}
             student={{
               name: report.student.name,
               roll: report.student.roll,
               className: report.student.className,
               division: report.student.division,
               section: report.student.section,
+              photoKey: report.student.photoKey,
             }}
             subjects={(report.subjects ?? []).map((s) => {
               const t = teacherMap.get(s.subjectId);
@@ -178,18 +170,17 @@ export default async function AdminMonthlyReportPage({ searchParams }: { searchP
                 attendance,
               };
             })}
-            overall={report.overall}
+            overall={{
+              totalMarks: report.overall.totalMarks,
+              obtained: report.overall.obtained,
+              percentage: report.overall.percentage ?? 0,
+              gpa: report.overall.gpa,
+              grade: report.overall.grade,
+            }}
             position={position}
             directorInfo={dirInfo}
-            availableDirectors={availableDirectors}
+            academyName={academyName}
             logoUrl={logoKey ? `/api/files/${logoKey}` : null}
-            publicationLogoUrl={publicationLogoUrl}
-            publicationName={publicationName}
-            teacherRemarks={teacherRemarks}
-            defaultTab="ALL"
-            isAdmin={true}
-            canPrint={true}
-            showPrintButton={true}
           />
         </div>
       ) : (

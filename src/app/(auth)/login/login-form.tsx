@@ -221,11 +221,8 @@ export function LoginForm({
           </a>
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
-          নম্বর সংগ্রাহক ও রিপোর্ট সফটওয়্যার
-        </h1>
-        <p className="mt-3 text-lg sm:text-xl font-bold text-white tracking-wide">
           {academyName || "বিজ্ঞান পণ্ডিত একাডেমি"}
-        </p>
+        </h1>
         <p className="mt-1 text-xs sm:text-sm font-medium text-blue-200">
           সঠিক মূল্যায়ন, উজ্জ্বল ভবিষ্যৎ
         </p>

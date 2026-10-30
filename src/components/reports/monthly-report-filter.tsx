@@ -135,7 +135,21 @@ export function MonthlyReportFilter({
           <Select
             name="student"
             value={selectedStudent}
-            onValueChange={setSelectedStudent}
+            onValueChange={(val) => {
+              setSelectedStudent(val);
+              const params = new URLSearchParams();
+              params.set("class", className);
+              if (requiresDiv) {
+                params.set("division", division);
+              }
+              params.set("student", val);
+              params.set("mode", mode);
+              params.set("month", month);
+              params.set("year", year);
+              startTransition(() => {
+                router.push(`${basePath}?${params.toString()}`);
+              });
+            }}
           >
             <SelectTrigger className="h-10 bg-white">
               <SelectValue />

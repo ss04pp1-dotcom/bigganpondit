@@ -1063,8 +1063,10 @@ table:not(.rc-tbl) tbody tr:hover { background: #f7fbff !important; }
   white-space: nowrap;
 }
 .rc-tbl .rc-sp {
-  background: #fff !important;
-  padding: 0;
+  display: none !important;
+  width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
 }
 .rc-tbl td.rc-sub {
   background: #f1f6e8;

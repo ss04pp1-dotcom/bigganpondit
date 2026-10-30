@@ -983,7 +983,7 @@ export function OfficialResultCard({
               {/* রেজাল্ট টেবিল: শিক্ষক, বিষয়, উপস্থিতি (P/An), মোট নম্বর, সর্বোচ্চ, প্রাপ্ত, গ্রেড, GPA */}
               <table className="rc-tbl">
                 <colgroup>
-                  {[74, 150, 66, 72, 82, 72, 50, 70, 14, 94, 94, 56, 76].map((w, i) => (
+                  {[74, 154, 66, 72, 82, 72, 50, 72, 96, 96, 58, 78].map((w, i) => (
                     <col key={i} style={{ width: w }} />
                   ))}
                 </colgroup>
@@ -1009,7 +1009,6 @@ export function OfficialResultCard({
                       <br />
                       (5.00)
                     </th>
-                    <th className="rc-sp" />
                     <th>
                       ১ম স্থান
                       <br />
@@ -1037,7 +1036,6 @@ export function OfficialResultCard({
                     const first = idx === 0;
                     const right = first ? (
                       <>
-                        <td className="rc-sp" rowSpan={rows.length} />
                         <td className="rc-top" rowSpan={rows.length}>
                           <div className="flex flex-col items-center justify-center space-y-1">
                             <div className="text-[20px] font-bold text-slate-900 leading-tight">

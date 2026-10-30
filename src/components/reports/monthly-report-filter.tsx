@@ -26,6 +26,7 @@ interface MonthlyReportFilterProps {
   month: number;
   year: number;
   curYear: number;
+  basePath?: string;
 }
 
 export function MonthlyReportFilter({
@@ -39,6 +40,7 @@ export function MonthlyReportFilter({
   month: initialMonth,
   year: initialYear,
   curYear,
+  basePath = "/teacher/monthly-report",
 }: MonthlyReportFilterProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,7 +77,7 @@ export function MonthlyReportFilter({
     params.set("year", year);
 
     startTransition(() => {
-      router.push(`/teacher/monthly-report?${params.toString()}`);
+      router.push(`${basePath}?${params.toString()}`);
     });
   };
 

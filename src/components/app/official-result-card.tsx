@@ -269,9 +269,9 @@ export function OfficialResultCard({
   isAdmin = false,
   canPrint: propCanPrint,
 }: OfficialResultCardProps) {
-  // রেজাল্ট কার্ড শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবে
-  const canPrint = Boolean(isAdmin || propCanPrint);
-  const showPrint = Boolean(canPrint && propShowPrintButton);
+  // রেজাল্ট কার্ড শুধুমাত্র অ্যাডমিন প্রিন্ট করতে পারবেন (Strictly Admin Only)
+  const canPrint = Boolean(isAdmin);
+  const showPrint = Boolean(isAdmin && propShowPrintButton);
 
   const [activeView, setActiveView] = useState<"SHEET" | "BOOKLET" | "ALL">(defaultTab);
   const bgTheme = propBgTheme ?? "FLORAL";

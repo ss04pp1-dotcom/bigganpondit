@@ -197,9 +197,9 @@ export default async function MonthlyReportPage({ searchParams }: { searchParams
             publicationName={publicationName}
             teacherRemarks={teacherRemarks}
             defaultTab="ALL"
-            isAdmin={false}
-            canPrint={true}
-            showPrintButton={true}
+            isAdmin={user.role === "ADMIN"}
+            canPrint={user.role === "ADMIN"}
+            showPrintButton={user.role === "ADMIN"}
           />
         </div>
       ) : (

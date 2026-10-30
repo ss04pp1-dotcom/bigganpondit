@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "রেজাল্ট কার্ড" };
 
 export default async function DirectorResultCardsPage() {
-  await requirePageUser(["DIRECTOR", "ADMIN"]);
+  const user = await requirePageUser(["DIRECTOR", "ADMIN"]);
   return (
     <div className="space-y-4">
-      <AdminResultCardView />
+      <AdminResultCardView isAdmin={user.role === "ADMIN"} />
     </div>
   );
 }

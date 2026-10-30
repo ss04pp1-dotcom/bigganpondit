@@ -38,12 +38,12 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function AnnualReportPage({ searchParams }: { searchParams: SP }) {
-  const user = await requirePageUser(["TEACHER"]);
+  const user = await requirePageUser(["TEACHER", "ADMIN", "DIRECTOR"]);
   const db = await getDb();
   const sp = await searchParams;
   const curYear = currentYearDhaka();
 
-  const allowedClasses = await getTeacherClasses(db, user.teacherId);
+  const allowedClasses = user.teacherId ? await getTeacherClasses(db, user.teacherId) : [];
   const allDbClasses = (
     await db.prepare("SELECT name FROM classes ORDER BY sort_order DESC").all<{ name: string }>().catch(() => null)
   )?.results.map((r) => r.name) ?? ["10", "9", "8", "7", "6"];
@@ -227,9 +227,9 @@ export default async function AnnualReportPage({ searchParams }: { searchParams:
             publicationLogoUrl={publicationLogoUrl}
             publicationName={publicationName}
             defaultTab="SHEET"
-            isAdmin={false}
-            canPrint={true}
-            showPrintButton={true}
+            isAdmin={user.role === "ADMIN"}
+            canPrint={user.role === "ADMIN"}
+            showPrintButton={user.role === "ADMIN"}
           />
         
           <Card className="no-print">

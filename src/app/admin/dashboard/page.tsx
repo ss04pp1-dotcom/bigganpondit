@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { DashboardBanner } from "@/components/app/dashboard-banner";
 import { RecentResultBox } from "@/components/app/recent-result-box";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, GraduationCap, BookOpen, ClipboardEdit, Database, Building2, Wallet } from "lucide-react";
+import { Users, GraduationCap, BookOpen, ClipboardEdit, Database, Building2, Wallet, FileText, CalendarRange, Award } from "lucide-react";
 import { MONTHS_BN, bn, classLabel, divisionLabel, fmtNum } from "@/lib/constants";
 import Link from "next/link";
 
@@ -125,7 +125,7 @@ export default async function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => {
           const Icon = s.icon;
           return (
@@ -144,6 +144,58 @@ export default async function AdminDashboard() {
             </Link>
           );
         })}
+      </div>
+
+      {/* Quick Action Report Cards for Admin */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Link
+          href="/admin/monthly-report"
+          className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-3.5 transition-all hover:border-blue-400 hover:bg-blue-50 shadow-2xs"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+            <FileText className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-bold text-blue-950">মাসিক রিপোর্ট</p>
+            <p className="text-[11px] text-blue-700">সকল ক্লাসের ফলাফল</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/annual-report"
+          className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3.5 transition-all hover:border-indigo-400 hover:bg-indigo-50 shadow-2xs"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
+            <CalendarRange className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-bold text-indigo-950">বার্ষিক রিপোর্ট</p>
+            <p className="text-[11px] text-indigo-700">পূর্ণাঙ্গ বার্ষিক শিট ও গ্রাফ</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/result-cards"
+          className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 transition-all hover:border-emerald-400 hover:bg-emerald-50 shadow-2xs"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+            <Award className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-bold text-emerald-950">রেজাল্ট কার্ড</p>
+            <p className="text-[11px] text-emerald-700">অফিসিয়াল প্রিন্ট ও সিল</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/results"
+          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3.5 transition-all hover:border-amber-400 hover:bg-amber-50 shadow-2xs"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white shadow-xs">
+            <BookOpen className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-bold text-amber-950">ফলাফল ও মার্কশিট</p>
+            <p className="text-[11px] text-amber-700">পরীক্ষাভিত্তিক নম্বর</p>
+          </div>
+        </Link>
       </div>
 
       {/* Recent Published Result Box with Podium */}

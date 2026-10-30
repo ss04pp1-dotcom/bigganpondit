@@ -14,6 +14,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,7 +60,7 @@ interface CardData {
   };
 }
 
-export function AdminResultCardView() {
+export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = {}) {
   const [mode, setMode] = useState<"MONTHLY" | "ANNUAL" | "MODEL">("MONTHLY");
   const [className, setClassName] = useState("10");
   const [division, setDivision] = useState("SCIENCE");
@@ -331,15 +332,22 @@ export function AdminResultCardView() {
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 খুঁজুন
               </Button>
-              <Button
-                type="button"
-                className="h-10 flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                onClick={handlePrint}
-                disabled={loading || cards.length === 0}
-              >
-                <Printer className="h-4 w-4" />
-                {cards.length > 1 ? `সব কার্ড প্রিন্ট (${bn(cards.length)})` : "প্রিন্ট করুন"}
-              </Button>
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  className="h-10 flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  onClick={handlePrint}
+                  disabled={loading || cards.length === 0}
+                >
+                  <Printer className="h-4 w-4" />
+                  {cards.length > 1 ? `সব কার্ড প্রিন্ট (${bn(cards.length)})` : "প্রিন্ট করুন"}
+                </Button>
+              ) : (
+                <div className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <Lock className="h-3.5 w-3.5 text-amber-600" />
+                  <span>প্রিন্ট শুধুমাত্র অ্যাডমিন করতে পারবেন</span>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -471,9 +479,9 @@ export function AdminResultCardView() {
                       onCardBgChange={setCardBgUrl}
                       isLastCard={isLastCard}
                       hideCardControls={!isPreview}
-                      isAdmin={true}
-                      canPrint={true}
-                      showPrintButton={true}
+                      isAdmin={isAdmin}
+                      canPrint={isAdmin}
+                      showPrintButton={isAdmin}
                     />
                   </div>
                 );

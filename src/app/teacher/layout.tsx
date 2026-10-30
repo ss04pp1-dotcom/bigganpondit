@@ -10,7 +10,7 @@ export default async function TeacherLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requirePageUser(["TEACHER"]);
+  const user = await requirePageUser(["TEACHER", "ADMIN", "DIRECTOR"]);
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   return (

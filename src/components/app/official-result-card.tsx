@@ -230,6 +230,19 @@ function CommentBox({
             </span>
           )}
         </div>
+      ) : text && (sig || teacherName) ? (
+        <div
+          className="rc-a flex items-center justify-end gap-1 text-[#333]"
+          style={{
+            right: 12,
+            bottom: compact ? 3 : 5,
+            fontSize: compact ? "9.5px" : "11px",
+            fontWeight: "bold",
+          }}
+        >
+          <span className="font-normal text-slate-500 text-[9px]">স্বাক্ষর:</span>
+          <span className="font-semibold underline decoration-dotted">{sig || teacherName}</span>
+        </div>
       ) : null}
     </div>
   );
@@ -707,10 +720,13 @@ export function OfficialResultCard({
             <div className="rc-panel rc-pl" style={getPanelBg("LEFT")}>
               {/* শিক্ষক মন্তব্য এরিয়া: ২ জন হলে স্বাভাবিক মাপে, ২ এর বেশি হলে নির্ধারিত ৩০০px পরিধির মধ্যে অভিযোজিত স্কেলিং */}
               {(() => {
-                const remarksList: TeacherRemarkItem[] = [
+                const rawRemarks: TeacherRemarkItem[] = [
                   ...(teacherRemarks ?? []),
                   ...(teacherComments?.list ?? []),
                 ];
+                const remarksList = rawRemarks.filter((item, index, self) =>
+                  index === self.findIndex((t) => (item.id && t.id ? t.id === item.id : t.teacherId === item.teacherId && t.comment === item.comment))
+                );
 
                 // যদি কোনো শিক্ষকের সংরক্ষিত মন্তব্য না থাকে তবে একদম পরিষ্কার খালি বক্স (কোনো পূর্বনির্ধারিত স্বাক্ষর বা তারিখ ছাড়া)
                 if (remarksList.length === 0) {

@@ -4,6 +4,7 @@ import {
   buildMonthlyClassSummary,
   buildMonthlyReport,
   getDirectorSignatureInfo,
+  getStudentMonthlyComments,
   getSubjectTeachersMap,
 } from "@/lib/results/reports";
 import { StudentMarksheet } from "@/components/students/student-marksheet";
@@ -52,6 +53,10 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
     ? await buildMonthlyClassSummary(db, { classId, division: user.division ?? null, month, year, subjectIds: null, mode, publishedOnly: true })
     : null;
   const position = report && summaryAll ? summaryAll.entries.find((e) => e.studentId === user.studentId)?.position : undefined;
+
+  const teacherRemarks = user.studentId
+    ? await getStudentMonthlyComments(db, { studentId: user.studentId, month, year, mode })
+    : [];
 
   const dirInfo = await getDirectorSignatureInfo(db);
   const teacherMap = await getSubjectTeachersMap(db);
@@ -148,6 +153,7 @@ export default async function StudentMonthlyResult({ searchParams }: { searchPar
         subjects={officialSubjects}
         overall={overall}
         position={position}
+        teacherRemarks={teacherRemarks}
         directorInfo={dirInfo}
         academyName={academyName}
         logoUrl={logoUrl}

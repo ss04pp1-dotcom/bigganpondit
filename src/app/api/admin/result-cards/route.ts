@@ -231,36 +231,29 @@ export async function GET(req: Request) {
 
           if (exams.length > 0) {
             for (const e of exams) {
-              const isFourth = Boolean(s.isFourth || e.subjectIsFourth);
               const isAbsent = e.attendance === "ABSENT";
               if (isAbsent) {
                 subAbsences++;
               }
-              if (!isAbsent || e.obtained > 0) {
-                const isFail = e.grade === "F" || (e.total > 0 && (e.obtained / e.total) * 100 < 33);
-                if (isFail && !isFourth) {
-                  subFails++;
-                }
-              }
             }
           } else {
-            const isFourth = Boolean(s.isFourth);
             if (s.attendance && s.attendance.startsWith("A")) {
               subAbsences += parseInt(s.attendance.substring(1), 10) || 1;
             }
-            if (s.grade === "F" && !isFourth) {
-              subFails++;
-            }
           }
 
-          // If the aggregated subject is Grade F and compulsory:
-          // Ensure at least 1 fail is registered if the student participated (s.obtained > 0),
-          // had any non-absent exam, or was present with 0 marks (subAbsences === 0).
-          // Having an absence in one test (e.g. A1) must not suppress the 50৳ fail fine for the failed subject.
-          if (s.grade === "F" && !s.isFourth && subFails === 0) {
+          // বিকল্প ১ (Subject-level Pass/Fail Rule):
+          // সম্পূর্ণ বিষয়ে সব পরীক্ষা মিলে যদি চূড়ান্ত গ্রেড F হয় (বাধ্যতামূলক বিষয়):
+          // শিক্ষার্থী যদি পরীক্ষায় অংশ নিয়ে ফেল করে (s.obtained > 0 অথবা অন্তত ১টি পরীক্ষায় উপস্থিত ছিল অথবা subAbsences === 0),
+          // তবে ১টি ফেল জরিমানা (৫০৳) যুক্ত হবে।
+          // আর যদি একাধিক পরীক্ষার মধ্যে কোনো একটিতে কম পেলেও সামগ্রিক বিষয় মিলিয়ে পাস (A+, A, A-, B, C, D) করে,
+          // তবে বিষয়ে ফেল জরিমানা হবে না (subFails = 0)।
+          if (s.grade === "F" && !s.isFourth) {
             if (s.obtained > 0 || subAbsences === 0 || (exams.length > 0 && exams.some((e) => e.attendance !== "ABSENT"))) {
               subFails = 1;
             }
+          } else {
+            subFails = 0;
           }
 
           totalStudentAbsences += subAbsences;

@@ -77,4 +77,41 @@ describe("OfficialResultCard Fine Calculation in Frontend", () => {
       : annualFine;
     expect(fineDisplay3).toBe("০০/-");
   });
+
+  it("Option 1 in Frontend: student passing subject overall gets 0 fail fine", () => {
+    const subjects = [
+      {
+        subjectId: 1,
+        subjectName: "ইংরেজি",
+        attendance: "P",
+        totalMarks: 80,
+        obtained: 50,
+        grade: "A-",
+        gpa: 3.5,
+        isFourth: false,
+        failCount: 0,
+      },
+    ];
+
+    let totalAbsenceCount = 0;
+    let totalFails = 0;
+    for (const s of subjects) {
+      const att = s.attendance || "P";
+      if (att.startsWith("A")) {
+        const num = parseInt(att.substring(1), 10) || 1;
+        totalAbsenceCount += num;
+      }
+      const failsInSub = (s.grade === "F" && !s.isFourth)
+        ? ((typeof s.failCount === "number" && s.failCount > 0)
+            ? s.failCount
+            : (!att.startsWith("A") || (s.obtained !== undefined && s.obtained > 0) ? 1 : 0))
+        : 0;
+      totalFails += failsInSub;
+    }
+
+    const calculatedFine = totalAbsenceCount * 20 + totalFails * 50;
+    expect(totalAbsenceCount).toBe(0);
+    expect(totalFails).toBe(0);
+    expect(calculatedFine).toBe(0);
+  });
 });

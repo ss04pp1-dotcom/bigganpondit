@@ -180,4 +180,75 @@ describe("Result Card Fail and Absence Fine Calculation", () => {
     await db.prepare("DELETE FROM marks WHERE student_id = 602").run();
     await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 104").bind(year, month).run();
   });
+
+  it("Option 1 verification: 4 exams in a subject, 1 failed, 3 passed, overall subject passed (A-) -> 0 fail fine", async () => {
+    const db = await getDb();
+    const month = 10;
+    const year = 2026;
+
+    await db.prepare("DELETE FROM marks WHERE student_id = 603").run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 105").bind(year, month).run();
+    await db.prepare("INSERT OR IGNORE INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)").bind(603, "টেস্ট ৩", "test603", "hash", "STUDENT").run();
+    await db.prepare("INSERT OR IGNORE INTO students (id, user_id, name, roll, class_id) VALUES (?, ?, ?, ?, ?)").bind(603, 603, "টেস্ট ৩", 603, 1).run();
+    await db.prepare("INSERT OR IGNORE INTO subjects (id, class_id, name, is_fourth_subject) VALUES (?, ?, ?, ?)").bind(105, 1, "ইংরেজি", 0).run();
+
+    // 4 Exams (20 marks each)
+    // Exam 1: 15/20 (pass)
+    const e1 = await db.prepare("INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("ইংরেজি ১", 1, 105, 20, month, year, "2026-10-01", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e1.meta.last_row_id, 603, 15, "PRESENT").run();
+
+    // Exam 2: 16/20 (pass)
+    const e2 = await db.prepare("INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("ইংরেজি ২", 1, 105, 20, month, year, "2026-10-08", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e2.meta.last_row_id, 603, 16, "PRESENT").run();
+
+    // Exam 3: 15/20 (pass)
+    const e3 = await db.prepare("INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("ইংরেজি ৩", 1, 105, 20, month, year, "2026-10-15", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e3.meta.last_row_id, 603, 15, "PRESENT").run();
+
+    // Exam 4: 4/20 (fail in individual exam: 20% < 33%)
+    const e4 = await db.prepare("INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind("ইংরেজি ৪", 1, 105, 20, month, year, "2026-10-22", 1, "MONTHLY").run();
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(e4.meta.last_row_id, 603, 4, "PRESENT").run();
+
+    const report = await buildMonthlyReport(db, {
+      studentId: 603,
+      month,
+      year,
+      mode: "MONTHLY",
+      publishedOnly: true,
+    });
+
+    expect(report).not.toBeNull();
+    const sub = report!.subjects.find(s => s.subjectId === 105);
+    expect(sub).toBeDefined();
+    // Total marks: 80, obtained: 50 -> 62.5% -> Grade A-
+    expect(sub!.totalMarks).toBe(80);
+    expect(sub!.obtained).toBe(50);
+    expect(sub!.grade).toBe("A-");
+
+    // Under Option 1:
+    let subAbsences = 0;
+    let subFails = 0;
+    const exams = report?.examRowsBySubject?.get(105) ?? [];
+    for (const e of exams) {
+      if (e.attendance === "ABSENT") subAbsences++;
+    }
+
+    if (sub!.grade === "F" && !sub!.isFourth) {
+      if (sub!.obtained > 0 || subAbsences === 0 || (exams.length > 0 && exams.some((e) => e.attendance !== "ABSENT"))) {
+        subFails = 1;
+      }
+    } else {
+      subFails = 0;
+    }
+
+    expect(subAbsences).toBe(0);
+    expect(subFails).toBe(0); // 0 fail fine because overall subject is A- (passed)!
+
+    const totalFine = (subAbsences * 20) + (subFails * 50);
+    expect(totalFine).toBe(0);
+
+    // Clean up
+    await db.prepare("DELETE FROM marks WHERE student_id = 603").run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 105").bind(year, month).run();
+  });
 });

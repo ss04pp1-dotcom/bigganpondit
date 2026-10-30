@@ -375,13 +375,14 @@ export function OfficialResultCard({
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    // Fail count:
-    // If s.failCount is explicitly provided as > 0, use it.
-    // Otherwise, if s.grade === "F" and !s.isFourth, and the student either scored marks (s.obtained > 0)
-    // or had no absences (!att.startsWith("A")), count it as 1 fail!
-    const failsInSub = (typeof s.failCount === "number" && s.failCount > 0)
-      ? s.failCount
-      : (s.grade === "F" && !s.isFourth && (!att.startsWith("A") || (s.obtained !== undefined && s.obtained > 0)) ? 1 : 0);
+    // বিকল্প ১ (Subject-level Pass/Fail Rule):
+    // যদি সামগ্রিক বিষয়ে পাস (s.grade !== "F") করে, তবে বিষয়ে কোনো ফেল জরিমানা হবে না (failsInSub = 0)।
+    // শুধুমাত্র চূড়ান্ত গ্রেড F এবং বাধ্যতামূলক বিষয়ে (s.grade === "F" && !s.isFourth) ফেল জরিমানা (৫০৳) হবে।
+    const failsInSub = (s.grade === "F" && !s.isFourth)
+      ? ((typeof s.failCount === "number" && s.failCount > 0)
+          ? s.failCount
+          : (!att.startsWith("A") || (s.obtained !== undefined && s.obtained > 0) ? 1 : 0))
+      : 0;
     totalFails += failsInSub;
   }
 

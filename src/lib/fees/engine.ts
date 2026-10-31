@@ -287,13 +287,30 @@ export async function syncExamAbsentAndFailFines(
   let totalFineAmount = 0;
   let skippedExisting = 0;
 
+  // Track per-student per-subject monthly aggregation for Option 1 subject-level FAIL_FINE (50৳)
+  const subjectMonthlyMap = new Map<
+    string,
+    {
+      student_id: number;
+      subject_id: number;
+      subject_name: string;
+      is4th: boolean;
+      month: number | null;
+      year: number | null;
+      total_marks: number;
+      obtained_marks: number;
+      latest_exam_id: number;
+      exam_label: string;
+    }
+  >();
+
   for (const row of rows) {
     const isAbsent = row.attendance === "ABSENT";
     const monthNameBn = row.month && MONTHS_BN[row.month - 1] ? MONTHS_BN[row.month - 1] : "";
     const examLabel = row.exam_title || `${monthNameBn} ${row.year || ""} পরীক্ষা`;
 
     if (isAbsent) {
-      // 1. ABSENT FINE: 20 Taka
+      // 1. ABSENT FINE: 20 Taka per absent exam
       const existing = await db
         .prepare(
           `SELECT id FROM fee_items WHERE student_id = ? AND exam_id = ? AND category = 'ABSENT_FINE' AND (subject_id = ? OR subject_id IS NULL)`
@@ -330,53 +347,80 @@ export async function syncExamAbsentAndFailFines(
         totalAbsentFines++;
         totalFineAmount += 20;
       }
+    }
+
+    // Aggregate marks per (student, subject, month, year) for subject-level FAIL_FINE check
+    const key = `${row.student_id}:${row.subject_id}:${row.month || 0}:${row.year || 0}`;
+    const totalMarks = Number(row.total_marks) || 0;
+    const obtained = isAbsent ? 0 : (Number(row.obtained_marks) || 0);
+    const is4th = Number(row.subject_is_fourth) === 1;
+
+    const prev = subjectMonthlyMap.get(key);
+    if (!prev) {
+      subjectMonthlyMap.set(key, {
+        student_id: row.student_id,
+        subject_id: row.subject_id,
+        subject_name: row.subject_name,
+        is4th,
+        month: row.month || null,
+        year: row.year || null,
+        total_marks: totalMarks,
+        obtained_marks: obtained,
+        latest_exam_id: row.exam_id,
+        exam_label: `${monthNameBn} ${row.year || ""}`.trim() || examLabel,
+      });
     } else {
-      // 2. Check for FAIL: 50 Taka
-      const totalMarks = Number(row.total_marks) || 100;
-      const obtained = Number(row.obtained_marks) || 0;
-      const pct = calculatePercentage(obtained, totalMarks);
-      const grade = calculateGrade(pct).grade;
+      prev.total_marks += totalMarks;
+      prev.obtained_marks += obtained;
+    }
+  }
 
-      // Check if this subject is 4th subject for this student
-      const is4th = Number(row.subject_is_fourth) === 1;
+  // 2. Subject-level FAIL_FINE (50 Taka) — if overall subject grade in the month is F (and compulsory),
+  // regardless of whether the student failed by low marks or by absence (A1 -> 0 marks -> F).
+  for (const agg of subjectMonthlyMap.values()) {
+    if (agg.is4th || agg.total_marks <= 0) continue;
+    const pct = calculatePercentage(agg.obtained_marks, agg.total_marks);
+    const grade = calculateGrade(pct).grade;
 
-      if (grade === "F" && !is4th) {
-        const existing = await db
+    if (grade === "F") {
+      const existing = await db
+        .prepare(
+          `SELECT id FROM fee_items
+           WHERE student_id = ? AND subject_id = ? AND category = 'FAIL_FINE'
+             AND (month = ? OR (month IS NULL AND ? IS NULL))
+             AND (year = ? OR (year IS NULL AND ? IS NULL))`
+        )
+        .bind(agg.student_id, agg.subject_id, agg.month, agg.month, agg.year, agg.year)
+        .first<{ id: number }>()
+        .catch(() => null);
+
+      if (existing) {
+        skippedExisting++;
+      } else {
+        const title = `${agg.exam_label} — ${agg.subject_name} ফেল জরিমানা`;
+        const refNote = `অটো-জেনারেটেড: ${agg.subject_name} বিষয়ে ফেল (প্রাপ্ত: ${agg.obtained_marks}/${agg.total_marks}, গ্রেড F) হিসেবে ৫০৳ জরিমানা`;
+        await db
           .prepare(
-            `SELECT id FROM fee_items WHERE student_id = ? AND exam_id = ? AND subject_id = ? AND category = 'FAIL_FINE'`
+            `INSERT INTO fee_items (
+              student_id, category, title, amount, paid_amount, due_amount,
+              month, year, exam_id, subject_id, reference_note, status, created_by
+            ) VALUES (?, 'FAIL_FINE', ?, 50, 0, 50, ?, ?, ?, ?, ?, 'PENDING', ?)`
           )
-          .bind(row.student_id, row.exam_id, row.subject_id)
-          .first<{ id: number }>()
-          .catch(() => null);
+          .bind(
+            agg.student_id,
+            title,
+            agg.month,
+            agg.year,
+            agg.latest_exam_id,
+            agg.subject_id,
+            refNote,
+            options.createdBy || null
+          )
+          .run();
 
-        if (existing) {
-          skippedExisting++;
-        } else {
-          const title = `${examLabel} — ${row.subject_name} ফেল জরিমানা`;
-          const refNote = `অটো-জেনারেটেড: ${row.subject_name} পরীক্ষায় ফেল (প্রাপ্ত: ${obtained}/${totalMarks}, গ্রেড F) হিসেবে ৫০৳ জরিমানা`;
-          await db
-            .prepare(
-              `INSERT INTO fee_items (
-                student_id, category, title, amount, paid_amount, due_amount,
-                month, year, exam_id, subject_id, reference_note, status, created_by
-              ) VALUES (?, 'FAIL_FINE', ?, 50, 0, 50, ?, ?, ?, ?, ?, 'PENDING', ?)`
-            )
-            .bind(
-              row.student_id,
-              title,
-              row.month || null,
-              row.year || null,
-              row.exam_id,
-              row.subject_id,
-              refNote,
-              options.createdBy || null
-            )
-            .run();
-
-          createdFines++;
-          totalFailFines++;
-          totalFineAmount += 50;
-        }
+        createdFines++;
+        totalFailFines++;
+        totalFineAmount += 50;
       }
     }
   }

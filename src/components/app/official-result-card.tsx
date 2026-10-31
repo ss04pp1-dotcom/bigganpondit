@@ -375,13 +375,9 @@ export function OfficialResultCard({
       const num = parseInt(att.substring(1), 10) || 1;
       totalAbsenceCount += num;
     }
-    // বিকল্প ১ (Subject-level Pass/Fail Rule):
-    // যদি সামগ্রিক বিষয়ে পাস (s.grade !== "F") করে, তবে বিষয়ে কোনো ফেল জরিমানা হবে না (failsInSub = 0)।
-    // শুধুমাত্র চূড়ান্ত গ্রেড F এবং বাধ্যতামূলক বিষয়ে (s.grade === "F" && !s.isFourth) ফেল জরিমানা (৫০৳) হবে।
+    // সম্পূর্ণ বিষয়ে চূড়ান্ত গ্রেড F এবং বাধ্যতামূলক বিষয় হলেই (উপস্থিত বা অনুপস্থিত A1 যাই হোক) ১টি ফেল জরিমানা (৫০৳) যুক্ত হবে।
     const failsInSub = (s.grade === "F" && !s.isFourth)
-      ? ((typeof s.failCount === "number" && s.failCount > 0)
-          ? s.failCount
-          : (!att.startsWith("A") || (s.obtained !== undefined && s.obtained > 0) ? 1 : 0))
+      ? ((typeof s.failCount === "number" && s.failCount > 0) ? s.failCount : 1)
       : 0;
     totalFails += failsInSub;
   }
@@ -1091,12 +1087,17 @@ export function OfficialResultCard({
                           <div className="rc-dd" />
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
-                          <div className={`rc-vv ${totalFails > 0 ? "text-red-600 font-bold" : ""}`}>
+                          <div
+                            className={`rc-vv ${totalFails > 0 ? "text-red-600 font-bold" : ""}`}
+                            style={totalFails > 0 || overall.grade === "F" ? { color: "#dc2626", fontWeight: "bold" } : undefined}
+                          >
                             {totalFails > 0 ? (
-                              <span className="inline-flex items-baseline">
+                              <span className="inline-flex items-baseline" style={{ color: "#dc2626", fontWeight: "bold" }}>
                                 <span>F</span>
                                 {totalFails > 1 && (
-                                  <sub className="text-[14px] font-bold leading-none ml-[0.5px] -bottom-[3px]">{totalFails}</sub>
+                                  <sub className="text-[14px] font-bold leading-none ml-[0.5px] -bottom-[3px]" style={{ color: "#dc2626" }}>
+                                    {totalFails}
+                                  </sub>
                                 )}
                               </span>
                             ) : (
@@ -1172,8 +1173,18 @@ export function OfficialResultCard({
                         <td className="rc-num" style={{ fontSize: nFs }}>{bn(sub.totalMarks)}</td>
                         <td className="rc-num rc-top" style={{ fontSize: nFs }}>{bn(sub.classHighest)}</td>
                         <td className="rc-num" style={{ fontSize: nFs }}>{bn(sub.obtained)}</td>
-                        <td className={`rc-num ${sub.grade === "F" ? "text-red-600 font-bold" : ""}`} style={{ fontSize: nFs }}>
-                          {sub.grade}
+                        <td
+                          className={`rc-num ${sub.grade === "F" ? "text-red-600 font-bold" : ""}`}
+                          style={{
+                            fontSize: nFs,
+                            ...(sub.grade === "F" ? { color: "#dc2626", fontWeight: "bold" } : {}),
+                          }}
+                        >
+                          {sub.grade === "F" ? (
+                            <span style={{ color: "#dc2626", fontWeight: "bold" }}>{sub.grade}</span>
+                          ) : (
+                            sub.grade
+                          )}
                         </td>
                         <td className="rc-num" style={{ fontSize: nFs }}>{fmtGpa(sub.gpa)}</td>
                         {right}

@@ -159,4 +159,68 @@ describe("OfficialResultCard Fine Calculation in Frontend", () => {
       )
     ).toBe("১ম");
   });
+
+  it("handles Siyam Hossain's exact case: Biology A1 with obtained 0 and Grade F -> 20৳ absent + 50৳ fail = 70.00৳", () => {
+    const subjects = [
+      {
+        subjectId: 1,
+        subjectName: "জীববিজ্ঞান",
+        attendance: "A1",
+        totalMarks: 6,
+        obtained: 0,
+        grade: "F",
+        gpa: 0,
+        isFourth: false,
+      },
+      {
+        subjectId: 2,
+        subjectName: "রসায়ন",
+        attendance: "P",
+        totalMarks: 20,
+        obtained: 9,
+        grade: "C",
+        gpa: 2.0,
+        isFourth: false,
+      },
+      {
+        subjectId: 3,
+        subjectName: "পদার্থবিজ্ঞান",
+        attendance: "P",
+        totalMarks: 10,
+        obtained: 5,
+        grade: "B",
+        gpa: 3.0,
+        isFourth: false,
+      },
+      {
+        subjectId: 4,
+        subjectName: "সাধারণ গণিত",
+        attendance: "P",
+        totalMarks: 10,
+        obtained: 5,
+        grade: "B",
+        gpa: 3.0,
+        isFourth: false,
+      },
+    ];
+
+    let totalAbsenceCount = 0;
+    let totalFails = 0;
+    for (const s of subjects) {
+      const att = s.attendance || "P";
+      if (att.startsWith("A")) {
+        const num = parseInt(att.substring(1), 10) || 1;
+        totalAbsenceCount += num;
+      }
+      const failsInSub = (s.grade === "F" && !s.isFourth)
+        ? 1
+        : 0;
+      totalFails += failsInSub;
+    }
+
+    const calculatedFine = totalAbsenceCount * 20 + totalFails * 50;
+    expect(totalAbsenceCount).toBe(1);
+    expect(totalFails).toBe(1);
+    expect(calculatedFine).toBe(70);
+  });
 });

@@ -914,29 +914,32 @@ table:not(.rc-tbl) tbody tr:hover { background: #f7fbff !important; }
   position: absolute;
   left: 0;
   right: 0;
-  height: 22px;
+  height: 34px;
   font-weight: 700;
   font-size: 19px;
 }
 .rc-r b {
   position: absolute;
   left: 16px;
-  bottom: 0;
+  bottom: 2px;
   white-space: nowrap;
   font-weight: 700;
   font-size: 18px;
+  line-height: 1.4;
+  overflow: visible;
 }
 .rc-r i {
   position: absolute;
   left: 110px;
-  bottom: 0;
+  bottom: 2px;
   font-style: normal;
+  line-height: 1.4;
 }
 .rc-r .rc-fill {
   position: absolute;
   left: 122px;
   right: 16px;
-  height: 18px;
+  height: 22px;
   bottom: 0;
 }
 .rc-r .rc-v {
@@ -945,8 +948,8 @@ table:not(.rc-tbl) tbody tr:hover { background: #f7fbff !important; }
   right: 18px;
   bottom: 2px;
   white-space: nowrap;
-  overflow: hidden;
-  line-height: 1.2;
+  overflow: visible;
+  line-height: 1.4;
 }
 .rc-qt {
   left: 0;

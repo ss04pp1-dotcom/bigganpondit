@@ -429,7 +429,24 @@ export function OfficialResultCard({
   const nameLen = student.name.length;
   const nameSize = nameLen > 30 ? 12 : nameLen > 24 ? 14 : nameLen > 19 ? 16 : 19;
   const divText = student.division ? divisionLabel(student.division) : "";
-  const shakha = [divText, student.section].filter(Boolean).join(" | ");
+  const rawSec = typeof student.section === "string" ? student.section.trim() : "";
+  const secText = (rawSec && rawSec !== "-" && rawSec !== "—" && rawSec.toLowerCase() !== "n/a" && rawSec.toLowerCase() !== "null") ? rawSec : "";
+
+  let branchLabel = "শাখা";
+  let branchText = "-";
+  if (divText && secText) {
+    branchLabel = "বিভাগ / শাখা";
+    branchText = `${divText} - ${secText}`;
+  } else if (divText) {
+    branchLabel = "বিভাগ";
+    branchText = divText;
+  } else if (secText) {
+    branchLabel = "শাখা";
+    branchText = secText;
+  } else {
+    branchLabel = "শাখা";
+    branchText = "-";
+  }
 
   const slotStyle = { width: PAGE_W * scale, height: PAGE_H * scale };
   const pageStyle = { transform: `scale(${scale})` };
@@ -924,17 +941,25 @@ export function OfficialResultCard({
               <div className="rc-a rc-info">
                 {(
                   [
-                    ["শিক্ষার্থীর নাম", student.name, 27, nameSize],
-                    ["শ্রেণী", classLabel(student.className), 67, 19],
-                    ["শাখা", shakha, 109, 19],
-                    ["রোল", bn(student.roll), 149, 19],
+                    ["শিক্ষার্থীর নাম", student.name, 25, nameSize],
+                    ["শ্রেণী", classLabel(student.className), 66, 19],
+                    [branchLabel, branchText, 107, branchLabel === "বিভাগ / শাখা" ? 17 : 19],
+                    ["রোল", bn(student.roll), 147, 19],
                   ] as [string, string, number, number][]
                 ).map(([label, value, top, fs]) => (
-                  <div key={label} className="rc-r" style={{ top }}>
-                    <b>{label}</b>
-                    <i>:</i>
+                  <div key={label} className="rc-r" style={{ top, height: 34 }}>
+                    <b style={{ fontSize: label === "বিভাগ / শাখা" ? 15.5 : 18, lineHeight: 1.4, overflow: "visible" }}>{label}</b>
+                    <i style={{ lineHeight: 1.4 }}>:</i>
                     <span className="rc-fill" />
-                    <span className="rc-v" style={{ fontSize: fs }}>
+                    <span
+                      className="rc-v"
+                      style={{
+                        fontSize: fs,
+                        lineHeight: 1.4,
+                        overflow: "visible",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {value}
                     </span>
                   </div>

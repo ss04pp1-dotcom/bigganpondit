@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { MeritPodium, type PodiumEntry } from "./merit-podium";
 import { StudentAvatar } from "./student-avatar";
@@ -102,6 +102,7 @@ export function RecentResultBox({
   const [availableExams, setAvailableExams] = useState<RecentExamOption[]>([]);
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const autoSyncSkipRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/classes")
@@ -146,6 +147,7 @@ export function RecentResultBox({
           if (!hasUserManuallySelectedClass && (activeClass === "AUTO" || !isStudent)) {
             const detectedClass = json.exam?.className || json.latestClass;
             if (detectedClass && detectedClass !== selectedClass) {
+              autoSyncSkipRef.current = true;
               setSelectedClass(detectedClass);
             }
             const detectedDivision = json.exam?.division || json.latestDivision;
@@ -164,12 +166,13 @@ export function RecentResultBox({
   );
 
   useEffect(() => {
-    // Avoid redundant fetch if selectedClass was just set to the exam's class
-    if (data?.exam && data.exam.className === selectedClass && selectedClass !== "AUTO") {
+    // If selectedClass was just automatically synced from AUTO, skip redundant re-fetch
+    if (autoSyncSkipRef.current) {
+      autoSyncSkipRef.current = false;
       return;
     }
     loadRecent();
-  }, [selectedClass, selectedDivision, selectedSubject, selectedExamId]);
+  }, [selectedClass, selectedDivision, selectedSubject, selectedExamId, loadRecent]);
 
   const handleClassChange = (cls: string) => {
     if (cls === "AUTO") {
@@ -177,7 +180,6 @@ export function RecentResultBox({
       setSelectedClass("AUTO");
       setSelectedSubject("ALL");
       setSelectedExamId("LATEST");
-      loadRecent("AUTO", "ALL", "LATEST");
       return;
     }
     setHasUserManuallySelectedClass(true);

@@ -1092,7 +1092,16 @@ export function OfficialResultCard({
                         </td>
                         <td className="rc-pc" rowSpan={rows.length}>
                           <div className={`rc-vv ${totalFails > 0 ? "text-red-600 font-bold" : ""}`}>
-                            {totalFails > 0 ? `F${totalFails > 1 ? bn(totalFails) : ""}` : overall.grade}
+                            {totalFails > 0 ? (
+                              <span className="inline-flex items-baseline">
+                                <span>F</span>
+                                {totalFails > 1 && (
+                                  <sub className="text-[14px] font-bold leading-none ml-[0.5px] -bottom-[3px]">{totalFails}</sub>
+                                )}
+                              </span>
+                            ) : (
+                              overall.grade
+                            )}
                           </div>
                           <div className="rc-dd" />
                         </td>

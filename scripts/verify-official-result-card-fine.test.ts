@@ -114,4 +114,49 @@ describe("OfficialResultCard Fine Calculation in Frontend", () => {
     expect(totalFails).toBe(0);
     expect(calculatedFine).toBe(0);
   });
+
+  it("shows '-' for position on result card when student fails, and shows actual position when passed", () => {
+    const computePosText = (
+      subjects: { grade: string; isFourth?: boolean }[],
+      overallGrade: string,
+      totalFails: number,
+      position?: number | string
+    ) => {
+      const hasCompulsoryFail = subjects.some((s) => s.grade === "F" && !s.isFourth);
+      const isOverallFailed = totalFails > 0 || hasCompulsoryFail || overallGrade === "F" || String(overallGrade).startsWith("F");
+      return isOverallFailed
+        ? "-"
+        : (position ? (typeof position === "number" ? String(position) : position) : "-");
+    };
+
+    // Case 1: Student failed a compulsory subject (even if position "৮ম" was passed)
+    expect(
+      computePosText(
+        [{ grade: "F", isFourth: false }, { grade: "A-", isFourth: false }],
+        "F",
+        1,
+        "৮ম"
+      )
+    ).toBe("-");
+
+    // Case 2: Student failed only 4th subject, passed all compulsory subjects
+    expect(
+      computePosText(
+        [{ grade: "A-", isFourth: false }, { grade: "F", isFourth: true }],
+        "A-",
+        0,
+        "৩য়"
+      )
+    ).toBe("৩য়");
+
+    // Case 3: Student passed all subjects
+    expect(
+      computePosText(
+        [{ grade: "A+", isFourth: false }, { grade: "A", isFourth: false }],
+        "A+",
+        0,
+        "১ম"
+      )
+    ).toBe("১ম");
+  });
 });

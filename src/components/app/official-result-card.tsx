@@ -425,7 +425,11 @@ export function OfficialResultCard({
   const dataRows = Math.max(MIN_ROWS, n);
   const rowH = Math.floor((BODY_H / dataRows) * 2) / 2;
 
-  const posText = position ? (typeof position === "number" ? bn(position) : position) : "১ম";
+  const hasCompulsoryFail = subjects.some((s) => s.grade === "F" && !s.isFourth);
+  const isOverallFailed = totalFails > 0 || hasCompulsoryFail || overall.grade === "F" || String(overall.grade).startsWith("F");
+  const posText = isOverallFailed
+    ? "-"
+    : (position ? (typeof position === "number" ? bn(position) : position) : "-");
   const nameLen = student.name.length;
   const nameSize = nameLen > 30 ? 12 : nameLen > 24 ? 14 : nameLen > 19 ? 16 : 19;
   const divText = student.division ? divisionLabel(student.division) : "";

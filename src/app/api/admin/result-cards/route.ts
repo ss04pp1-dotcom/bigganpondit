@@ -313,6 +313,8 @@ export async function GET(req: Request) {
           mode,
         });
 
+        const isMonthlyFailed = totalStudentFails > 0 || officialSubjects.some((s) => s.grade === "F" && !s.isFourth) || overall.grade === "F";
+
         cards.push({
           student: {
             id: st.id,
@@ -324,8 +326,8 @@ export async function GET(req: Request) {
           },
           subjects: officialSubjects,
           overall,
-          // FIX: real position with proper Bangla ordinals — never a fake "১ম"
-          position: banglaOrdinal(position),
+          // যদি ফেল করে তবে রেজাল্ট কার্ডে কোনো অবস্থান দেখাবে না, শুধু "-" দেখাবে
+          position: isMonthlyFailed ? "-" : banglaOrdinal(position),
           fine: `${finalFine}.00৳`,
           topStudent,
           teacherRemarks,
@@ -371,6 +373,7 @@ export async function GET(req: Request) {
         const obtainedSum = officialSubjects.reduce((acc, s) => acc + s.obtained, 0);
         const overallGpa = rep?.annual.overall.gpa ?? 0;
         const overallGrade = rep?.annual.overall.grade ?? "—";
+        const isAnnualFailed = officialSubjects.some((s) => s.grade === "F" && !s.isFourth) || overallGrade === "F";
 
         cards.push({
           student: {
@@ -390,8 +393,8 @@ export async function GET(req: Request) {
             gpa: overallGpa,
             percentage: totalMarksSum > 0 ? Math.round((obtainedSum / totalMarksSum) * 100) : 0,
           },
-          // FIX: real computed annual position (was: hardcoded "১ম" for everyone)
-          position: banglaOrdinal(annualPosition.get(st.id)),
+          // যদি ফেল করে তবে রেজাল্ট কার্ডে কোনো অবস্থান দেখাবে না, শুধু "-" দেখাবে
+          position: isAnnualFailed ? "-" : banglaOrdinal(annualPosition.get(st.id)),
           fine: "০০/-",
           // No canned comments on official annual cards (see monthly note).
         });

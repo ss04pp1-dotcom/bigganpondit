@@ -307,8 +307,8 @@ export function RecentResultBox({
               </SelectContent>
             </Select>
 
-            {/* 4. Exam Selector Dropdown (when multiple exams exist for current subject) */}
-            {availableExams.length > 1 && (
+            {/* 4. Exam Selector Dropdown (only when a specific subject is selected and multiple exams exist for that subject) */}
+            {selectedSubject !== "ALL" && availableExams.length > 1 && (
               <Select value={selectedExamId} onValueChange={setSelectedExamId}>
                 <SelectTrigger className="h-8 min-w-[125px] max-w-[170px] rounded-lg border-indigo-200 bg-white text-xs font-medium text-slate-800 shadow-2xs">
                   <Calendar className="mr-1 h-3.5 w-3.5 text-slate-500 flex-shrink-0" />

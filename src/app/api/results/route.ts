@@ -187,10 +187,10 @@ export async function GET(req: Request) {
       }
 
       // Priority 1: Pick exam that actually has published marks (mark_count > 0)
-      // Ordered by latest mark insertion/update activity first, then exam date, then ID
+      // Ordered by true latest exam date first, then ID (never by last_activity)
       const queryWithMarks =
         examQuery +
-        ` GROUP BY e.id HAVING COUNT(m.id) > 0 ORDER BY last_activity DESC, e.exam_date DESC, e.id DESC LIMIT 1`;
+        ` GROUP BY e.id HAVING COUNT(m.id) > 0 ORDER BY e.exam_date DESC, e.id DESC LIMIT 1`;
 
       let latestExam =
         examParams.length > 0
@@ -254,9 +254,11 @@ export async function GET(req: Request) {
         }));
       }
 
-      // 4. Fetch available exams list for the subject so user can switch exams if multiple exist
+      // 4. Fetch available exams list ONLY when a specific subject is selected
+      // so the default recent result view for all classes (including Class 8)
+      // directly shows the latest published exam without an unnecessary exam dropdown.
       let availableExams: Array<{ id: number; title: string; examDate: string; markCount: number }> = [];
-      const targetSubjectId = subjectId || latestExam?.subject_id;
+      const targetSubjectId = subjectId;
       if (targetSubjectId) {
         const exRows = (
           await db

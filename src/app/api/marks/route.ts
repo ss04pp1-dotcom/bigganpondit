@@ -58,11 +58,18 @@ export async function POST(req: Request) {
 
     if (body.examId) {
       const existingById = await db
-        .prepare("SELECT id, total_marks, class_id, subject_id, COALESCE(is_published, 0) as is_published FROM exams WHERE id = ?")
+        .prepare("SELECT id, total_marks, class_id, subject_id, title, month, year, COALESCE(is_published, 0) as is_published FROM exams WHERE id = ?")
         .bind(body.examId)
-        .first<{ id: number; total_marks: number; class_id: number; subject_id: number; is_published: number }>()
+        .first<{ id: number; total_marks: number; class_id: number; subject_id: number; title: string; month: number; year: number; is_published: number }>()
         .catch(() => null);
-      if (existingById && existingById.class_id === body.classId && existingById.subject_id === body.subjectId) {
+      if (
+        existingById &&
+        existingById.class_id === body.classId &&
+        existingById.subject_id === body.subjectId &&
+        existingById.title.trim().toLowerCase() === body.title.trim().toLowerCase() &&
+        existingById.month === body.month &&
+        existingById.year === body.year
+      ) {
         exam = { id: existingById.id, total_marks: existingById.total_marks, is_published: existingById.is_published };
       }
     }

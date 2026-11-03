@@ -221,9 +221,17 @@ export function MarksEntry({
 
   // Check and sync with existing exam marks in database
   const checkExistingExam = useCallback(async () => {
-    if (!subjectId || !className || !title.trim()) return;
+    if (!subjectId || !className || !title.trim()) {
+      setExistingExamId(null);
+      setExistingExamPublished(false);
+      return;
+    }
     const selectedSub = classSubjects.find((s) => s.id === subjectId);
-    if (!selectedSub) return;
+    if (!selectedSub) {
+      setExistingExamId(null);
+      setExistingExamPublished(false);
+      return;
+    }
 
     setLoadingExisting(true);
     try {
@@ -286,6 +294,7 @@ export function MarksEntry({
         });
       } else {
         setExistingExamId(null);
+        setExistingExamPublished(false);
         // Reset saved flags if starting a completely new exam title
         setMarksState((prev) => {
           const reset: Record<number, StudentMarkState> = {};
@@ -298,11 +307,19 @@ export function MarksEntry({
         });
       }
     } catch {
-      // Silently catch network drops during check
+      setExistingExamId(null);
+      setExistingExamPublished(false);
     } finally {
       setLoadingExisting(false);
     }
   }, [subjectId, className, title, classSubjects, month, year, examType, requiresDivision, division, students]);
+
+  // Immediately clear existing exam lock whenever any exam parameters change,
+  // preventing a previously loaded published exam's lock from persisting on a new exam
+  useEffect(() => {
+    setExistingExamId(null);
+    setExistingExamPublished(false);
+  }, [subjectId, className, title, month, year, examType, division]);
 
   useEffect(() => {
     if (students.length > 0) {
@@ -472,8 +489,8 @@ export function MarksEntry({
       return;
     }
 
-    // PUBLISH LOCK: teachers cannot modify a published exam
-    if (existingExamPublished && role !== "ADMIN") {
+    // PUBLISH LOCK: teachers cannot modify an existing published exam
+    if (existingExamId && existingExamPublished && role !== "ADMIN") {
       toast({
         title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
         description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",
@@ -590,8 +607,8 @@ export function MarksEntry({
       return;
     }
 
-    // PUBLISH LOCK: teachers cannot modify a published exam
-    if (existingExamPublished && role !== "ADMIN") {
+    // PUBLISH LOCK: teachers cannot modify an existing published exam
+    if (existingExamId && existingExamPublished && role !== "ADMIN") {
       toast({
         title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
         description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",

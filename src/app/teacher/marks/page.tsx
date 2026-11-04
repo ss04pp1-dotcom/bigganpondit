@@ -12,6 +12,10 @@ interface MarksPageProps {
     class?: string;
     division?: string;
     subjectId?: string;
+    month?: string;
+    year?: string;
+    title?: string;
+    examType?: string;
   }>;
 }
 
@@ -47,7 +51,7 @@ export default async function MarksPage({ searchParams }: MarksPageProps) {
         </p>
       </div>
       <MarksEntry
-        role="TEACHER"
+        role={isAdmin ? "ADMIN" : "TEACHER"}
         subjects={subjects.map((s) => ({
           id: s.id,
           name: s.name,
@@ -58,6 +62,10 @@ export default async function MarksPage({ searchParams }: MarksPageProps) {
         initialClass={sp.class}
         initialDivision={sp.division}
         initialSubjectId={sp.subjectId ? Number(sp.subjectId) : undefined}
+        initialMonth={sp.month ? Number(sp.month) : undefined}
+        initialYear={sp.year ? Number(sp.year) : undefined}
+        initialTitle={sp.title}
+        initialExamType={sp.examType === "MODEL" ? "MODEL" : "MONTHLY"}
       />
     </div>
   );

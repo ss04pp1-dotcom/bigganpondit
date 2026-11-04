@@ -104,7 +104,10 @@ export interface MarksEntryProps {
   initialClass?: string;
   initialDivision?: string;
   initialSubjectId?: number;
-  /** Role of the logged-in user — teachers cannot edit published exams. */
+  initialMonth?: number;
+  initialYear?: number;
+  initialTitle?: string;
+  initialExamType?: "MONTHLY" | "MODEL";
   role?: "ADMIN" | "TEACHER";
 }
 
@@ -113,6 +116,10 @@ export function MarksEntry({
   initialClass,
   initialDivision,
   initialSubjectId,
+  initialMonth,
+  initialYear,
+  initialTitle,
+  initialExamType,
   role = "TEACHER",
 }: MarksEntryProps) {
   const { toast } = useToast();
@@ -121,16 +128,16 @@ export function MarksEntry({
   const [viewMode, setViewMode] = useState<"GRID" | "SINGLE">("GRID");
 
   // Exam Configuration Context
-  const [examType, setExamType] = useState<"MONTHLY" | "MODEL">("MONTHLY");
+  const [examType, setExamType] = useState<"MONTHLY" | "MODEL">(initialExamType || "MONTHLY");
   const [className, setClassName] = useState<string>(
     initialClass || (subjects[0]?.className ?? "10")
   );
   const [division, setDivision] = useState<string>(initialDivision || "SCIENCE");
   const [subjectId, setSubjectId] = useState<number | null>(initialSubjectId ?? null);
-  const [month, setMonth] = useState<number>(() => currentMonthDhaka());
-  const [year, setYear] = useState<number>(() => currentYearDhaka());
+  const [month, setMonth] = useState<number>(() => initialMonth || currentMonthDhaka());
+  const [year, setYear] = useState<number>(() => initialYear || currentYearDhaka());
   const [examDate, setExamDate] = useState<string>(today());
-  const [title, setTitle] = useState<string>("ক্লাস টেস্ট ১");
+  const [title, setTitle] = useState<string>(initialTitle || "ক্লাস টেস্ট ১");
   const [totalMarks, setTotalMarks] = useState<string>("20");
 
   // Students & Existing Exam State
@@ -489,15 +496,6 @@ export function MarksEntry({
       return;
     }
 
-    // PUBLISH LOCK: teachers cannot modify an existing published exam
-    if (existingExamId && existingExamPublished && role !== "ADMIN") {
-      toast({
-        title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
-        description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",
-        variant: "destructive",
-      });
-      return;
-    }
 
     const st = marksState[studentIdToSave] ?? { obtained: "", attendance: "PRESENT" };
     const obtainedNum = st.attendance === "ABSENT" ? 0 : Number(st.obtained) || 0;
@@ -607,15 +605,6 @@ export function MarksEntry({
       return;
     }
 
-    // PUBLISH LOCK: teachers cannot modify an existing published exam
-    if (existingExamId && existingExamPublished && role !== "ADMIN") {
-      toast({
-        title: "এই পরীক্ষার ফলাফল প্রকাশিত (published)",
-        description: "সম্পাদনার জন্য প্রথমে অ্যাডমিনকে অপ্রকাশ (unpublish) করতে বলুন।",
-        variant: "destructive",
-      });
-      return;
-    }
 
     // Collect all valid entries
     const batchEntries: Array<{

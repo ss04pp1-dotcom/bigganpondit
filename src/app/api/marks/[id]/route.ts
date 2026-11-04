@@ -32,10 +32,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const mark = await loadMark(db, id);
     if (!mark) throw new ApiError(404, MSG.notFound);
 
-    // PUBLISH INTEGRITY: teachers cannot modify marks of a published exam.
-    if (mark.is_published === 1 && user.role !== "ADMIN") {
-      throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সংশোধন করতে হলে প্রথমে অপ্রকাশ (unpublish) করতে হবে।");
-    }
 
     if (user.role === "TEACHER" && user.teacherId) {
       const allowed = await teacherSubjectAllowed(db, user.teacherId, mark.subject_id);

@@ -89,10 +89,7 @@ export async function POST(req: Request) {
     }
 
     if (exam) {
-      // ---- PUBLISH INTEGRITY: teachers cannot modify a published exam ----
-      if (exam.is_published === 1 && user.role !== "ADMIN") {
-        throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সম্পাদনা করতে হলে প্রথমে অ্যাডমিনের কাছ থেকে অপ্রকাশ (unpublish) করতে হবে।");
-      }
+      // Exam exists; authorized teachers & admins can enter or update marks
 
       // ---- RESCALE GUARD: never silently rewrite saved marks ----
       if (exam.total_marks !== body.totalMarks) {
@@ -148,9 +145,6 @@ export async function POST(req: Request) {
           .first<{ id: number; total_marks: number; is_published: number }>()
           .catch(() => null);
         if (recheck) {
-          if (recheck.is_published === 1 && user.role !== "ADMIN") {
-            throw new ApiError(403, "এই পরীক্ষার ফলাফল প্রকাশিত হয়েছে — সম্পাদনা করা যাবে না।");
-          }
           exam = { id: recheck.id, total_marks: recheck.total_marks, is_published: recheck.is_published };
         } else {
           throw new ApiError(500, "পরীক্ষা তৈরি করা যায়নি।");
@@ -450,7 +444,7 @@ export async function GET(req: Request) {
     const exams = (
       await db
         .prepare(
-          `SELECT e.id, e.title, e.exam_date, e.month, e.year, e.total_marks, e.division,
+          `SELECT e.id, e.title, e.subject_id, e.exam_type, e.exam_date, e.month, e.year, e.total_marks, e.division,
                   COALESCE(e.is_published, 0) as is_published,
                   s.name as subject_name, c.name as class_name,
                   (SELECT COUNT(*) FROM marks m WHERE m.exam_id = e.id) as mark_count,

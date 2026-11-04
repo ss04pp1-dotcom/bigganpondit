@@ -27,6 +27,8 @@ interface ExamRowT {
   total_marks: number;
   division: string | null;
   subject_name: string;
+  subject_id?: number;
+  exam_type?: string;
   class_name: string;
   mark_count: number;
   highest: number | null;
@@ -380,7 +382,7 @@ export function ResultsManager() {
                   )}
                 </Button>
                 <Link
-                  href={`/admin/marks?class=${active.class_name}${active.division ? `&division=${active.division}` : ""}`}
+                  href={`/admin/marks?class=${active.class_name}${active.division ? `&division=${active.division}` : ""}${active.subject_id ? `&subjectId=${active.subject_id}` : ""}&month=${active.month}&year=${active.year}&title=${encodeURIComponent(active.title)}${active.exam_type ? `&examType=${active.exam_type}` : ""}`}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold hover:bg-emerald-100 transition shadow-2xs"
                 >
                   <ClipboardEdit className="h-3.5 w-3.5 text-emerald-600" />

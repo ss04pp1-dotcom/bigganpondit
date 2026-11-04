@@ -127,4 +127,33 @@ describe("Multiple exams for same subject on same day or month", () => {
 
     expect(markInsert!.obtained_marks).toBe(8.5);
   });
+
+  it("allows entering and updating marks for Class 8 exams even if already marked published", async () => {
+    const db = await getLocalD1();
+
+    const cls = await db.prepare("SELECT id FROM classes WHERE name = '8'").first<{ id: number }>();
+    const subj = await db.prepare("SELECT id FROM subjects WHERE name = 'ইংরেজি' AND class_id = ?").bind(cls!.id).first<{ id: number }>();
+    const teacherUser = await db.prepare("SELECT id FROM users WHERE username = 'test_teacher_eng'").first<{ id: number }>();
+    const student = await db.prepare("SELECT id FROM students WHERE class_id = ? AND roll = 3").bind(cls!.id).first<{ id: number }>();
+
+    // Exam is published
+    const pubExam = await db.prepare("SELECT id, is_published FROM exams WHERE class_id = ? AND subject_id = ? AND title = 'ক্লাস টেস্ট ১'").bind(cls!.id, subj!.id).first<{ id: number; is_published: number }>();
+    expect(pubExam).not.toBeNull();
+    expect(pubExam!.is_published).toBe(1);
+
+    // Save mark into published exam (both insert and update)
+    await db.prepare(`
+      INSERT INTO marks (exam_id, student_id, attendance, obtained_marks)
+      VALUES (?, ?, 'PRESENT', 9.0)
+      ON CONFLICT(exam_id, student_id) DO UPDATE SET
+        attendance = excluded.attendance,
+        obtained_marks = excluded.obtained_marks,
+        updated_at = datetime('now')
+    `).bind(pubExam!.id, student!.id).run();
+
+    const saved = await db.prepare("SELECT obtained_marks, attendance FROM marks WHERE exam_id = ? AND student_id = ?").bind(pubExam!.id, student!.id).first<{ obtained_marks: number; attendance: string }>();
+    expect(saved).not.toBeNull();
+    expect(saved!.obtained_marks).toBe(9.0);
+    expect(saved!.attendance).toBe("PRESENT");
+  });
 });

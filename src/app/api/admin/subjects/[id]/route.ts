@@ -28,7 +28,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       const cls = await db.prepare("SELECT id, name FROM classes WHERE name = ?").bind(body.className).first<{ id: number; name: string }>(undefined as never).catch(() => null);
       if (!cls) throw new ApiError(404, "শ্রেণি পাওয়া যায়নি।");
       classId = cls.id;
-      if ((cls.name === "9" || cls.name === "10") === false && body.division) {
+      if (["6", "7", "8"].includes(cls.name) && body.division) {
         throw new ApiError(400, "এই শ্রেণিতে বিভাগ প্রযোজ্য নয়।");
       }
     }

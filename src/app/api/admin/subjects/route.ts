@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       .catch(() => null);
     if (!cls) throw new ApiError(404, "শ্রেণি পাওয়া যায়নি।");
 
-    if ((cls.name === "9" || cls.name === "10") === false && body.division) {
+    if (["6", "7", "8"].includes(cls.name) && body.division) {
       throw new ApiError(400, "এই শ্রেণিতে বিভাগ প্রযোজ্য নয়।");
     }
 

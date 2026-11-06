@@ -29,17 +29,18 @@ interface FormState {
   id?: number;
   name: string;
   className: string;
+  division?: string | null;
   isFourth: boolean;
 }
 
-const empty: FormState = { name: "", className: "6", isFourth: false };
+const empty: FormState = { name: "", className: "6", division: null, isFourth: false };
 
 export function SubjectManager() {
   const [subjects, setSubjects] = useState<SubjectRowT[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
-  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+  const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number; sort_order?: number }>>([]);
 
   useEffect(() => {
     fetch("/api/classes")
@@ -72,12 +73,24 @@ export function SubjectManager() {
       if (!m.has(s.class_name)) m.set(s.class_name, []);
       m.get(s.class_name)!.push(s);
     }
-    return [...m.entries()].sort((a, b) => Number(b[0]) - Number(a[0]));
-  }, [subjects]);
+    const classOrderMap = new Map<string, number>();
+    classesList.forEach((c, idx) => {
+      classOrderMap.set(c.name, c.sort_order ?? (classesList.length - idx));
+    });
+    return [...m.entries()].sort((a, b) => {
+      const orderA = classOrderMap.has(a[0]) ? classOrderMap.get(a[0])! : (Number(a[0]) || 0);
+      const orderB = classOrderMap.has(b[0]) ? classOrderMap.get(b[0])! : (Number(b[0]) || 0);
+      return orderB - orderA;
+    });
+  }, [subjects, classesList]);
 
   async function save() {
     if (!form || !form.name.trim()) {
       toast({ title: "বিষয়ের নাম লিখুন।", variant: "destructive" });
+      return;
+    }
+    if (!form.className || !form.className.trim()) {
+      toast({ title: "শ্রেণি নির্বাচন করুন।", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -87,7 +100,8 @@ export function SubjectManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
-          className: form.className,
+          className: form.className.trim(),
+          division: form.division || null,
           isFourthSubject: form.isFourth,
         }),
       });
@@ -118,7 +132,13 @@ export function SubjectManager() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button className="gap-2" onClick={() => setForm({ ...empty })}>
+        <Button
+          className="gap-2"
+          onClick={() => {
+            const defaultClass = classesList.find((c) => c.is_active !== 0)?.name || classesList[0]?.name || "6";
+            setForm({ name: "", className: defaultClass, division: null, isFourth: false });
+          }}
+        >
           <Plus className="h-4 w-4" /> নতুন বিষয়
         </Button>
       </div>
@@ -140,6 +160,11 @@ export function SubjectManager() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[14px] font-medium text-slate-900">{s.name}</span>
+                          {s.division && (
+                            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700 font-medium">
+                              {s.division === "SCIENCE" ? "বিজ্ঞান" : s.division === "HUMANITIES" ? "মানবিক" : s.division}
+                            </span>
+                          )}
                           {Number(s.is_fourth_subject) === 1 && (
                             <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700 font-medium">৪র্থ বিষয়</span>
                           )}
@@ -158,7 +183,20 @@ export function SubjectManager() {
                           )}
                         </div>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 shrink-0" onClick={() => setForm({ id: s.id, name: s.name, className: s.class_name, isFourth: Number(s.is_fourth_subject) === 1 })}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 shrink-0"
+                        onClick={() =>
+                          setForm({
+                            id: s.id,
+                            name: s.name,
+                            className: s.class_name,
+                            division: s.division,
+                            isFourth: Number(s.is_fourth_subject) === 1,
+                          })
+                        }
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <AlertDialog>
@@ -200,8 +238,18 @@ export function SubjectManager() {
               </div>
               <div className="space-y-1.5">
                 <Label>শ্রেণি</Label>
-                <Select value={form.className} onValueChange={(v) => setForm({ ...form, className: v })}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <Select
+                  value={form.className}
+                  onValueChange={(v) => {
+                    const isJunior = ["6", "7", "8"].includes(v);
+                    setForm({
+                      ...form,
+                      className: v,
+                      division: isJunior ? null : form.division,
+                    });
+                  }}
+                >
+                  <SelectTrigger className="h-11"><SelectValue placeholder="শ্রেণি নির্বাচন করুন" /></SelectTrigger>
                   <SelectContent>
                     {classesList.length > 0
                       ? classesList.map((c) => (
@@ -218,6 +266,22 @@ export function SubjectManager() {
                 </Select>
                 {form.id && <p className="text-[11px] text-amber-600">শ্রেণি পরিবর্তন করলে বিষয়টি নতুন শ্রেণিতে চলে যাবে।</p>}
               </div>
+              {!["6", "7", "8"].includes(form.className) && (
+                <div className="space-y-1.5">
+                  <Label>বিভাগ (ঐচ্ছিক)</Label>
+                  <Select
+                    value={form.division || "ALL"}
+                    onValueChange={(v) => setForm({ ...form, division: v === "ALL" ? null : v })}
+                  >
+                    <SelectTrigger className="h-11"><SelectValue placeholder="সকল বিভাগ" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">সকল বিভাগ (সাধারণ)</SelectItem>
+                      <SelectItem value="SCIENCE">বিজ্ঞান</SelectItem>
+                      <SelectItem value="HUMANITIES">মানবিক</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-[14px]">
                 <Checkbox checked={form.isFourth} onCheckedChange={(v) => setForm({ ...form, isFourth: !!v })} />
                 এটি একটি ৪র্থ বিষয়

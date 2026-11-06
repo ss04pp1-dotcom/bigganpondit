@@ -123,7 +123,7 @@ export const teacherUpdateSchema = teacherCreateSchema.partial();
 
 export const subjectCreateSchema = z.object({
   name: z.string().trim().min(1, "বিষয়ের নাম লিখুন।").max(100),
-  className: z.string().regex(/^(6|7|8|9|10)$/, "শ্রেণি নির্বাচন করুন।"),
+  className: z.string().trim().min(1, "শ্রেণি নির্বাচন করুন।").max(50),
   division: z.enum(["SCIENCE", "HUMANITIES"]).nullish(),
   isFourthSubject: z.boolean().optional().default(false),
 });

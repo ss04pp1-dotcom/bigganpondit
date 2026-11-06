@@ -124,25 +124,38 @@ const CLASS_NAMES: Record<string, string> = {
   "ALUMNI": "উত্তীর্ণ / প্রাক্তন",
 };
 export function classNameLabel(n: string): string {
-  return CLASS_NAMES[n] ?? n;
+  if (!n) return "";
+  const en = toEnDigits(String(n)).trim();
+  return CLASS_NAMES[en] ?? CLASS_NAMES[n] ?? n;
 }
 export function classLabel(n: string): string {
+  if (!n) return "";
   if (n === "ALUMNI") return "উত্তীর্ণ / প্রাক্তন ব্যাচ";
-  if (CLASS_NAMES[n]) return `${CLASS_NAMES[n]} শ্রেণি`;
+  const en = toEnDigits(String(n)).trim();
+  const name = CLASS_NAMES[en] ?? CLASS_NAMES[n];
+  if (name) return `${name} শ্রেণি`;
   if (n.endsWith("শ্রেণি") || n.endsWith("শ্রেণী")) return n;
   return `${n} শ্রেণি`;
 }
 /** e.g. groupLabel('9','SCIENCE') -> '৯ম বিজ্ঞান' (used by list filters) */
 export function groupLabel(classNum: string, division: string | null): string {
   const ord: Record<string, string> = {
+    "1": "১ম",
+    "2": "২য়",
+    "3": "৩য়",
+    "4": "৪র্থ",
+    "5": "৫ম",
     "6": "৬ষ্ঠ",
     "7": "৭ম",
     "8": "৮ম",
     "9": "৯ম",
     "10": "১০ম",
+    "11": "১১শ",
+    "12": "১২শ",
     "ALUMNI": "উত্তীর্ণ",
   };
-  const base = `${ord[classNum] ?? classNum}`;
+  const en = toEnDigits(String(classNum ?? "")).trim();
+  const base = `${ord[en] ?? ord[classNum] ?? classNum}`;
   return division ? `${base} ${divisionLabel(division)}` : base;
 }
 

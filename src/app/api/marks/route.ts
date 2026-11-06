@@ -413,9 +413,9 @@ export async function GET(req: Request) {
 
     const clauses: string[] = ["1=1"];
     const params: unknown[] = [];
-    if (className && /^(6|7|8|9|10)$/.test(className)) {
+    if (className && typeof className === "string" && className.trim()) {
       clauses.push("c.name = ?");
-      params.push(className);
+      params.push(className.trim());
     }
     if (division === "SCIENCE" || division === "HUMANITIES") {
       clauses.push("COALESCE(e.division,'') = ?");

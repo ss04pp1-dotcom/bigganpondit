@@ -7,6 +7,7 @@ import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { MSG } from "@/lib/constants";
 import { markUpdateSchema, parseJson } from "@/lib/validation";
 import { teacherSubjectAllowed } from "@/lib/permissions";
+import { syncExamAbsentAndFailFines } from "@/lib/fees/engine";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -47,6 +48,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
       .prepare("UPDATE marks SET attendance = ?, obtained_marks = ?, updated_at = datetime('now') WHERE id = ?")
       .bind(body.attendance, obtained, id)
       .run();
+
+    await syncExamAbsentAndFailFines(db, {
+      examId: mark.exam_id,
+      createdBy: user.id,
+    }).catch((err) => console.warn("[auto-fine] Patch sync error:", err));
+
     return ok({ message: MSG.updated });
   } catch (e) {
     return handleError(e);
@@ -72,6 +79,12 @@ export async function DELETE(req: Request, ctx: Ctx) {
     }
 
     await db.prepare("DELETE FROM marks WHERE id = ?").bind(id).run();
+
+    await syncExamAbsentAndFailFines(db, {
+      examId: mark.exam_id,
+      createdBy: user.id,
+    }).catch((err) => console.warn("[auto-fine] Delete sync error:", err));
+
     return ok({ message: MSG.deleted });
   } catch (e) {
     return handleError(e);

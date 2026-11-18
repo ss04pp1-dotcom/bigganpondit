@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { getDb } from "@/lib/db";
 import { buildMonthlyReport } from "@/lib/results/reports";
+import { syncExamAbsentAndFailFines } from "@/lib/fees/engine";
 
 describe("Result Card Fail and Absence Fine Calculation", () => {
   it("accurately calculates fail fines (50৳) and absent fines (20৳) under all conditions", async () => {
@@ -252,3 +253,67 @@ describe("Result Card Fail and Absence Fine Calculation", () => {
     await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = 105").bind(year, month).run();
   });
 });
+
+describe("syncExamAbsentAndFailFines overall pass/fail & cleanup", () => {
+  it("does NOT charge 50৳ FAIL_FINE when student fails 1 exam (2.5/10) but passes subject overall (16.83/50 -> D), and cleans up stale FAIL_FINE", async () => {
+    const db = await getDb();
+    const month = 11;
+    const year = 2026;
+    const studentId = 604;
+    const subjectId = 106;
+
+    await db.prepare("DELETE FROM fee_items WHERE student_id = ?").bind(studentId).run();
+    await db.prepare("DELETE FROM marks WHERE student_id = ?").bind(studentId).run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = ?").bind(year, month, subjectId).run();
+
+    await db.prepare("INSERT OR IGNORE INTO users (id, name, username, password_hash, role) VALUES (?, ?, ?, ?, ?)").bind(studentId, "সামিয়া খাতুন", "samiya604", "hash", "STUDENT").run();
+    await db.prepare("INSERT OR IGNORE INTO students (id, user_id, name, roll, class_id) VALUES (?, ?, ?, ?, ?)").bind(studentId, studentId, "সামিয়া খাতুন", 260808, 1).run();
+    await db.prepare("INSERT OR IGNORE INTO subjects (id, class_id, name, is_fourth_subject) VALUES (?, ?, ?, ?)").bind(subjectId, 1, "ইংরেজি", 0).run();
+
+    // 1. Exam 1 entered first: 2.5 / 10 (25% < 33% -> single-exam fail)
+    const e1 = await db.prepare(
+      "INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind("ইংরেজি পরীক্ষা ১", 1, subjectId, 10, month, year, "2026-11-03", 1, "MONTHLY").run();
+    const exam1Id = Number(e1.meta.last_row_id);
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(exam1Id, studentId, 2.5, "PRESENT").run();
+
+    // Sync after Exam 1 -> temporary FAIL_FINE (50৳) created
+    await syncExamAbsentAndFailFines(db, { examId: exam1Id });
+    const afterE1 = await db
+      .prepare("SELECT id, category, amount FROM fee_items WHERE student_id = ? AND month = ? AND year = ? AND category = 'FAIL_FINE'")
+      .bind(studentId, month, year)
+      .all<any>();
+    expect(afterE1.results.length).toBe(1);
+
+    // 2. Exam 2 entered: 14.33 / 40 -> Combined 16.83 / 50 = 33.66% -> D (PASS overall!)
+    const e2 = await db.prepare(
+      "INSERT INTO exams (title, class_id, subject_id, total_marks, month, year, exam_date, is_published, exam_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind("ইংরেজি পরীক্ষা ২", 1, subjectId, 40, month, year, "2026-11-12", 1, "MONTHLY").run();
+    const exam2Id = Number(e2.meta.last_row_id);
+    await db.prepare("INSERT INTO marks (exam_id, student_id, obtained_marks, attendance) VALUES (?, ?, ?, ?)").bind(exam2Id, studentId, 14.33, "PRESENT").run();
+
+    // Sync with examId = exam1Id OR exam2Id -> MUST aggregate both exams AND delete the stale 50৳ FAIL_FINE!
+    const syncRes = await syncExamAbsentAndFailFines(db, { examId: exam2Id });
+    expect(syncRes.removedFines).toBe(1);
+
+    const afterE2 = await db
+      .prepare("SELECT id, category, amount FROM fee_items WHERE student_id = ? AND month = ? AND year = ? AND category = 'FAIL_FINE'")
+      .bind(studentId, month, year)
+      .all<any>();
+    expect(afterE2.results.length).toBe(0);
+
+    // Even if sync is run again targeting exam1Id (the failed exam!), it must NOT re-insert a FAIL_FINE!
+    await syncExamAbsentAndFailFines(db, { examId: exam1Id });
+    const afterReSyncE1 = await db
+      .prepare("SELECT id FROM fee_items WHERE student_id = ? AND month = ? AND year = ? AND category = 'FAIL_FINE'")
+      .bind(studentId, month, year)
+      .all<any>();
+    expect(afterReSyncE1.results.length).toBe(0);
+
+    // Clean up
+    await db.prepare("DELETE FROM fee_items WHERE student_id = ?").bind(studentId).run();
+    await db.prepare("DELETE FROM marks WHERE student_id = ?").bind(studentId).run();
+    await db.prepare("DELETE FROM exams WHERE year = ? AND month = ? AND subject_id = ?").bind(year, month, subjectId).run();
+  });
+});
+

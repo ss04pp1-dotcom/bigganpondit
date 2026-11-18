@@ -208,14 +208,28 @@ export interface FeePaymentRow {
   payment_date: string;
 }
 
+function resolveFineExamType(examType?: string | null, title?: string | null): "MODEL" | "MONTHLY" {
+  const t = (title || "").trim();
+  if (examType === "MODEL" || t.includes("মডেল টেস্ট") || t.toLowerCase().includes("model")) {
+    return "MODEL";
+  }
+  return "MONTHLY";
+}
+
 /**
  * -------------------------------------------------------------
  * 1. AUTOMATED ABSENT & FAIL FINE SYNC
  * -------------------------------------------------------------
  * Automatically scans marks from exams and generates fine items:
  *  - 20৳ per absence in an exam (ABSENT)
- *  - 50৳ per fail in a subject (Grade F, not 4th subject, not absent)
- * Idempotent: Skips fine if already recorded for student + exam + category + subject.
+ *  - 50৳ per compulsory subject where overall monthly grade is F
+ *    (Option 1: failing one individual exam does NOT trigger a fail fine
+ *    if the aggregated subject grade across the month's exams passes).
+ * Idempotent & self-healing:
+ *  - Skips fine if already recorded.
+ *  - Removes stale unpaid (PENDING, paid_amount=0) auto-generated fines
+ *    when marks are updated/added so the student passes overall or is
+ *    no longer absent.
  */
 export async function syncExamAbsentAndFailFines(
   db: D1Database,
@@ -228,11 +242,57 @@ export async function syncExamAbsentAndFailFines(
   } = {}
 ): Promise<{
   createdFines: number;
+  removedFines: number;
   totalAbsentFines: number;
   totalFailFines: number;
   totalFineAmount: number;
   skippedExisting: number;
 }> {
+  let targetExam: {
+    id: number;
+    class_id: number;
+    month: number | null;
+    year: number | null;
+    subject_id: number;
+    exam_type: string | null;
+    title: string | null;
+  } | null = null;
+
+  if (options.examId) {
+    targetExam = await db
+      .prepare(
+        `SELECT id, class_id, month, year, subject_id, exam_type, title FROM exams WHERE id = ?`
+      )
+      .bind(options.examId)
+      .first<{
+        id: number;
+        class_id: number;
+        month: number | null;
+        year: number | null;
+        subject_id: number;
+        exam_type: string | null;
+        title: string | null;
+      }>()
+      .catch(() => null);
+
+    if (!targetExam) {
+      return {
+        createdFines: 0,
+        removedFines: 0,
+        totalAbsentFines: 0,
+        totalFailFines: 0,
+        totalFineAmount: 0,
+        skippedExisting: 0,
+      };
+    }
+  }
+
+  const targetExamType = targetExam
+    ? resolveFineExamType(targetExam.exam_type, targetExam.title)
+    : null;
+
+  // Query marks: when examId is given, still fetch ALL exams of that same
+  // (class_id, subject_id, month, year) so monthly subject aggregation is exact!
   let sql = `
     SELECT
       m.id as mark_id,
@@ -241,6 +301,7 @@ export async function syncExamAbsentAndFailFines(
       m.attendance,
       m.obtained_marks,
       e.title as exam_title,
+      e.exam_type as exam_type,
       e.total_marks,
       e.month,
       e.year,
@@ -260,34 +321,54 @@ export async function syncExamAbsentAndFailFines(
   `;
   const params: unknown[] = [];
 
-  if (options.examId) {
-    sql += ` AND e.id = ?`;
-    params.push(options.examId);
-  }
-  if (options.month) {
-    sql += ` AND e.month = ?`;
-    params.push(options.month);
-  }
-  if (options.year) {
-    sql += ` AND e.year = ?`;
-    params.push(options.year);
-  }
-  if (options.classId) {
-    sql += ` AND e.class_id = ?`;
-    params.push(options.classId);
+  if (targetExam) {
+    sql += ` AND e.class_id = ? AND e.subject_id = ?`;
+    params.push(targetExam.class_id, targetExam.subject_id);
+    if (targetExam.month != null) {
+      sql += ` AND e.month = ?`;
+      params.push(targetExam.month);
+    } else {
+      sql += ` AND e.month IS NULL`;
+    }
+    if (targetExam.year != null) {
+      sql += ` AND e.year = ?`;
+      params.push(targetExam.year);
+    } else {
+      sql += ` AND e.year IS NULL`;
+    }
+  } else {
+    if (options.month) {
+      sql += ` AND e.month = ?`;
+      params.push(options.month);
+    }
+    if (options.year) {
+      sql += ` AND e.year = ?`;
+      params.push(options.year);
+    }
+    if (options.classId) {
+      sql += ` AND e.class_id = ?`;
+      params.push(options.classId);
+    }
   }
 
   sql += ` ORDER BY e.id DESC, st.roll ASC`;
 
-  const rows = (await db.prepare(sql).bind(...params).all<any>()).results || [];
+  const allRows = (await db.prepare(sql).bind(...params).all<any>()).results || [];
+  const rows = targetExamType
+    ? allRows.filter((r: any) => resolveFineExamType(r.exam_type, r.exam_title) === targetExamType)
+    : allRows;
 
   let createdFines = 0;
+  let removedFines = 0;
   let totalAbsentFines = 0;
   let totalFailFines = 0;
   let totalFineAmount = 0;
   let skippedExisting = 0;
 
-  // Track per-student per-subject monthly aggregation for Option 1 subject-level FAIL_FINE (50৳)
+  // Track valid absent keys (`${student_id}:${exam_id}`) for stale ABSENT_FINE cleanup
+  const validAbsentKeys = new Set<string>();
+
+  // Track per-student per-subject monthly aggregation per examType for Option 1 subject-level FAIL_FINE (50৳)
   const subjectMonthlyMap = new Map<
     string,
     {
@@ -297,6 +378,7 @@ export async function syncExamAbsentAndFailFines(
       is4th: boolean;
       month: number | null;
       year: number | null;
+      exam_type: "MODEL" | "MONTHLY";
       total_marks: number;
       obtained_marks: number;
       latest_exam_id: number;
@@ -306,11 +388,15 @@ export async function syncExamAbsentAndFailFines(
 
   for (const row of rows) {
     const isAbsent = row.attendance === "ABSENT";
+    const rowExamType = resolveFineExamType(row.exam_type, row.exam_title);
     const monthNameBn = row.month && MONTHS_BN[row.month - 1] ? MONTHS_BN[row.month - 1] : "";
     const examLabel = row.exam_title || `${monthNameBn} ${row.year || ""} পরীক্ষা`;
 
-    if (isAbsent) {
-      // 1. ABSENT FINE: 20 Taka per absent exam
+    // For ABSENT_FINE: if options.examId was given, only check absent marks for that examId;
+    // otherwise check all rows in scope.
+    if (isAbsent && (!options.examId || row.exam_id === options.examId)) {
+      validAbsentKeys.add(`${row.student_id}:${row.exam_id}`);
+
       const existing = await db
         .prepare(
           `SELECT id FROM fee_items WHERE student_id = ? AND exam_id = ? AND category = 'ABSENT_FINE' AND (subject_id = ? OR subject_id IS NULL)`
@@ -349,8 +435,8 @@ export async function syncExamAbsentAndFailFines(
       }
     }
 
-    // Aggregate marks per (student, subject, month, year) for subject-level FAIL_FINE check
-    const key = `${row.student_id}:${row.subject_id}:${row.month || 0}:${row.year || 0}`;
+    // Aggregate marks per (student, subject, month, year, exam_type) for subject-level FAIL_FINE check
+    const key = `${row.student_id}:${row.subject_id}:${row.month || 0}:${row.year || 0}:${rowExamType}`;
     const totalMarks = Number(row.total_marks) || 0;
     const obtained = isAbsent ? 0 : (Number(row.obtained_marks) || 0);
     const is4th = Number(row.subject_is_fourth) === 1;
@@ -364,6 +450,7 @@ export async function syncExamAbsentAndFailFines(
         is4th,
         month: row.month || null,
         year: row.year || null,
+        exam_type: rowExamType,
         total_marks: totalMarks,
         obtained_marks: obtained,
         latest_exam_id: row.exam_id,
@@ -375,29 +462,84 @@ export async function syncExamAbsentAndFailFines(
     }
   }
 
-  // 2. Subject-level FAIL_FINE (50 Taka) — if overall subject grade in the month is F (and compulsory),
-  // regardless of whether the student failed by low marks or by absence (A1 -> 0 marks -> F).
+  // Cleanup stale unpaid ABSENT_FINE rows in scope (e.g., attendance edited ABSENT -> PRESENT or mark deleted)
+  let absentCleanupSql = `
+    SELECT fi.id, fi.student_id, fi.exam_id
+    FROM fee_items fi
+    JOIN students st ON st.id = fi.student_id
+    LEFT JOIN exams ex ON ex.id = fi.exam_id
+    WHERE fi.category = 'ABSENT_FINE'
+      AND fi.status = 'PENDING'
+      AND COALESCE(fi.paid_amount, 0) = 0
+      AND fi.exam_id IS NOT NULL
+      AND (fi.reference_note LIKE 'অটো-জেনারেটেড:%' OR fi.exam_id IS NOT NULL)
+  `;
+  const absentCleanupParams: unknown[] = [];
+  if (options.examId) {
+    absentCleanupSql += ` AND fi.exam_id = ?`;
+    absentCleanupParams.push(options.examId);
+  } else {
+    if (options.month) {
+      absentCleanupSql += ` AND (fi.month = ? OR ex.month = ?)`;
+      absentCleanupParams.push(options.month, options.month);
+    }
+    if (options.year) {
+      absentCleanupSql += ` AND (fi.year = ? OR ex.year = ?)`;
+      absentCleanupParams.push(options.year, options.year);
+    }
+    if (options.classId) {
+      absentCleanupSql += ` AND (ex.class_id = ? OR st.class_id = ?)`;
+      absentCleanupParams.push(options.classId, options.classId);
+    }
+  }
+
+  const existingAbsentFines = (
+    await db.prepare(absentCleanupSql).bind(...absentCleanupParams).all<{ id: number; student_id: number; exam_id: number }>()
+  ).results || [];
+
+  for (const af of existingAbsentFines) {
+    if (!validAbsentKeys.has(`${af.student_id}:${af.exam_id}`)) {
+      await db.prepare(`DELETE FROM fee_items WHERE id = ?`).bind(af.id).run().catch(() => null);
+      removedFines++;
+    }
+  }
+
+  // 2. Subject-level FAIL_FINE (50 Taka) — ONLY if overall subject grade in the month is F (and compulsory).
+  const validFailKeys = new Set<string>();
+
   for (const agg of subjectMonthlyMap.values()) {
     if (agg.is4th || agg.total_marks <= 0) continue;
     const pct = calculatePercentage(agg.obtained_marks, agg.total_marks);
     const grade = calculateGrade(pct).grade;
 
     if (grade === "F") {
-      const existing = await db
-        .prepare(
-          `SELECT id FROM fee_items
-           WHERE student_id = ? AND subject_id = ? AND category = 'FAIL_FINE'
-             AND (month = ? OR (month IS NULL AND ? IS NULL))
-             AND (year = ? OR (year IS NULL AND ? IS NULL))`
-        )
-        .bind(agg.student_id, agg.subject_id, agg.month, agg.month, agg.year, agg.year)
-        .first<{ id: number }>()
-        .catch(() => null);
+      const failKey = `${agg.student_id}:${agg.subject_id}:${agg.month || 0}:${agg.year || 0}:${agg.exam_type}`;
+      validFailKeys.add(failKey);
 
-      if (existing) {
+      const existingRows = (
+        await db
+          .prepare(
+            `SELECT fi.id, fi.title, ex.exam_type as linked_exam_type, ex.title as linked_exam_title
+             FROM fee_items fi
+             LEFT JOIN exams ex ON ex.id = fi.exam_id
+             WHERE fi.student_id = ? AND fi.subject_id = ? AND fi.category = 'FAIL_FINE'
+               AND (fi.month = ? OR (fi.month IS NULL AND ? IS NULL))
+               AND (fi.year = ? OR (fi.year IS NULL AND ? IS NULL))`
+          )
+          .bind(agg.student_id, agg.subject_id, agg.month, agg.month, agg.year, agg.year)
+          .all<{ id: number; title: string; linked_exam_type: string | null; linked_exam_title: string | null }>()
+          .catch(() => ({ results: [] }))
+      ).results || [];
+
+      const matchingExisting = existingRows.find(
+        (r) => resolveFineExamType(r.linked_exam_type, r.linked_exam_title ?? r.title) === agg.exam_type
+      );
+
+      if (matchingExisting) {
         skippedExisting++;
       } else {
-        const title = `${agg.exam_label} — ${agg.subject_name} ফেল জরিমানা`;
+        const typeTag = agg.exam_type === "MODEL" ? " (মডেল টেস্ট)" : "";
+        const title = `${agg.exam_label}${typeTag} — ${agg.subject_name} ফেল জরিমানা`;
         const refNote = `অটো-জেনারেটেড: ${agg.subject_name} বিষয়ে ফেল (প্রাপ্ত: ${agg.obtained_marks}/${agg.total_marks}, গ্রেড F) হিসেবে ৫০৳ জরিমানা`;
         await db
           .prepare(
@@ -425,8 +567,80 @@ export async function syncExamAbsentAndFailFines(
     }
   }
 
+  // Cleanup stale unpaid FAIL_FINE rows in scope (e.g., student failed 1 exam early on,
+  // or marks were updated, and student now passes the subject overall!)
+  let failCleanupSql = `
+    SELECT fi.id, fi.student_id, fi.subject_id, fi.month, fi.year, fi.title,
+           ex.exam_type as linked_exam_type, ex.title as linked_exam_title
+    FROM fee_items fi
+    JOIN students st ON st.id = fi.student_id
+    LEFT JOIN exams ex ON ex.id = fi.exam_id
+    WHERE fi.category = 'FAIL_FINE'
+      AND fi.status = 'PENDING'
+      AND COALESCE(fi.paid_amount, 0) = 0
+      AND (fi.exam_id IS NOT NULL OR fi.reference_note LIKE 'অটো-জেনারেটেড:%')
+  `;
+  const failCleanupParams: unknown[] = [];
+  if (targetExam) {
+    failCleanupSql += ` AND (ex.class_id = ? OR st.class_id = ?) AND fi.subject_id = ?`;
+    failCleanupParams.push(targetExam.class_id, targetExam.class_id, targetExam.subject_id);
+    if (targetExam.month != null) {
+      failCleanupSql += ` AND fi.month = ?`;
+      failCleanupParams.push(targetExam.month);
+    } else {
+      failCleanupSql += ` AND fi.month IS NULL`;
+    }
+    if (targetExam.year != null) {
+      failCleanupSql += ` AND fi.year = ?`;
+      failCleanupParams.push(targetExam.year);
+    } else {
+      failCleanupSql += ` AND fi.year IS NULL`;
+    }
+  } else {
+    if (options.month) {
+      failCleanupSql += ` AND fi.month = ?`;
+      failCleanupParams.push(options.month);
+    }
+    if (options.year) {
+      failCleanupSql += ` AND fi.year = ?`;
+      failCleanupParams.push(options.year);
+    }
+    if (options.classId) {
+      failCleanupSql += ` AND (ex.class_id = ? OR st.class_id = ?)`;
+      failCleanupParams.push(options.classId, options.classId);
+    }
+  }
+
+  const existingFailFines = (
+    await db
+      .prepare(failCleanupSql)
+      .bind(...failCleanupParams)
+      .all<{
+        id: number;
+        student_id: number;
+        subject_id: number | null;
+        month: number | null;
+        year: number | null;
+        title: string;
+        linked_exam_type: string | null;
+        linked_exam_title: string | null;
+      }>()
+      .catch(() => ({ results: [] }))
+  ).results || [];
+
+  for (const ff of existingFailFines) {
+    const ffType = resolveFineExamType(ff.linked_exam_type, ff.linked_exam_title ?? ff.title);
+    if (targetExamType && ffType !== targetExamType) continue;
+    const k = `${ff.student_id}:${ff.subject_id || 0}:${ff.month || 0}:${ff.year || 0}:${ffType}`;
+    if (!validFailKeys.has(k)) {
+      await db.prepare(`DELETE FROM fee_items WHERE id = ?`).bind(ff.id).run().catch(() => null);
+      removedFines++;
+    }
+  }
+
   return {
     createdFines,
+    removedFines,
     totalAbsentFines,
     totalFailFines,
     totalFineAmount,

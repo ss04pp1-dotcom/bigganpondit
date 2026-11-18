@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { ApiError, assertSameOrigin, handleError, ok } from "@/lib/api";
 import { parseJson } from "@/lib/validation";
 import { notifyResultPublished } from "@/lib/push-events";
+import { syncExamAbsentAndFailFines } from "@/lib/fees/engine";
 import { z } from "zod";
 
 const publishSchema = z.object({
@@ -17,7 +18,7 @@ const publishSchema = z.object({
 export async function POST(req: Request) {
   try {
     assertSameOrigin(req);
-    await requireApiUser(["ADMIN", "DIRECTOR"]);
+    const { user } = await requireApiUser(["ADMIN", "DIRECTOR"]);
     const db = await getDb();
     const body = await parseJson(req, publishSchema);
 
@@ -40,6 +41,11 @@ export async function POST(req: Request) {
       // Event-triggered push: notify the class only when results become
       // visible (publish=true). Unpublishing does not notify.
       if (body.publish) {
+        await syncExamAbsentAndFailFines(db, {
+          examId: body.examId,
+          createdBy: user.id,
+        }).catch(() => null);
+
         const examInfo = await db
           .prepare(
             "SELECT e.class_id, e.title, e.month, e.year, c.name as class_name FROM exams e JOIN classes c ON c.id = e.class_id WHERE e.id = ?"
@@ -77,6 +83,13 @@ export async function POST(req: Request) {
 
       // Event-triggered push: class-wide monthly publish.
       if (body.publish) {
+        await syncExamAbsentAndFailFines(db, {
+          classId: body.classId,
+          month: body.month,
+          year: body.year,
+          createdBy: user.id,
+        }).catch(() => null);
+
         const cls = await db
           .prepare("SELECT id, name FROM classes WHERE id = ?")
           .bind(body.classId)

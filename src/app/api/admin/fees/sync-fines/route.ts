@@ -24,8 +24,12 @@ export async function POST(req: Request) {
       createdBy: user.id,
     });
 
+    const removedText = result.removedFines > 0
+      ? ` অকার্যকর/উত্তীর্ণ ${result.removedFines}টি পূর্ববর্তী জরিমানা মুছে ফেলা হয়েছে।`
+      : "";
+
     return ok({
-      message: `মোট ${result.createdFines}টি জরিমানা সফলভাবে তৈরি ও শিক্ষার্থীদের বকেয়ায় যোগ করা হয়েছে (${result.totalAbsentFines}টি অনুপস্থিতি ও ${result.totalFailFines}টি ফেল জরিমানা)। পূর্ববর্তী ${result.skippedExisting}টি জরিমানা অপরিবর্তিত রাখা হয়েছে।`,
+      message: `মোট ${result.createdFines}টি জরিমানা সফলভাবে তৈরি ও শিক্ষার্থীদের বকেয়ায় যোগ করা হয়েছে (${result.totalAbsentFines}টি অনুপস্থিতি ও ${result.totalFailFines}টি ফেল জরিমানা)। পূর্ববর্তী ${result.skippedExisting}টি জরিমানা অপরিবর্তিত রাখা হয়েছে।${removedText}`,
       ...result,
     });
   } catch (err) {

@@ -237,8 +237,9 @@ export async function GET(req: Request) {
               }
             }
           } else {
-            if (s.attendance && s.attendance.startsWith("A")) {
-              subAbsences += parseInt(s.attendance.substring(1), 10) || 1;
+            const fallbackAtt = (s as { attendance?: string }).attendance;
+            if (fallbackAtt && fallbackAtt.startsWith("A")) {
+              subAbsences += parseInt(fallbackAtt.substring(1), 10) || 1;
             }
           }
 
@@ -286,21 +287,24 @@ export async function GET(req: Request) {
           ? monthlySummary.entries.find((e: any) => e.studentId === st.id)?.position
           : undefined;
 
-        // Check if fine items are recorded in the fee ledger for this student/month/year
+        // Dynamic fine is computed authoritatively from the published exams on this card
+        // (20৳ per absent exam + 50৳ per compulsory subject with overall grade F).
+        // Only add manual OTHER_FINE items from the fee ledger so stale or cross-mode
+        // auto-generated FAIL_FINE/ABSENT_FINE rows never override the card's actual pass/fail state.
         const feeRow = await db
           .prepare(
             `SELECT COALESCE(SUM(amount), 0) as fine_amount
              FROM fee_items
              WHERE student_id = ? AND month = ? AND (year = ? OR year IS NULL)
-               AND category IN ('ABSENT_FINE', 'FAIL_FINE', 'OTHER_FINE')`
+               AND category = 'OTHER_FINE'`
           )
           .bind(st.id, month, year)
           .first<{ fine_amount: number }>()
           .catch(() => null);
 
         const dynamicFine = (totalStudentAbsences * 20) + (totalStudentFails * 50);
-        const recordedFine = Number(feeRow?.fine_amount || 0);
-        const finalFine = Math.max(dynamicFine, recordedFine);
+        const otherFine = Number(feeRow?.fine_amount || 0);
+        const finalFine = dynamicFine + otherFine;
 
         const teacherRemarks = await getStudentMonthlyComments(db, {
           studentId: st.id,

@@ -29,6 +29,7 @@ export function AdminSettingsForm({
   initialName,
   logoKey,
   cardBgKey = null,
+  admissionBgKey = null,
   initialPublicationName = "বিজ্ঞান পণ্ডিত প্রকাশনী",
   publicationLogoKey = null,
   initialPublicationDescription = "অনলাইনে প্রকাশনীর বই ও লেকচার শিট পড়ার সুরক্ষিত মাধ্যম (রিড-অনলি মোড)",
@@ -40,6 +41,7 @@ export function AdminSettingsForm({
   initialName: string;
   logoKey: string | null;
   cardBgKey?: string | null;
+  admissionBgKey?: string | null;
   initialPublicationName?: string;
   publicationLogoKey?: string | null;
   initialPublicationDescription?: string;
@@ -52,6 +54,7 @@ export function AdminSettingsForm({
   const [name, setName] = useState(initialName);
   const [currentLogoKey, setCurrentLogoKey] = useState<string | null>(logoKey);
   const [cardBg, setCardBg] = useState<string | null>(cardBgKey);
+  const [admissionBg, setAdmissionBg] = useState<string | null>(admissionBgKey);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
 
@@ -421,6 +424,60 @@ export function AdminSettingsForm({
               onUploaded={(_, url) => {
                 setCardBg(url);
                 toast({ title: "নতুন কভার ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
+                router.refresh();
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        {/* ভর্তি ফর্মের ব্যাকগ্রাউন্ড কার্ড */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="border-b border-border pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-[16px] flex items-center gap-2">
+                <Palette className="h-4 w-4 text-indigo-600" />
+                ভর্তি ফর্মের ব্যাকগ্রাউন্ড ছবি (স্থায়ী সংরক্ষণ)
+              </CardTitle>
+              <CardDescription className="text-[12px] text-slate-500 mt-0.5">
+                শিক্ষার্থীদের ভর্তি ফর্ম প্রিন্ট করার সময় পুরো A4 পেজের ব্যাকগ্রাউন্ডে এই ছবি প্রদর্শিত হবে।
+              </CardDescription>
+            </div>
+            {admissionBg && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 gap-1.5"
+                onClick={async () => {
+                  await fetch("/api/settings", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ admissionFormBgUrl: "" }),
+                  });
+                  setAdmissionBg(null);
+                  toast({ title: "ভর্তি ফর্মের ব্যাকগ্রাউন্ড রিমুভ করা হয়েছে।" });
+                  router.refresh();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                ডিফল্টে ফিরুন
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ImageUpload
+              type="admission-bg"
+              label="ভর্তি ফর্মের ব্যাকগ্রাউন্ড ছবি (JPG / PNG / WebP — সর্বোচ্চ ১৫ MB)"
+              currentUrl={
+                admissionBg
+                  ? admissionBg.startsWith("http") || admissionBg.startsWith("data:") || admissionBg.startsWith("/")
+                    ? admissionBg
+                    : `/api/files/${admissionBg}`
+                  : null
+              }
+              onUploaded={(_, url) => {
+                setAdmissionBg(url);
+                toast({ title: "ভর্তি ফর্মের ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
                 router.refresh();
               }}
             />

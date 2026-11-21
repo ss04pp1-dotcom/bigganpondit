@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Printer, X } from "lucide-react";
+import { ImagePlus, Loader2, Printer, RotateCcw, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { classLabel, divisionLabel } from "@/lib/constants";
 
 export interface AdmissionPrintableStudent {
@@ -170,6 +171,148 @@ function formatSectionOrDivision(student: AdmissionPrintableStudent): string {
 const A4_PREVIEW_WIDTH_PX = 794; // 210mm at 96dpi
 const A4_PREVIEW_HEIGHT_PX = 1115; // 295mm at 96dpi
 
+const trimmedLogoCache = new Map<string, string>();
+
+/**
+ * Automatically trims empty outer transparent (or solid-white) margins from the
+ * academy logo so the actual artwork fills the header frame without pushing
+ * the address bar and form sections downward.
+ */
+function useTrimmedLogo(src: string | null): string | null {
+  const [trimmed, setTrimmed] = useState<string | null>(() =>
+    src ? trimmedLogoCache.get(src) ?? src : null
+  );
+
+  useEffect(() => {
+    if (!src) {
+      setTrimmed(null);
+      return;
+    }
+    const cached = trimmedLogoCache.get(src);
+    if (cached) {
+      setTrimmed(cached);
+      return;
+    }
+    setTrimmed(src);
+
+    let active = true;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) return;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+
+        ctx.drawImage(img, 0, 0);
+        const { data } = ctx.getImageData(0, 0, w, h);
+
+        const cornerCoords = [
+          [0, 0],
+          [w - 1, 0],
+          [0, h - 1],
+          [w - 1, h - 1],
+        ];
+        let transparentCorners = 0;
+        let whiteCorners = 0;
+        for (const [cx, cy] of cornerCoords) {
+          const idx = (cy * w + cx) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const a = data[idx + 3];
+          if (a < 15) transparentCorners++;
+          else if (r >= 244 && g >= 244 && b >= 244) whiteCorners++;
+        }
+
+        const trimByAlpha = transparentCorners >= 3;
+        const trimByWhite = !trimByAlpha && whiteCorners >= 3;
+        if (!trimByAlpha && !trimByWhite) {
+          trimmedLogoCache.set(src, src);
+          return;
+        }
+
+        let minX = w;
+        let minY = h;
+        let maxX = -1;
+        let maxY = -1;
+
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const a = data[idx + 3];
+            const isContent = trimByAlpha
+              ? a >= 15
+              : a >= 15 && (data[idx] < 244 || data[idx + 1] < 244 || data[idx + 2] < 244);
+            if (isContent) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+
+        if (maxX <= minX || maxY <= minY) {
+          trimmedLogoCache.set(src, src);
+          return;
+        }
+
+        const pad = 2;
+        const sx = Math.max(0, minX - pad);
+        const sy = Math.max(0, minY - pad);
+        const sw = Math.min(w - sx, maxX - minX + 1 + pad * 2);
+        const sh = Math.min(h - sy, maxY - minY + 1 + pad * 2);
+
+        if (w - sw < 4 && h - sh < 4) {
+          trimmedLogoCache.set(src, src);
+          return;
+        }
+
+        const out = document.createElement("canvas");
+        out.width = sw;
+        out.height = sh;
+        const outCtx = out.getContext("2d");
+        if (!outCtx) return;
+        outCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        const dataUrl = out.toDataURL("image/png");
+        trimmedLogoCache.set(src, dataUrl);
+        if (active) setTrimmed(dataUrl);
+      } catch {
+        // Keep original src on canvas/CORS failure
+      }
+    };
+
+    img.src = src;
+    return () => {
+      active = false;
+    };
+  }, [src]);
+
+  return trimmed;
+}
+
+function sanitizeBgUrl(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null;
+  const trimmed = url.trim();
+  if (/["'()\r\n;]/.test(trimmed)) return null;
+  if (
+    trimmed.startsWith("/api/files/") ||
+    trimmed.startsWith("blob:") ||
+    /^https?:\/\//i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  return null;
+}
+
 const ADMISSION_FORM_CSS = `
 .af-root,
 .af-root * {
@@ -184,6 +327,9 @@ const ADMISSION_FORM_CSS = `
   padding: 5mm;
   margin: 0 auto;
   background-color: #fff;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   box-sizing: border-box;
   font-size: 16px;
   color: #000;
@@ -191,12 +337,14 @@ const ADMISSION_FORM_CSS = `
   page-break-inside: avoid;
   page-break-after: avoid;
   text-align: left;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 
 .af-border-box {
   border: 2px dashed #1a237e;
   border-radius: 12px;
-  padding: 6px 10px;
+  padding: 4px 10px 6px 10px;
   height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -207,13 +355,23 @@ const ADMISSION_FORM_CSS = `
 
 .af-header {
   text-align: center;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
+}
+
+.af-logo-slot {
+  height: 122px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0 auto 2px auto;
 }
 
 .af-header img.af-logo-top {
-  height: 135px;
-  max-height: 135px;
-  max-width: 520px;
+  height: 120px;
+  max-height: 120px;
+  max-width: 600px;
   width: auto;
   object-fit: contain;
   margin: 0 auto;
@@ -454,9 +612,9 @@ const ADMISSION_FORM_CSS = `
 }
 
 .af-student-copy-left img {
-  width: 185px;
+  width: 180px;
   height: auto;
-  max-height: 68px;
+  max-height: 58px;
   object-fit: contain;
   display: block;
   margin: 0 auto;
@@ -579,7 +737,7 @@ const ADMISSION_FORM_CSS = `
     margin: 0 !important;
     page-break-after: avoid !important;
     page-break-inside: avoid !important;
-    background: #fff !important;
+    background: transparent !important;
   }
   #admissionPrintArea * {
     visibility: visible !important;
@@ -590,10 +748,12 @@ const ADMISSION_FORM_CSS = `
 function AdmissionFormSheet({
   student,
   logoUrl,
+  bgUrl,
   adminSigUrl,
 }: {
   student: AdmissionPrintableStudent;
   logoUrl: string | null;
+  bgUrl: string | null;
   adminSigUrl: string | null;
 }) {
   const [logoError, setLogoError] = useState(false);
@@ -609,26 +769,39 @@ function AdmissionFormSheet({
   const guardianOcc = student.guardian_occupation || student.father_occupation || "";
   const guardianPhone = student.phone || "";
   const programName = student.batch_name || "সাধারণ প্রোগ্রাম";
-  const resolvedLogo = !logoError ? logoUrl || "/logo.png" : null;
+  const rawLogo = !logoError ? logoUrl || "/logo.png" : null;
+  const resolvedLogo = useTrimmedLogo(rawLogo);
   const resolvedPhoto = !photoError && student.photo_key ? `/api/files/${student.photo_key}` : null;
+  const safeBgUrl = useMemo(() => sanitizeBgUrl(bgUrl), [bgUrl]);
+
+  const containerStyle: React.CSSProperties | undefined = safeBgUrl
+    ? {
+        backgroundImage: `url("${safeBgUrl}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }
+    : undefined;
 
   return (
-    <div className="af-root af-a4-container">
+    <div className="af-root af-a4-container" style={containerStyle}>
       <div className="af-border-box">
         <div>
           <div className="af-header">
-            {resolvedLogo ? (
-              <img
-                src={resolvedLogo}
-                alt="বিজ্ঞান পণ্ডিত টিউটর সেন্টার"
-                className="af-logo-top"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <h2 style={{ margin: 0, color: "#1e824c", fontSize: "24px", fontWeight: "bold" }}>
-                বিজ্ঞান পণ্ডিত টিউটর সেন্টার
-              </h2>
-            )}
+            <div className="af-logo-slot">
+              {resolvedLogo ? (
+                <img
+                  src={resolvedLogo}
+                  alt="বিজ্ঞান পণ্ডিত টিউটর সেন্টার"
+                  className="af-logo-top"
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <h2 style={{ margin: 0, color: "#1e824c", fontSize: "24px", fontWeight: "bold" }}>
+                  বিজ্ঞান পণ্ডিত টিউটর সেন্টার
+                </h2>
+              )}
+            </div>
             <div className="af-sub-address-bar">
               সজীব ভিলা, সলঙ্গা রোড, বোয়ালিয়া বাজার, উল্লাপাড়া, সিরাজগঞ্জ।
             </div>
@@ -839,7 +1012,14 @@ export function StudentAdmissionPrintDialog({
   onClose: () => void;
   role: "ADMIN" | "TEACHER" | "DIRECTOR";
 }) {
+  const { toast } = useToast();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bgUrl, setBgUrl] = useState<string | null>(null);
+  const [uploadingBg, setUploadingBg] = useState(false);
+  const [clearingBg, setClearingBg] = useState(false);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
   const [directors, setDirectors] = useState<DirectorSigOption[]>([]);
   const [selectedSig, setSelectedSig] = useState<string>("none");
   const [mounted, setMounted] = useState(false);
@@ -847,19 +1027,28 @@ export function StudentAdmissionPrintDialog({
   const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(0.45);
 
+  const canManageBg = role === "ADMIN" || role === "DIRECTOR";
+
   useEffect(() => {
     setMounted(true);
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (!student) return;
     let active = true;
 
-    fetch("/api/settings")
+    fetch("/api/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
         if (active && json?.ok) {
           setLogoUrl(json.logoUrl || null);
+          setBgUrl(json.admissionFormBgUrl || null);
         }
       })
       .catch(() => {});
@@ -908,6 +1097,73 @@ export function StudentAdmissionPrintDialog({
     ? `/api/files/${selectedDirector.signature_key}`
     : null;
 
+  const handleBgUpload = async (file: File) => {
+    if (!canManageBg || !file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      toast({ title: "ছবিটি অনেক বড় (সর্বোচ্চ ১৫ MB)।", variant: "destructive" });
+      return;
+    }
+
+    const previousBg = bgUrl;
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+    }
+    const localPreview = URL.createObjectURL(file);
+    blobUrlRef.current = localPreview;
+    setBgUrl(localPreview);
+    setUploadingBg(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", "admission-bg");
+      const res = await fetch("/api/uploads", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || !json?.ok || !json?.url) {
+        throw new Error(json?.error || "ব্যাকগ্রাউন্ড আপলোড করা যায়নি।");
+      }
+      setBgUrl(json.url);
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      toast({ title: "ভর্তি ফর্মের ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে!" });
+    } catch (e) {
+      setBgUrl(previousBg);
+      toast({
+        title: e instanceof Error ? e.message : "ব্যাকগ্রাউন্ড আপলোড ব্যর্থ হয়েছে।",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingBg(false);
+    }
+  };
+
+  const handleClearBg = async () => {
+    if (!canManageBg || clearingBg) return;
+    setClearingBg(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admissionFormBgUrl: "" }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "ব্যাকগ্রাউন্ড সরানো যায়নি।");
+      }
+      setBgUrl(null);
+      toast({ title: "ভর্তি ফর্মের ব্যাকগ্রাউন্ড সরানো হয়েছে (ডিফল্ট সাদা)।" });
+    } catch (e) {
+      toast({
+        title: e instanceof Error ? e.message : "ব্যাকগ্রাউন্ড সরানো যায়নি।",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingBg(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -929,6 +1185,54 @@ export function StudentAdmissionPrintDialog({
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {canManageBg && (
+                  <>
+                    <input
+                      ref={bgInputRef}
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleBgUpload(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={uploadingBg}
+                      onClick={() => bgInputRef.current?.click()}
+                      className="h-9 gap-1.5 border-indigo-200 bg-indigo-50/70 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold px-3"
+                    >
+                      {uploadingBg ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5" />
+                      )}
+                      {bgUrl ? "ব্যাকগ্রাউন্ড পরিবর্তন" : "ব্যাকগ্রাউন্ড সেট"}
+                    </Button>
+                    {bgUrl && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={clearingBg}
+                        onClick={handleClearBg}
+                        className="h-9 gap-1 border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold px-2.5"
+                        title="ব্যাকগ্রাউন্ড রিসেট করে সাদা করুন"
+                      >
+                        {clearingBg ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        )}
+                        রিসেট
+                      </Button>
+                    )}
+                  </>
+                )}
                 {directors.length > 0 && (
                   <Select value={selectedSig} onValueChange={setSelectedSig}>
                     <SelectTrigger className="h-9 w-44 text-xs bg-white">
@@ -990,6 +1294,7 @@ export function StudentAdmissionPrintDialog({
                   key={`preview-${student.id}`}
                   student={student}
                   logoUrl={logoUrl}
+                  bgUrl={bgUrl}
                   adminSigUrl={adminSigUrl}
                 />
               </div>
@@ -1005,6 +1310,7 @@ export function StudentAdmissionPrintDialog({
               key={`print-${student.id}`}
               student={student}
               logoUrl={logoUrl}
+              bgUrl={bgUrl}
               adminSigUrl={adminSigUrl}
             />
           </div>,

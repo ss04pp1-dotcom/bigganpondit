@@ -27,6 +27,9 @@ export async function GET(req: Request) {
     const cardBgKey =
       (await getSetting("card_cover_bg_url", "")) || (await getSetting("card_bg_image_key", ""));
     const cardBgUrl = cleanCardBgUrl(cardBgKey);
+    const admissionBgKey =
+      (await getSetting("admission_form_bg_url", "")) || (await getSetting("admission_form_bg_key", ""));
+    const admissionFormBgUrl = cleanCardBgUrl(admissionBgKey);
     const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
     const publicationLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
     const publicationDescription = await getSetting(
@@ -39,6 +42,7 @@ export async function GET(req: Request) {
       logoUrl: logoKey ? `/api/files/${logoKey}` : null,
       cardBgUrl,
       cardCoverBgUrl: cardBgUrl,
+      admissionFormBgUrl,
       publicationName,
       publicationLogoKey: publicationLogoKey || null,
       publicationLogoUrl: publicationLogoKey ? `/api/files/${publicationLogoKey}` : null,
@@ -66,6 +70,12 @@ export async function PUT(req: Request) {
       await setSetting("card_cover_bg_url", trimmed);
       const cleanKey = trimmed.replace(/^\/api\/files\//, "");
       await setSetting("card_bg_image_key", cleanKey);
+    }
+    if (body.admissionFormBgUrl !== undefined) {
+      const trimmed = body.admissionFormBgUrl ? body.admissionFormBgUrl.trim() : "";
+      await setSetting("admission_form_bg_url", trimmed);
+      const cleanKey = trimmed.replace(/^\/api\/files\//, "");
+      await setSetting("admission_form_bg_key", cleanKey);
     }
     if (body.publicationName !== undefined) {
       await setSetting(SETTING_PUBLICATION_NAME, body.publicationName.trim());

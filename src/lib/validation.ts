@@ -167,6 +167,19 @@ export const settingsUpdateSchema = z.object({
     )
     .nullable()
     .optional(),
+  admissionFormBgUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (v) =>
+        v === "" ||
+        /^\/api\/files\/academy\/admission-bg\/[A-Za-z0-9._-]+$/.test(v) ||
+        /^https?:\/\/\S+$/i.test(v),
+      "ভর্তি ফর্মের ব্যাকগ্রাউন্ড অবৈধ।"
+    )
+    .nullable()
+    .optional(),
   publicationName: z.string().trim().max(120).optional(),
   publicationDescription: z.string().trim().max(1000).optional(),
   publicationLogoKey: z

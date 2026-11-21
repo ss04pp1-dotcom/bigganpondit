@@ -37,6 +37,7 @@ export async function GET(req: Request, ctx: Ctx) {
       key.startsWith("academy/publication/") ||
       key.startsWith("academy/banners/") ||
       key.startsWith("academy/card-bg/") ||
+      key.startsWith("academy/admission-bg/") ||
       key.startsWith("academy/landing/")
     ) {
       return new Response(obj.data as unknown as BodyInit, {

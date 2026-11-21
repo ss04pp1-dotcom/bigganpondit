@@ -18,6 +18,8 @@ export const SETTING_BANNER_ACTIVE = "banner_active";
 export const SETTING_DIRECTOR_SIGNATURE = "director_default_signature_key";
 export const SETTING_CARD_COVER_BG = "card_cover_bg_url";
 export const SETTING_CARD_BG_KEY = "card_bg_image_key";
+export const SETTING_ADMISSION_BG_URL = "admission_form_bg_url";
+export const SETTING_ADMISSION_BG_KEY = "admission_form_bg_key";
 
 export const DEFAULT_PUBLICATION_NAME = "বিজ্ঞান পণ্ডিত প্রকাশনী";
 export const SETTING_PUBLICATION_NAME = "publication_name";

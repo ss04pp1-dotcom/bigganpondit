@@ -22,6 +22,7 @@ export default async function AdminSettingsPage() {
   const academyName = await getSetting(SETTING_ACADEMY_NAME, DEFAULT_ACADEMY_NAME);
   const logoKey = await getSetting(SETTING_ACADEMY_LOGO, "");
   const cardBgKey = await getSetting("card_bg_image_key", "");
+  const admissionBgKey = await getSetting("admission_form_bg_key", "");
   const publicationName = await getSetting(SETTING_PUBLICATION_NAME, DEFAULT_PUBLICATION_NAME);
   const publicationLogoKey = await getSetting(SETTING_PUBLICATION_LOGO, "");
   const publicationDescription = await getSetting(
@@ -44,6 +45,7 @@ export default async function AdminSettingsPage() {
         initialName={academyName}
         logoKey={logoKey || null}
         cardBgKey={cardBgKey || null}
+        admissionBgKey={admissionBgKey || null}
         initialPublicationName={publicationName}
         publicationLogoKey={publicationLogoKey || null}
         initialPublicationDescription={publicationDescription}

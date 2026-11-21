@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     const maxBytes =
       type === "banner"
         ? 15 * 1024 * 1024 // 15 MB
-        : type === "publication-logo" || type === "logo" || type === "card-bg"
+        : type === "publication-logo" || type === "logo" || type === "card-bg" || type === "admission-bg"
         ? 15 * 1024 * 1024 // 15 MB
         : type === "landing"
         ? 15 * 1024 * 1024 // 15 MB — public landing page images (hero/campus/course/avatar)
@@ -247,6 +247,25 @@ export async function POST(req: Request) {
       await setSetting("card_bg_image_key", key);
       await setSetting("card_cover_bg_url", `/api/files/${key}`);
       return ok({ key, url: `/api/files/${key}`, message: MSG.saved });
+    }
+
+    if (type === "admission-bg") {
+      if (user.role !== "ADMIN" && user.role !== "DIRECTOR") {
+        throw new ApiError(403, MSG.noPermissionView);
+      }
+      const current = await db
+        .prepare("SELECT value FROM settings WHERE key = ?")
+        .bind("admission_form_bg_key")
+        .first<{ value: string | null }>(undefined as never)
+        .catch(() => null);
+      const key = `academy/admission-bg/${uuid}.${detected}`;
+      await bucket.put(key, bytes);
+      await setSetting("admission_form_bg_key", key);
+      await setSetting("admission_form_bg_url", `/api/files/${key}`);
+      if (current?.value && current.value.startsWith("academy/admission-bg/")) {
+        await bucket.delete(current.value).catch(() => {});
+      }
+      return ok({ key, url: `/api/files/${key}`, message: "ভর্তি ফর্মের ব্যাকগ্রাউন্ড স্থায়ীভাবে সংরক্ষণ করা হয়েছে।" });
     }
 
     throw new ApiError(400, "অজানা আপলোড ধরন।");

@@ -299,9 +299,14 @@ export function ClassHolidayModal({
     }
   };
 
+  const baseTodayDate = todayDate || todayISODateDhaka();
+  const tomorrowDate = addDaysToIsoDate(baseTodayDate, 1);
+  const isTodaySelected = startDate === baseTodayDate && endDate === baseTodayDate;
+  const isTomorrowSelected = startDate === tomorrowDate && endDate === tomorrowDate;
+  const isTodayAndTomorrowSelected = startDate === baseTodayDate && endDate === tomorrowDate;
+
   const applyQuickDate = (daysFromToday: number, durationDays = 1) => {
-    const base = todayDate || todayISODateDhaka();
-    const s = addDaysToIsoDate(base, daysFromToday);
+    const s = addDaysToIsoDate(baseTodayDate, daysFromToday);
     const e = addDaysToIsoDate(s, durationDays - 1);
     setStartDate(s);
     setEndDate(e);
@@ -309,7 +314,7 @@ export function ClassHolidayModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden rounded-2xl border-slate-200">
+      <DialogContent className="w-[min(96vw,42rem)] max-w-[96vw] sm:max-w-2xl p-0 gap-0 overflow-hidden rounded-2xl border-slate-200">
         {/* Header */}
         <DialogHeader className="p-4 sm:p-5 bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white shrink-0">
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
@@ -445,21 +450,33 @@ export function ClassHolidayModal({
                   <button
                     type="button"
                     onClick={() => applyQuickDate(0, 1)}
-                    className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white border border-rose-200 text-rose-700 hover:bg-rose-100"
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${
+                      isTodaySelected
+                        ? "bg-rose-600 text-white border-rose-700 shadow-2xs"
+                        : "bg-white border-slate-200 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                    }`}
                   >
                     আজ
                   </button>
                   <button
                     type="button"
                     onClick={() => applyQuickDate(1, 1)}
-                    className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${
+                      isTomorrowSelected
+                        ? "bg-rose-600 text-white border-rose-700 shadow-2xs"
+                        : "bg-white border-slate-200 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                    }`}
                   >
                     আগামীকাল
                   </button>
                   <button
                     type="button"
                     onClick={() => applyQuickDate(0, 2)}
-                    className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${
+                      isTodayAndTomorrowSelected
+                        ? "bg-rose-600 text-white border-rose-700 shadow-2xs"
+                        : "bg-white border-slate-200 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                    }`}
                   >
                     আজ ও আগামীকাল
                   </button>
@@ -509,16 +526,23 @@ export function ClassHolidayModal({
                 required
               />
               <div className="flex flex-wrap gap-1.5">
-                {REASON_PRESETS.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setReason(preset)}
-                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-white border border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-700 transition"
-                  >
-                    {preset}
-                  </button>
-                ))}
+                {REASON_PRESETS.map((preset) => {
+                  const isActiveReason = reason.trim() === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setReason(preset)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-semibold border transition ${
+                        isActiveReason
+                          ? "bg-rose-600 text-white border-rose-700 shadow-2xs"
+                          : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-700"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

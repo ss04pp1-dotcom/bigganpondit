@@ -6,6 +6,7 @@ import { assertSameOrigin } from "@/lib/api";
 import { DAYS_OF_WEEK, getDayNameBn, getBangladeshDayOfWeek, todayISODateDhaka } from "@/lib/constants";
 import { notifyRoutineChanged } from "@/lib/push-events";
 import { sortRoutines } from "@/lib/routine-sort";
+import { ClassHoliday, holidayMatchesTarget } from "@/lib/holiday-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +148,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
           ok: true,
           routines: [],
+          holidays: [],
+          todayDate: queryDate,
           todayDayOfWeek,
           todayDayName: getDayNameBn(todayDayOfWeek),
           userContext: {
@@ -179,6 +182,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
           ok: true,
           routines: [],
+          holidays: [],
+          todayDate: queryDate,
           todayDayOfWeek,
           todayDayName: getDayNameBn(todayDayOfWeek),
           userContext: {
@@ -433,9 +438,36 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    // Load active & upcoming holidays (fail-safe if table hasn't been created yet)
+    const rawHolidays = (
+      await db
+        .prepare(
+          `SELECT * FROM class_holidays
+           WHERE is_active = 1 AND end_date >= ?
+           ORDER BY start_date ASC, end_date ASC, id DESC`
+        )
+        .bind(queryDate)
+        .all<ClassHoliday>()
+        .catch(() => ({ results: [] }))
+    ).results || [];
+
+    const holidays =
+      user.role === "STUDENT"
+        ? rawHolidays.filter((h) =>
+            holidayMatchesTarget(h, {
+              className: studentClass,
+              division: studentDivision,
+              batchId: studentBatchId,
+              batchName: studentBatchName,
+            })
+          )
+        : rawHolidays;
+
     return NextResponse.json({
       ok: true,
       routines: rows || [],
+      holidays,
+      todayDate: queryDate,
       todayDayOfWeek,
       todayDayName: getDayNameBn(todayDayOfWeek),
       queryDate,

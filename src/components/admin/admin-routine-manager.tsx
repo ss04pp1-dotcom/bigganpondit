@@ -22,6 +22,7 @@ import {
   Loader2,
   AlertCircle,
   Copy,
+  CalendarOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,11 +45,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { CLASS_NUMBERS, DAYS_OF_WEEK, bn, classLabel, getDayNameBn, getBangladeshDayOfWeek } from "@/lib/constants";
+import { CLASS_NUMBERS, DAYS_OF_WEEK, bn, classLabel, getDayNameBn, getBangladeshDayOfWeek, todayISODateDhaka } from "@/lib/constants";
 import { RoutineItem } from "@/components/app/today-routine-modal";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 import { TeacherAddTopicModal } from "@/components/app/teacher-add-topic-modal";
+import { ClassHolidayModal } from "@/components/admin/class-holiday-modal";
 import { sortRoutines } from "@/lib/routine-sort";
+import {
+  ClassHoliday,
+  formatBanglaDateRange,
+  formatHolidayTargetBn,
+  isDateInRange,
+} from "@/lib/holiday-utils";
 
 const TIME_PRESETS = [
   { start: "09:00 AM", end: "10:00 AM" },
@@ -77,6 +85,9 @@ export function AdminRoutineManager() {
   const [subjects, setSubjects] = useState<{ id: number; name: string; class_name: string; division: string | null }[]>([]);
   const [batches, setBatches] = useState<{ id: number; name: string; class_id: number; class_name: string; division: string | null; time_slot: string | null; is_active?: number }[]>([]);
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+  const [holidays, setHolidays] = useState<ClassHoliday[]>([]);
+  const [todayDate, setTodayDate] = useState<string>(todayISODateDhaka());
+  const [holidayModalOpen, setHolidayModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"TABLE" | "GRID">("TABLE");
 
@@ -173,6 +184,8 @@ export function AdminRoutineManager() {
         setRoutines(json.routines || []);
         setTeachers(json.teachers || []);
         setSubjects(json.subjects || []);
+        setHolidays(json.holidays || []);
+        if (json.todayDate) setTodayDate(json.todayDate);
         if (json.batches) {
           setBatches(json.batches);
         } else {
@@ -505,6 +518,19 @@ export function AdminRoutineManager() {
           </Button>
           <Button
             type="button"
+            onClick={() => setHolidayModalOpen(true)}
+            className="gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold h-9 sm:h-10 text-xs sm:text-sm shadow-xs"
+          >
+            <CalendarOff className="h-4 w-4" />
+            ছুটি ঘোষণা
+            {holidays.some((h) => isDateInRange(todayDate, h.start_date, h.end_date)) && (
+              <span className="ml-0.5 rounded-full bg-white/25 px-1.5 py-0.2 text-[10px] font-extrabold">
+                {bn(holidays.filter((h) => isDateInRange(todayDate, h.start_date, h.end_date)).length)}
+              </span>
+            )}
+          </Button>
+          <Button
+            type="button"
             onClick={() => setAddTopicModalOpen(true)}
             className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 sm:h-10 text-xs sm:text-sm shadow-xs"
           >
@@ -521,6 +547,59 @@ export function AdminRoutineManager() {
           </Button>
         </div>
       </div>
+
+      {/* Active & Upcoming Holidays Banner */}
+      {holidays.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-2xs no-print space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-600 text-white shadow-2xs">
+                <CalendarOff className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-rose-950">
+                  ঘোষিত ছুটি ({bn(holidays.length)} টি চলমান / আসন্ন)
+                </h3>
+                <p className="text-[11px] text-rose-700">
+                  সংশ্লিষ্ট শ্রেণির শিক্ষার্থীরা রুটিনে গেলে সরাসরি ছুটি দেখতে পাবে
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setHolidayModalOpen(true)}
+              className="h-8 text-xs font-bold border-rose-300 bg-white text-rose-700 hover:bg-rose-100"
+            >
+              ছুটি পরিচালনা করুন
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {holidays.slice(0, 6).map((h) => {
+              const activeToday = isDateInRange(todayDate, h.start_date, h.end_date);
+              return (
+                <div
+                  key={h.id}
+                  className={`inline-flex flex-wrap items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs ${
+                    activeToday
+                      ? "bg-rose-600 text-white border-rose-700 shadow-2xs"
+                      : "bg-white text-slate-800 border-rose-200"
+                  }`}
+                >
+                  <span className="font-extrabold">
+                    {activeToday ? "আজ ছুটি:" : "আসন্ন:"}
+                  </span>
+                  <span className="font-bold">{formatHolidayTargetBn(h)}</span>
+                  <span className={activeToday ? "text-rose-100" : "text-slate-500"}>
+                    • {h.reason} ({formatBanglaDateRange(h.start_date, h.end_date)})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 no-print">
@@ -1578,6 +1657,15 @@ export function AdminRoutineManager() {
         routines={routines}
         batches={batches}
         onSaved={loadData}
+      />
+
+      {/* Class Holiday Declaration & Management Modal */}
+      <ClassHolidayModal
+        isOpen={holidayModalOpen}
+        onClose={() => setHolidayModalOpen(false)}
+        classesList={classesList}
+        batches={batches}
+        onChanged={loadData}
       />
     </div>
   );

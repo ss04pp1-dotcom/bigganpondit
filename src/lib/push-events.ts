@@ -8,6 +8,7 @@ import { enqueueNotification } from "@/lib/push-service";
 import type { D1Database } from "@/lib/db/types";
 import { classLabel, getBangladeshDayOfWeek, todayISODateDhaka } from "@/lib/constants";
 import { parseTimeToMinutes, getCurrentDhakaMinutes } from "@/lib/routine-notifications";
+import { ClassHoliday, formatBanglaDateRange, holidayMatchesTarget } from "@/lib/holiday-utils";
 
 /** Notice became visible (admin created approved, or approved a pending one). */
 export async function notifyNoticePublished(
@@ -138,6 +139,47 @@ export async function notifyRoutineDailyTopicSaved(
   }
 }
 
+/** A class or academy-wide holiday was declared. */
+export async function notifyClassHolidayDeclared(
+  db: D1Database,
+  info: {
+    className: string;
+    batchName?: string | null;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    eventId: string;
+  }
+): Promise<void> {
+  try {
+    const isAll = info.className.trim().toUpperCase() === "ALL";
+    const classRow = isAll
+      ? null
+      : await db
+          .prepare("SELECT id FROM classes WHERE TRIM(name) = TRIM(?)")
+          .bind(info.className)
+          .first<{ id: number }>()
+          .catch(() => null);
+
+    const targetLabel = isAll
+      ? "সকল শ্রেণি"
+      : `${classLabel(info.className)}${info.batchName ? ` (${info.batchName})` : ""}`;
+    const dateRangeBn = formatBanglaDateRange(info.startDate, info.endDate);
+
+    await enqueueNotification(db, {
+      title: `🏖️ ছুটি ঘোষণা: ${targetLabel}`,
+      body: `${dateRangeBn} — ${info.reason}। বিস্তারিত দেখতে রুটিন দেখুন।`,
+      deepLink: "routine",
+      targetType: !isAll && classRow?.id ? "CLASS" : "ALL",
+      targetClassId: !isAll && classRow?.id ? classRow.id : undefined,
+      kind: "ROUTINE",
+      idempotencyKey: `holiday:${info.eventId}`,
+    });
+  } catch (e) {
+    console.error("[push-events] holiday notification failed:", e);
+  }
+}
+
 /**
  * Automatically scans today's active routines and enqueues push notifications
  * for upcoming classes (10-minute warning and class start).
@@ -152,10 +194,22 @@ export async function enqueueUpcomingClassPushReminders(
     const todayDate = todayISODateDhaka();
     const nowDhakaMin = getCurrentDhakaMinutes();
 
+    const todayHolidays = (
+      await db
+        .prepare(
+          `SELECT * FROM class_holidays
+           WHERE is_active = 1 AND start_date <= ? AND end_date >= ?`
+        )
+        .bind(todayDate, todayDate)
+        .all<ClassHoliday>()
+        .catch(() => ({ results: [] }))
+    ).results || [];
+
     const routines = (
       await db
         .prepare(
-          `SELECT r.id, r.class_name, r.subject_name, r.teacher_name, r.start_time, r.end_time, r.room_no,
+          `SELECT r.id, r.class_name, r.division, r.batch_id, r.batch_name,
+                  r.subject_name, r.teacher_name, r.start_time, r.end_time, r.room_no,
                   c.id as class_id,
                   rdt.chapter_name, rdt.topic_name
            FROM routines r
@@ -167,6 +221,9 @@ export async function enqueueUpcomingClassPushReminders(
         .all<{
           id: number;
           class_name: string;
+          division: string | null;
+          batch_id: number | null;
+          batch_name: string | null;
           subject_name: string;
           teacher_name: string | null;
           start_time: string;
@@ -180,6 +237,17 @@ export async function enqueueUpcomingClassPushReminders(
 
     let count = 0;
     for (const r of routines) {
+      // Skip automated class reminders if this class/batch is on holiday today
+      const isHolidayToday = todayHolidays.some((h) =>
+        holidayMatchesTarget(h, {
+          className: r.class_name,
+          division: r.division,
+          batchId: r.batch_id,
+          batchName: r.batch_name,
+        })
+      );
+      if (isHolidayToday) continue;
+
       const startMin = parseTimeToMinutes(r.start_time);
       if (startMin === null) continue;
 

@@ -274,6 +274,31 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_rdt_date ON routine_daily_topics(date)").run().catch(() => null);
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_rdt_teacher ON routine_daily_topics(teacher_id)").run().catch(() => null);
 
+      // Ensure class_holidays exists in fast-path (Cloudflare Workers)
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS class_holidays (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_name      TEXT NOT NULL,
+            division        TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+            batch_id        INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+            batch_name      TEXT,
+            start_date      TEXT NOT NULL,
+            end_date        TEXT NOT NULL,
+            reason          TEXT NOT NULL,
+            created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_by_name TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+          )`
+        )
+        .run()
+        .catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_class_holidays_dates ON class_holidays(start_date, end_date)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_class_holidays_class ON class_holidays(class_name)").run().catch(() => null);
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_class_holidays_active ON class_holidays(is_active, end_date)").run().catch(() => null);
+
       // Ensure fee_items, fee_payments, fee_notifications exist in fast-path (Cloudflare Workers)
       await db
         .prepare(
@@ -923,6 +948,32 @@ async function bootstrap(db: D1Database, cf: CloudflareEnv | null): Promise<void
       CREATE INDEX IF NOT EXISTS idx_rdt_teacher ON routine_daily_topics(teacher_id);
     `,
     "routine_daily_topics"
+  );
+
+  // Class Holidays / Off-days (ছুটি ব্যবস্থাপনা)
+  await execSchemaStep(
+    db,
+    `
+      CREATE TABLE IF NOT EXISTS class_holidays (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_name      TEXT NOT NULL,
+        division        TEXT CHECK (division IS NULL OR division IN ('SCIENCE','HUMANITIES')),
+        batch_id        INTEGER REFERENCES batches(id) ON DELETE SET NULL,
+        batch_name      TEXT,
+        start_date      TEXT NOT NULL,
+        end_date        TEXT NOT NULL,
+        reason          TEXT NOT NULL,
+        created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by_name TEXT,
+        is_active       INTEGER NOT NULL DEFAULT 1,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_class_holidays_dates ON class_holidays(start_date, end_date);
+      CREATE INDEX IF NOT EXISTS idx_class_holidays_class ON class_holidays(class_name);
+      CREATE INDEX IF NOT EXISTS idx_class_holidays_active ON class_holidays(is_active, end_date);
+    `,
+    "class_holidays"
   );
 
   // Fees, Automated Absent/Fail Fines, Payments & Notifications

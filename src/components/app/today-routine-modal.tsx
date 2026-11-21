@@ -18,6 +18,7 @@ import {
   ArrowRight,
   Flame,
   School,
+  CalendarOff,
 } from "lucide-react";
 import {
   Dialog,
@@ -45,10 +46,18 @@ import {
   divisionLabel,
   getDayNameBn,
   getBangladeshDayOfWeek,
+  todayISODateDhaka,
 } from "@/lib/constants";
 import Link from "next/link";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 import { sortRoutines } from "@/lib/routine-sort";
+import {
+  ClassHoliday,
+  findMatchingHolidays,
+  formatBanglaDateRange,
+  formatHolidayTargetBn,
+  getUpcomingDateForDayOfWeek,
+} from "@/lib/holiday-utils";
 
 export interface RoutineItem {
   id: number;
@@ -81,6 +90,8 @@ export interface RoutineItem {
 interface RoutineApiResponse {
   ok: boolean;
   routines: RoutineItem[];
+  holidays?: ClassHoliday[];
+  todayDate?: string;
   todayDayOfWeek: number;
   todayDayName: string;
   userContext: {
@@ -148,6 +159,8 @@ export function TodayRoutineModal({
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const todayDayOfWeek = data?.todayDayOfWeek ?? getBangladeshDayOfWeek();
   const todayDayName = data?.todayDayName ?? getDayNameBn(todayDayOfWeek);
+  const todayDate = data?.todayDate ?? todayISODateDhaka();
+  const holidays = data?.holidays ?? [];
 
   const [topicModalOpen, setTopicModalOpen] = useState(false);
   const [selectedRoutineForTopic, setSelectedRoutineForTopic] = useState<RoutineItem | null>(null);
@@ -416,6 +429,68 @@ export function TodayRoutineModal({
     selectedTeacher,
   ]);
 
+  // Holiday helpers
+  const activeHolidayTarget = useMemo(() => {
+    if (isStudent) {
+      return {
+        className: data?.userContext?.studentClass ?? null,
+        division: data?.userContext?.studentDivision ?? null,
+        batchId: data?.userContext?.studentBatchId ?? null,
+        batchName: data?.userContext?.studentBatchName ?? null,
+      };
+    }
+    if ((isAdmin || isDirector) && selectedClass !== "all") {
+      return {
+        className: selectedClass,
+        division: selectedDivision !== "all" ? selectedDivision : null,
+      };
+    }
+    return undefined;
+  }, [isStudent, isAdmin, isDirector, data, selectedClass, selectedDivision]);
+
+  const matchesModalViewerHoliday = (h: ClassHoliday, dateStr: string, dayNum: number): boolean => {
+    const base = findMatchingHolidays([h], dateStr, activeHolidayTarget);
+    if (base.length === 0) return false;
+    if (isTeacher) {
+      if (String(h.class_name).trim().toUpperCase() === "ALL") return true;
+      const teacherRoutinesOnDay = (data?.routines ?? []).filter(
+        (r) => r.day_of_week === dayNum
+      );
+      return teacherRoutinesOnDay.some(
+        (r) =>
+          findMatchingHolidays([h], dateStr, {
+            className: r.class_name,
+            division: r.division,
+            batchId: r.batch_id,
+            batchName: r.batch_name,
+          }).length > 0
+      );
+    }
+    return true;
+  };
+
+  const todayHolidays = useMemo(() => {
+    return holidays.filter((h) => matchesModalViewerHoliday(h, todayDate, todayDayOfWeek));
+  }, [holidays, todayDate, todayDayOfWeek, activeHolidayTarget, isTeacher, data]);
+
+  const selectedWeekDayDate = useMemo(() => {
+    return getUpcomingDateForDayOfWeek(todayDate, todayDayOfWeek, selectedDay);
+  }, [todayDate, todayDayOfWeek, selectedDay]);
+
+  const weeklyDayHolidays = useMemo(() => {
+    return holidays.filter((h) => matchesModalViewerHoliday(h, selectedWeekDayDate, selectedDay));
+  }, [holidays, selectedWeekDayDate, selectedDay, activeHolidayTarget, isTeacher, data]);
+
+  const getRoutineHolidayOnDate = (routine: RoutineItem, dateStr: string): ClassHoliday | null => {
+    const matches = findMatchingHolidays(holidays, dateStr, {
+      className: routine.class_name,
+      division: routine.division,
+      batchId: routine.batch_id,
+      batchName: routine.batch_name,
+    });
+    return matches[0] ?? null;
+  };
+
   // Calculate status of a class
   const getClassStatus = (startTime: string, endTime: string) => {
     const startMin = parseTimeToMinutes(startTime);
@@ -459,6 +534,12 @@ export function TodayRoutineModal({
                 <Badge className="bg-white/20 text-white hover:bg-white/30 text-[11px] font-bold border-none">
                   {todayDayName}
                 </Badge>
+                {todayHolidays.length > 0 && (
+                  <Badge className="bg-rose-500 text-white text-[11px] font-extrabold border-none gap-1 shadow-xs">
+                    <CalendarOff className="h-3 w-3" />
+                    আজ ছুটি
+                  </Badge>
+                )}
                 <Badge className="hidden sm:inline-flex bg-emerald-900/60 text-emerald-100 text-[10px] font-bold border border-emerald-400/30">
                   🔔 ১০মি. পূর্বে ও শুরুতে নোটিফিকেশন
                 </Badge>
@@ -547,31 +628,84 @@ export function TodayRoutineModal({
             ) : activeTab === "TODAY" ? (
               /* TODAY'S ROUTINE VIEW */
               <div className="space-y-3">
-                {todayRoutines.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-8 text-center space-y-2">
-                    <CalendarDays className="h-10 w-10 text-slate-400 mx-auto" />
-                    <h4 className="text-sm font-bold text-slate-800">
-                      আজ {todayDayName} কোনো ক্লাস নির্ধারিত নেই
-                    </h4>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                      {todayDayOfWeek === 5
-                        ? "আজ শুক্রবার — সাপ্তাহিক ছুটির দিন। পুরো সপ্তাহের সময়সূচি দেখতে সাপ্তাহিক রুটিন ট্যাবে যান।"
-                        : "আজকের জন্য কোনো ক্লাস পাওয়া যায়নি।"}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setActiveTab("WEEK")}
-                      className="text-xs font-bold mt-2"
-                    >
-                      সাপ্তাহিক রুটিন দেখুন
-                    </Button>
+                {/* Today's Holiday Banner */}
+                {todayHolidays.length > 0 && (
+                  <div className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 via-red-50/80 to-amber-50/60 p-4 space-y-2.5 shadow-xs">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white shadow-xs">
+                        <CalendarOff className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge className="bg-rose-600 text-white border-none text-[10px] font-extrabold">
+                            আজ ছুটি
+                          </Badge>
+                          <span className="text-[11px] font-bold text-rose-700">
+                            {todayDayName}
+                          </span>
+                        </div>
+                        <h4 className="text-sm sm:text-base font-black text-rose-950">
+                          {isStudent
+                            ? "আজ আপনার শ্রেণি ছুটি ঘোষণা করা হয়েছে!"
+                            : "আজ ছুটি ঘোষিত শ্রেণিসমূহ"}
+                        </h4>
+                        {isStudent && (
+                          <p className="text-xs font-medium text-rose-800">
+                            আজ নির্ধারিত কোনো ক্লাস অনুষ্ঠিত হবে না।
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {todayHolidays.map((h) => (
+                        <div
+                          key={h.id}
+                          className="rounded-xl border border-rose-200 bg-white/95 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div>
+                            <span className="font-extrabold text-rose-900">
+                              {formatHolidayTargetBn(h)}
+                            </span>
+                            <span className="text-slate-700 font-semibold"> — {h.reason}</span>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] font-bold border-rose-200 text-rose-700 bg-rose-50">
+                            {formatBanglaDateRange(h.start_date, h.end_date)}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+
+                {todayRoutines.length === 0 ? (
+                  todayHolidays.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-8 text-center space-y-2">
+                      <CalendarDays className="h-10 w-10 text-slate-400 mx-auto" />
+                      <h4 className="text-sm font-bold text-slate-800">
+                        আজ {todayDayName} কোনো ক্লাস নির্ধারিত নেই
+                      </h4>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                        {todayDayOfWeek === 5
+                          ? "আজ শুক্রবার — সাপ্তাহিক ছুটির দিন। পুরো সপ্তাহের সময়সূচি দেখতে সাপ্তাহিক রুটিন ট্যাবে যান।"
+                          : "আজকের জন্য কোনো ক্লাস পাওয়া যায়নি।"}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActiveTab("WEEK")}
+                        className="text-xs font-bold mt-2"
+                      >
+                        সাপ্তাহিক রুটিন দেখুন
+                      </Button>
+                    </div>
+                  ) : null
                 ) : (
                   <div className="space-y-2.5">
                     {todayRoutines.map((routine) => {
-                      const status = getClassStatus(routine.start_time, routine.end_time);
+                      const routineHoliday = getRoutineHolidayOnDate(routine, todayDate);
+                      const isHoliday = Boolean(routineHoliday);
+                      const status = isHoliday ? "HOLIDAY" : getClassStatus(routine.start_time, routine.end_time);
                       const isRunning = status === "RUNNING";
                       const isUpcoming = status === "UPCOMING";
                       const isPassed = status === "PASSED";
@@ -580,7 +714,9 @@ export function TodayRoutineModal({
                         <div
                           key={routine.id}
                           className={`rounded-xl border p-3.5 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs ${
-                            isRunning
+                            isHoliday
+                              ? "bg-rose-50/75 border-rose-300"
+                              : isRunning
                               ? "bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-500/20"
                               : isUpcoming
                               ? "bg-white border-slate-200 hover:border-slate-300"
@@ -590,19 +726,26 @@ export function TodayRoutineModal({
                           <div className="flex items-start gap-3">
                             <div
                               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
-                                isRunning
+                                isHoliday
+                                  ? "bg-rose-600 text-white shadow-xs"
+                                  : isRunning
                                   ? "bg-emerald-600 text-white shadow-xs"
                                   : "bg-emerald-100 text-emerald-800"
                               }`}
                             >
-                              <BookOpen className="h-5 w-5" />
+                              {isHoliday ? <CalendarOff className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
                             </div>
 
                             <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <h5 className="text-sm font-bold text-slate-900">
+                                <h5 className={`text-sm font-bold ${isHoliday ? "text-rose-950 line-through decoration-rose-400" : "text-slate-900"}`}>
                                   {routine.subject_name}
                                 </h5>
+                                {isHoliday && (
+                                  <Badge className="text-[10px] font-extrabold bg-rose-600 text-white border-none">
+                                    ছুটি
+                                  </Badge>
+                                )}
                                 <Badge variant="outline" className="text-[10px] font-bold border-slate-200 text-slate-700">
                                   {classLabel(routine.class_name)}
                                 </Badge>
@@ -692,6 +835,12 @@ export function TodayRoutineModal({
                               </Button>
                             )}
 
+                            {isHoliday && routineHoliday && (
+                              <span className="flex items-center gap-1 text-[10px] font-extrabold text-white bg-rose-600 px-2.5 py-0.5 rounded-full">
+                                <CalendarOff className="h-3 w-3" />
+                                ছুটি: {routineHoliday.reason}
+                              </span>
+                            )}
                             {isRunning && (
                               <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                                 <span className="relative flex h-1.5 w-1.5">
@@ -726,6 +875,10 @@ export function TodayRoutineModal({
                   {DAYS_OF_WEEK.map((day) => {
                     const isToday = day.id === todayDayOfWeek;
                     const isSelected = day.id === selectedDay;
+                    const dayDateStr = getUpcomingDateForDayOfWeek(todayDate, todayDayOfWeek, day.id);
+                    const hasDayHoliday = holidays.some((h) =>
+                      matchesModalViewerHoliday(h, dayDateStr, day.id)
+                    );
                     return (
                       <button
                         key={day.id}
@@ -733,18 +886,52 @@ export function TodayRoutineModal({
                         onClick={() => setSelectedDay(day.id)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition ${
                           isSelected
-                            ? "bg-slate-900 text-white shadow-xs"
+                            ? hasDayHoliday
+                              ? "bg-rose-600 text-white shadow-xs"
+                              : "bg-slate-900 text-white shadow-xs"
+                            : hasDayHoliday
+                            ? "bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100"
                             : isToday
                             ? "bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200"
                             : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
                         }`}
                       >
                         <span>{day.name}</span>
-                        {isToday && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                        {hasDayHoliday ? (
+                          <span
+                            className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                              isSelected ? "bg-white/25 text-white" : "bg-rose-600 text-white"
+                            }`}
+                          >
+                            ছুটি
+                          </span>
+                        ) : (
+                          isToday && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        )}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* Selected Weekday Holiday Notice */}
+                {weeklyDayHolidays.length > 0 && (
+                  <div className="rounded-xl border border-rose-300 bg-rose-50/80 p-3 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-extrabold text-rose-900">
+                      <CalendarOff className="h-4 w-4 text-rose-600 shrink-0" />
+                      <span>
+                        {getDayNameBn(selectedDay)} ({formatBanglaDateRange(selectedWeekDayDate, selectedWeekDayDate)}) ছুটি ঘোষিত
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {weeklyDayHolidays.map((h) => (
+                        <div key={h.id} className="text-xs text-rose-900 bg-white/90 rounded-lg border border-rose-200 px-2.5 py-1.5">
+                          <span className="font-bold">{formatHolidayTargetBn(h)}</span>
+                          <span> — {h.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {weeklyDayRoutines.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center space-y-2">
@@ -757,20 +944,36 @@ export function TodayRoutineModal({
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
-                    {weeklyDayRoutines.map((routine) => (
+                    {weeklyDayRoutines.map((routine) => {
+                      const weekCardHoliday = getRoutineHolidayOnDate(routine, selectedWeekDayDate);
+                      const isWeekHoliday = Boolean(weekCardHoliday);
+                      return (
                       <div
                         key={routine.id}
-                        className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition"
+                        className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                          isWeekHoliday ? "bg-rose-50/70" : "hover:bg-slate-50/60"
+                        }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-xs">
-                            <BookOpen className="h-5 w-5" />
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-bold text-xs ${
+                              isWeekHoliday
+                                ? "bg-rose-600 text-white border-rose-700"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            }`}
+                          >
+                            {isWeekHoliday ? <CalendarOff className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h5 className="text-sm font-bold text-slate-900">
+                              <h5 className={`text-sm font-bold ${isWeekHoliday ? "text-rose-950 line-through decoration-rose-400" : "text-slate-900"}`}>
                                 {routine.subject_name}
                               </h5>
+                              {isWeekHoliday && (
+                                <Badge className="text-[10px] font-extrabold bg-rose-600 text-white border-none">
+                                  ছুটি{weekCardHoliday?.reason ? `: ${weekCardHoliday.reason}` : ""}
+                                </Badge>
+                              )}
                               <Badge variant="outline" className="text-[10px] font-bold border-slate-200 text-slate-700">
                                 {classLabel(routine.class_name)}
                               </Badge>
@@ -863,7 +1066,8 @@ export function TodayRoutineModal({
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

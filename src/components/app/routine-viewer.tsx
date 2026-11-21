@@ -23,6 +23,7 @@ import {
   ArrowRight,
   Search,
   BellRing,
+  CalendarOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,11 +43,21 @@ import {
   divisionLabel,
   getDayNameBn,
   getBangladeshDayOfWeek,
+  todayISODateDhaka,
 } from "@/lib/constants";
 import { RoutineItem } from "@/components/app/today-routine-modal";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 import { TeacherAddTopicModal } from "@/components/app/teacher-add-topic-modal";
+import { ClassHolidayModal } from "@/components/admin/class-holiday-modal";
 import { sortRoutines } from "@/lib/routine-sort";
+import {
+  ClassHoliday,
+  findMatchingHolidays,
+  formatBanglaDateRange,
+  formatHolidayTargetBn,
+  getUpcomingDateForDayOfWeek,
+  isDateInRange,
+} from "@/lib/holiday-utils";
 
 function parseTimeToMinutes(timeStr: string): number | null {
   if (!timeStr) return null;
@@ -77,6 +88,9 @@ export function RoutineViewer({
   >([]);
   const [loading, setLoading] = useState(true);
   const [classesList, setClassesList] = useState<Array<{ id: number; name: string; is_active?: number }>>([]);
+  const [holidays, setHolidays] = useState<ClassHoliday[]>([]);
+  const [todayDate, setTodayDate] = useState<string>(todayISODateDhaka());
+  const [holidayModalOpen, setHolidayModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -104,46 +118,49 @@ export function RoutineViewer({
   const todayDayOfWeek = getBangladeshDayOfWeek();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch("/api/routines");
-        if (res.status === 401) {
-          setError("রুটিন দেখতে লগইন করা আবশ্যক। দয়া করে প্রথমে লগইন করুন।");
-          setLoading(false);
-          return;
-        }
-        const json = await res.json();
-        if (json.ok) {
-          setRoutines(json.routines || []);
-          setTeachers(json.teachers || []);
-          setUserContext(json.userContext || null);
-          fetch("/api/classes")
-            .then((r) => r.json())
-            .then((j) => {
-              if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
-            })
-            .catch(() => {});
-          if (json.batches) {
-            setBatches(json.batches);
-          } else {
-            const bRes = await fetch("/api/batches").catch(() => null);
-            const bJson = await bRes?.json().catch(() => null);
-            if (bJson?.ok) setBatches(bJson.batches || []);
-          }
-        } else {
-          setError(json.error || "রুটিন লোড করা যায়নি।");
-        }
-      } catch (err) {
-        console.error("Failed to load routines", err);
-        setError("রুটিন লোড করতে সমস্যা হয়েছে।");
-      } finally {
+  const loadRoutines = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/routines");
+      if (res.status === 401) {
+        setError("রুটিন দেখতে লগইন করা আবশ্যক। দয়া করে প্রথমে লগইন করুন।");
         setLoading(false);
+        return;
       }
+      const json = await res.json();
+      if (json.ok) {
+        setRoutines(json.routines || []);
+        setTeachers(json.teachers || []);
+        setHolidays(json.holidays || []);
+        if (json.todayDate) setTodayDate(json.todayDate);
+        setUserContext(json.userContext || null);
+        fetch("/api/classes")
+          .then((r) => r.json())
+          .then((j) => {
+            if (j?.ok && Array.isArray(j.classes)) setClassesList(j.classes);
+          })
+          .catch(() => {});
+        if (json.batches) {
+          setBatches(json.batches);
+        } else {
+          const bRes = await fetch("/api/batches").catch(() => null);
+          const bJson = await bRes?.json().catch(() => null);
+          if (bJson?.ok) setBatches(bJson.batches || []);
+        }
+      } else {
+        setError(json.error || "রুটিন লোড করা যায়নি।");
+      }
+    } catch (err) {
+      console.error("Failed to load routines", err);
+      setError("রুটিন লোড করতে সমস্যা হয়েছে।");
+    } finally {
+      setLoading(false);
     }
-    load();
+  };
+
+  useEffect(() => {
+    loadRoutines();
   }, []);
 
   const isStudent = role === "STUDENT";
@@ -340,6 +357,95 @@ export function RoutineViewer({
     }
   };
 
+  // Helper: map any weekday (0..6) to today or next upcoming YYYY-MM-DD
+  const getDateForDay = (dayNum: number) =>
+    getUpcomingDateForDayOfWeek(todayDate, todayDayOfWeek, dayNum);
+
+  // Target used for checking holidays for the active viewer/filter
+  const activeHolidayTarget = useMemo(() => {
+    if (isStudent) {
+      return {
+        className: userContext?.studentClass ?? null,
+        division: userContext?.studentDivision ?? null,
+        batchId: userContext?.studentBatchId ?? null,
+        batchName: userContext?.studentBatchName ?? null,
+      };
+    }
+    if ((isAdmin || isDirector) && selectedClass !== "all") {
+      const matchedBatch =
+        selectedBatch !== "all"
+          ? batches.find((b) => String(b.id) === selectedBatch)
+          : null;
+      return {
+        className: selectedClass,
+        division: selectedDivision !== "all" ? selectedDivision : null,
+        batchId: matchedBatch ? matchedBatch.id : null,
+        batchName: matchedBatch ? matchedBatch.name : null,
+      };
+    }
+    return undefined;
+  }, [
+    isStudent,
+    isAdmin,
+    isDirector,
+    userContext,
+    selectedClass,
+    selectedDivision,
+    selectedBatch,
+    batches,
+  ]);
+
+  const matchesViewerHoliday = (h: ClassHoliday, dateStr: string, dayNum?: number | null): boolean => {
+    if (!isDateInRange(dateStr, h.start_date, h.end_date)) return false;
+    if (activeHolidayTarget) {
+      return findMatchingHolidays([h], dateStr, activeHolidayTarget).length > 0;
+    }
+    if (isTeacher) {
+      if (String(h.class_name).trim().toUpperCase() === "ALL") return true;
+      const teacherRoutines =
+        dayNum !== null && dayNum !== undefined
+          ? routines.filter((r) => r.day_of_week === dayNum)
+          : routines;
+      return teacherRoutines.some(
+        (r) =>
+          findMatchingHolidays([h], dateStr, {
+            className: r.class_name,
+            division: r.division,
+            batchId: r.batch_id,
+            batchName: r.batch_name,
+          }).length > 0
+      );
+    }
+    return true;
+  };
+
+  // Holidays active on the currently selected day (or today)
+  const selectedDayDate =
+    activeDayNumber !== null ? getDateForDay(activeDayNumber) : todayDate;
+
+  const activeDayHolidays = useMemo(() => {
+    if (selectedDay === "all") {
+      return holidays.filter((h) => matchesViewerHoliday(h, h.start_date, null));
+    }
+    return holidays.filter((h) => matchesViewerHoliday(h, selectedDayDate, activeDayNumber));
+  }, [holidays, selectedDay, selectedDayDate, activeDayNumber, activeHolidayTarget, isTeacher, routines]);
+
+  const dayHasViewerHoliday = (dayNum: number): boolean => {
+    const dStr = getDateForDay(dayNum);
+    return holidays.some((h) => matchesViewerHoliday(h, dStr, dayNum));
+  };
+
+  const getRoutineHoliday = (r: RoutineItem): ClassHoliday | null => {
+    const targetDate = getDateForDay(r.day_of_week);
+    const matches = findMatchingHolidays(holidays, targetDate, {
+      className: r.class_name,
+      division: r.division,
+      batchId: r.batch_id,
+      batchName: r.batch_name,
+    });
+    return matches[0] ?? null;
+  };
+
   // Stats for today
   const todayClassesTotal = useMemo(() => {
     return routines.filter((r) => r.day_of_week === todayDayOfWeek).length;
@@ -348,10 +454,11 @@ export function RoutineViewer({
   const runningNowCount = useMemo(() => {
     return routines.filter((r) => {
       if (r.day_of_week !== todayDayOfWeek) return false;
+      if (getRoutineHoliday(r)) return false;
       const s = getClassStatus(r.start_time, r.end_time, r.day_of_week);
       return s === "RUNNING";
     }).length;
-  }, [routines, todayDayOfWeek, currentMinutes]);
+  }, [routines, todayDayOfWeek, currentMinutes, holidays, todayDate]);
 
   if (error) {
     return (
@@ -449,6 +556,17 @@ export function RoutineViewer({
             <BellRing className="h-3.5 w-3.5 text-emerald-600" />
             <span>১০ মিনিট পূর্বে ও শুরুর সময়ে নোটিফিকেশন সক্রিয়</span>
           </div>
+
+          {(isAdmin || isDirector) && (
+            <Button
+              type="button"
+              onClick={() => setHolidayModalOpen(true)}
+              className="gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold h-9 sm:h-10 text-xs sm:text-sm shadow-xs"
+            >
+              <CalendarOff className="h-4 w-4" />
+              ছুটি ঘোষণা
+            </Button>
+          )}
 
           {(isTeacher || isAdmin || isDirector) && (
             <Button
@@ -563,14 +681,24 @@ export function RoutineViewer({
                 onClick={() => setSelectedDay("today")}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition ${
                   selectedDay === "today"
-                    ? "bg-emerald-600 text-white shadow-xs"
+                    ? dayHasViewerHoliday(todayDayOfWeek)
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "bg-emerald-600 text-white shadow-xs"
+                    : dayHasViewerHoliday(todayDayOfWeek)
+                    ? "bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100"
                     : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
                 }`}
               >
-                <Sparkles className="h-3.5 w-3.5" />
+                {dayHasViewerHoliday(todayDayOfWeek) ? (
+                  <CalendarOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
                 <span>আজকের রুটিন</span>
                 <span className="text-[10px] bg-black/15 px-1.5 py-0.2 rounded-full">
-                  {getDayNameBn(todayDayOfWeek)}
+                  {dayHasViewerHoliday(todayDayOfWeek)
+                    ? "ছুটি"
+                    : getDayNameBn(todayDayOfWeek)}
                 </span>
               </button>
 
@@ -592,6 +720,7 @@ export function RoutineViewer({
               {DAYS_OF_WEEK.map((d) => {
                 const isToday = d.id === todayDayOfWeek;
                 const isSelected = selectedDay === String(d.id);
+                const dayHasHoliday = dayHasViewerHoliday(d.id);
                 return (
                   <button
                     key={d.id}
@@ -599,14 +728,28 @@ export function RoutineViewer({
                     onClick={() => setSelectedDay(String(d.id))}
                     className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition ${
                       isSelected
-                        ? "bg-slate-900 text-white shadow-xs"
+                        ? dayHasHoliday
+                          ? "bg-rose-600 text-white shadow-xs"
+                          : "bg-slate-900 text-white shadow-xs"
+                        : dayHasHoliday
+                        ? "bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100"
                         : isToday
                         ? "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
                         : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
                     }`}
                   >
                     <span>{d.name}</span>
-                    {isToday && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                    {dayHasHoliday ? (
+                      <span
+                        className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                          isSelected ? "bg-white/25 text-white" : "bg-rose-600 text-white"
+                        }`}
+                      >
+                        ছুটি
+                      </span>
+                    ) : (
+                      isToday && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    )}
                   </button>
                 );
               })}
@@ -723,6 +866,90 @@ export function RoutineViewer({
         </CardContent>
       </Card>
 
+      {/* 3.5 Prominent Holiday Announcement Banner */}
+      {!loading && activeDayHolidays.length > 0 && (
+        <div className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 via-red-50/80 to-amber-50/70 p-5 shadow-sm no-print space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-600 text-white shadow-sm">
+                <CalendarOff className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-rose-600 text-white border-none text-xs font-extrabold px-2.5 py-0.5">
+                    {selectedDay === "today" || activeDayNumber === todayDayOfWeek
+                      ? "আজ ছুটি"
+                      : selectedDay === "all"
+                      ? "ঘোষিত ছুটি"
+                      : `${getDayNameBn(activeDayNumber ?? todayDayOfWeek)} ছুটি`}
+                  </Badge>
+                  <span className="text-xs font-bold text-rose-700">
+                    {isStudent ? "আপনার শ্রেণি ছুটি ঘোষণা করা হয়েছে" : "শ্রেণি ছুটি ঘোষণা"}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-rose-950">
+                  {isStudent
+                    ? selectedDay === "today" || activeDayNumber === todayDayOfWeek
+                      ? `আজ (${getDayNameBn(todayDayOfWeek)}) আপনার শ্রেণি ছুটি!`
+                      : selectedDay === "all"
+                      ? "আপনার শ্রেণির চলমান ও আসন্ন ছুটি"
+                      : `${getDayNameBn(activeDayNumber ?? todayDayOfWeek)} আপনার শ্রেণি ছুটি!`
+                    : selectedDay === "today" || activeDayNumber === todayDayOfWeek
+                    ? `আজ (${getDayNameBn(todayDayOfWeek)}) ছুটি ঘোষিত শ্রেণিসমূহ`
+                    : selectedDay === "all"
+                    ? "চলমান ও আসন্ন ছুটির তালিকা"
+                    : `${getDayNameBn(activeDayNumber ?? todayDayOfWeek)} ছুটি ঘোষিত শ্রেণিসমূহ`}
+                </h3>
+                {isStudent && selectedDay !== "all" && (
+                  <p className="text-xs font-medium text-rose-800">
+                    এই দিনে নির্ধারিত কোনো ক্লাস অনুষ্ঠিত হবে না।
+                  </p>
+                )}
+              </div>
+            </div>
+            {(isAdmin || isDirector) && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setHolidayModalOpen(true)}
+                className="border-rose-300 bg-white text-rose-700 hover:bg-rose-100 font-bold text-xs self-start sm:self-center"
+              >
+                ছুটি সম্পাদনা
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {activeDayHolidays.map((h) => {
+              const isTodayNow = isDateInRange(todayDate, h.start_date, h.end_date);
+              return (
+                <div
+                  key={h.id}
+                  className="rounded-xl border border-rose-200 bg-white/95 p-3 flex flex-col gap-1 shadow-2xs"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="text-xs font-extrabold text-rose-900">
+                      {formatHolidayTargetBn(h)}
+                    </span>
+                    <Badge
+                      className={`text-[10px] font-bold border-none ${
+                        isTodayNow ? "bg-rose-600 text-white" : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {formatBanglaDateRange(h.start_date, h.end_date)}
+                    </Badge>
+                  </div>
+                  <p className="text-sm font-bold text-slate-900">
+                    কারণ: {h.reason}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 4. Routine Cards Grid / Status view */}
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
@@ -730,6 +957,20 @@ export function RoutineViewer({
           <p className="mt-2 text-xs text-slate-500 font-medium">ক্লাস রুটিন লোড হচ্ছে...</p>
         </div>
       ) : filtered.length === 0 ? (
+        isStudent && activeDayHolidays.length > 0 && selectedDay !== "all" ? (
+          <div className="flex justify-center no-print">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedDay("all")}
+              className="gap-2 text-xs font-bold border-slate-300 text-slate-700"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              পুরো সপ্তাহের রুটিন দেখুন
+            </Button>
+          </div>
+        ) : (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center space-y-3">
           <CalendarDays className="h-12 w-12 text-slate-300 mx-auto" />
           <h3 className="text-base font-bold text-slate-800">কোনো ক্লাস নির্ধারিত নেই</h3>
@@ -753,6 +994,7 @@ export function RoutineViewer({
             </Button>
           )}
         </div>
+        )
       ) : (
         <>
           {/* Official Printable Routine Table Model (Visible only when printing) */}
@@ -825,7 +1067,9 @@ export function RoutineViewer({
           {/* Screen Interactive Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 no-print">
           {filtered.map((r) => {
-            const status = getClassStatus(r.start_time, r.end_time, r.day_of_week);
+            const cardHoliday = getRoutineHoliday(r);
+            const isHoliday = Boolean(cardHoliday);
+            const status = isHoliday ? "HOLIDAY" : getClassStatus(r.start_time, r.end_time, r.day_of_week);
             const isRunning = status === "RUNNING";
             const isUpcoming = status === "UPCOMING";
             const isPassed = status === "PASSED";
@@ -834,7 +1078,9 @@ export function RoutineViewer({
               <div
                 key={r.id}
                 className={`relative rounded-2xl border p-4 transition duration-150 shadow-xs flex flex-col justify-between ${
-                  isRunning
+                  isHoliday
+                    ? "bg-rose-50/70 border-rose-300 ring-1 ring-rose-200"
+                    : isRunning
                     ? "bg-emerald-50/95 border-emerald-400 ring-2 ring-emerald-500/25 shadow-md"
                     : isUpcoming
                     ? "bg-white border-indigo-200 hover:border-indigo-300"
@@ -848,7 +1094,9 @@ export function RoutineViewer({
                       <Badge
                         variant="secondary"
                         className={`text-[11px] font-bold ${
-                          r.day_of_week === todayDayOfWeek
+                          isHoliday
+                            ? "bg-rose-100 text-rose-800"
+                            : r.day_of_week === todayDayOfWeek
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-slate-100 text-slate-800"
                         }`}
@@ -866,6 +1114,12 @@ export function RoutineViewer({
                     </div>
 
                     {/* Real-time Status Badge */}
+                    {isHoliday && (
+                      <span className="flex items-center gap-1 text-[11px] font-extrabold text-white bg-rose-600 px-2.5 py-0.5 rounded-full shadow-2xs">
+                        <CalendarOff className="h-3 w-3" />
+                        ছুটি
+                      </span>
+                    )}
                     {isRunning && (
                       <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full shadow-2xs">
                         <span className="relative flex h-2 w-2">
@@ -886,6 +1140,19 @@ export function RoutineViewer({
                       </span>
                     )}
                   </div>
+
+                  {/* Inline Holiday Notice on Card */}
+                  {cardHoliday && (
+                    <div className="mb-3 rounded-xl border border-rose-200 bg-white/90 px-3 py-2 text-xs text-rose-900 flex items-start gap-2">
+                      <CalendarOff className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-extrabold text-rose-800">ক্লাস ছুটি — {cardHoliday.reason}</p>
+                        <p className="text-[11px] text-rose-700">
+                          {formatBanglaDateRange(cardHoliday.start_date, cardHoliday.end_date)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Class Time */}
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
@@ -1072,8 +1339,18 @@ export function RoutineViewer({
         onClose={() => setAddTopicModalOpen(false)}
         routines={routines}
         batches={batches}
-        onSaved={() => window.location.reload()}
+        onSaved={loadRoutines}
       />
+
+      {(isAdmin || isDirector) && (
+        <ClassHolidayModal
+          isOpen={holidayModalOpen}
+          onClose={() => setHolidayModalOpen(false)}
+          classesList={classesList}
+          batches={batches}
+          onChanged={loadRoutines}
+        />
+      )}
     </div>
   );
 }

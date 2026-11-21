@@ -271,17 +271,53 @@ function useTrimmedLogo(src: string | null): string | null {
         const sw = Math.min(w - sx, maxX - minX + 1 + pad * 2);
         const sh = Math.min(h - sy, maxY - minY + 1 + pad * 2);
 
-        if (w - sw < 4 && h - sh < 4) {
+        // Detect a thin sticking-up top spire (e.g., rocket arc above main logo text)
+        // where each row covers less than 6% of total logo width.
+        let spireEndRelY = 0;
+        const spireWidthThreshold = Math.max(8, Math.round(sw * 0.06));
+        for (let ry = 0; ry < sh; ry++) {
+          const y = sy + ry;
+          let rowCount = 0;
+          for (let rx = 0; rx < sw; rx++) {
+            const x = sx + rx;
+            const idx = (y * w + x) * 4;
+            const a = data[idx + 3];
+            const isContent = trimByAlpha
+              ? a >= 15
+              : a >= 15 && (data[idx] < 244 || data[idx + 1] < 244 || data[idx + 2] < 244);
+            if (isContent) rowCount++;
+          }
+          if (rowCount >= spireWidthThreshold) {
+            spireEndRelY = ry;
+            break;
+          }
+        }
+
+        const hasTallTopSpire = spireEndRelY >= sh * 0.15 && spireEndRelY <= sh * 0.45;
+
+        if (!hasTallTopSpire && w - sw < 4 && h - sh < 4) {
           trimmedLogoCache.set(src, src);
           return;
         }
 
         const out = document.createElement("canvas");
         out.width = sw;
-        out.height = sh;
         const outCtx = out.getContext("2d");
         if (!outCtx) return;
-        outCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        if (hasTallTopSpire) {
+          // Smoothly shorten only the thin upper rocket tail while keeping the
+          // pointed curve intact and the entire main logo body 100% untouched.
+          const compactSpireH = Math.max(12, Math.round(spireEndRelY * 0.28));
+          const bodyH = sh - spireEndRelY;
+          out.height = compactSpireH + bodyH;
+          outCtx.drawImage(canvas, sx, sy, sw, spireEndRelY, 0, 0, sw, compactSpireH);
+          outCtx.drawImage(canvas, sx, sy + spireEndRelY, sw, bodyH, 0, compactSpireH, sw, bodyH);
+        } else {
+          out.height = sh;
+          outCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        }
+
         const dataUrl = out.toDataURL("image/png");
         trimmedLogoCache.set(src, dataUrl);
         if (active) setTrimmed(dataUrl);
@@ -344,7 +380,7 @@ const ADMISSION_FORM_CSS = `
 .af-border-box {
   border: 2px dashed #1a237e;
   border-radius: 12px;
-  padding: 4px 10px 6px 10px;
+  padding: 2px 10px 6px 10px;
   height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -359,18 +395,18 @@ const ADMISSION_FORM_CSS = `
 }
 
 .af-logo-slot {
-  height: 122px;
+  height: 92px;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  margin: 0 auto 2px auto;
+  margin: 0 auto 1px auto;
 }
 
 .af-header img.af-logo-top {
-  height: 120px;
-  max-height: 120px;
+  height: 90px;
+  max-height: 90px;
   max-width: 600px;
   width: auto;
   object-fit: contain;
@@ -386,7 +422,7 @@ const ADMISSION_FORM_CSS = `
   font-weight: bold;
   font-size: 14.5px;
   border-radius: 4px;
-  margin: 2px 0 4px 0;
+  margin: 1px 0 3px 0;
   border: 1px solid #f57f17;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
@@ -1173,7 +1209,7 @@ export function StudentAdmissionPrintDialog({
       <style dangerouslySetInnerHTML={{ __html: ADMISSION_FORM_CSS }} />
 
       <Dialog open={Boolean(student)} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="no-print w-[96vw] max-w-[96vw] sm:max-w-4xl max-h-[94vh] flex flex-col p-3 sm:p-5 rounded-2xl overflow-hidden">
+        <DialogContent className="no-print w-[min(96vw,56rem)] max-w-[96vw] sm:max-w-[min(96vw,56rem)] max-h-[94vh] flex flex-col p-3 sm:p-5 rounded-2xl overflow-hidden">
           <DialogHeader className="shrink-0 border-b border-slate-200 pb-3 min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2 pr-6 min-w-0">
               <div className="min-w-0">

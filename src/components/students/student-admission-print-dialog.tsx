@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Printer, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -211,7 +211,9 @@ const ADMISSION_FORM_CSS = `
 }
 
 .af-header img.af-logo-top {
-  max-height: 85px;
+  height: 135px;
+  max-height: 135px;
+  max-width: 520px;
   width: auto;
   object-fit: contain;
   margin: 0 auto;
@@ -452,9 +454,12 @@ const ADMISSION_FORM_CSS = `
 }
 
 .af-student-copy-left img {
-  width: 170px;
-  max-height: 45px;
+  width: 185px;
+  height: auto;
+  max-height: 68px;
   object-fit: contain;
+  display: block;
+  margin: 0 auto;
 }
 
 .af-student-copy-left .af-address-text {
@@ -839,8 +844,8 @@ export function StudentAdmissionPrintDialog({
   const [selectedSig, setSelectedSig] = useState<string>("none");
   const [mounted, setMounted] = useState(false);
 
-  const previewWrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [previewEl, setPreviewEl] = useState<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0.45);
 
   useEffect(() => {
     setMounted(true);
@@ -877,18 +882,24 @@ export function StudentAdmissionPrintDialog({
   }, [student, role]);
 
   useEffect(() => {
-    if (!student) return;
-    const el = previewWrapRef.current;
-    if (!el) return;
+    if (!student || !previewEl) return;
     const update = () => {
-      const avail = Math.max(260, (el.clientWidth || A4_PREVIEW_WIDTH_PX) - 8);
-      setScale(Math.min(1, avail / A4_PREVIEW_WIDTH_PX));
+      const style = window.getComputedStyle(previewEl);
+      const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const innerWidth = Math.max(240, previewEl.clientWidth - padX);
+      setScale(Math.min(1, innerWidth / A4_PREVIEW_WIDTH_PX));
     };
     update();
+    const raf = requestAnimationFrame(update);
     const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [student]);
+    ro.observe(previewEl);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [student, previewEl]);
 
   if (!student) return null;
 
@@ -906,14 +917,14 @@ export function StudentAdmissionPrintDialog({
       <style dangerouslySetInnerHTML={{ __html: ADMISSION_FORM_CSS }} />
 
       <Dialog open={Boolean(student)} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="no-print w-[96vw] sm:max-w-4xl max-h-[94vh] flex flex-col p-3 sm:p-5 rounded-2xl overflow-hidden">
-          <DialogHeader className="shrink-0 border-b border-slate-200 pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 pr-6">
-              <div>
-                <DialogTitle className="text-base sm:text-lg font-bold text-slate-900">
+        <DialogContent className="no-print w-[96vw] max-w-[96vw] sm:max-w-4xl max-h-[94vh] flex flex-col p-3 sm:p-5 rounded-2xl overflow-hidden">
+          <DialogHeader className="shrink-0 border-b border-slate-200 pb-3 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 pr-6 min-w-0">
+              <div className="min-w-0">
+                <DialogTitle className="text-sm sm:text-lg font-bold text-slate-900 truncate">
                   ভর্তি ফর্ম প্রিন্ট প্রিভিউ — {student.name}
                 </DialogTitle>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                   A4 Portrait ফরম্যাট • প্রিন্ট ডায়ালগে Margins: None এবং Background graphics চালু রাখুন
                 </p>
               </div>
@@ -957,8 +968,8 @@ export function StudentAdmissionPrintDialog({
           </DialogHeader>
 
           <div
-            ref={previewWrapRef}
-            className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-200/80 rounded-xl p-2 sm:p-4 mt-2"
+            ref={setPreviewEl}
+            className="flex-1 min-w-0 w-full overflow-y-auto overflow-x-hidden bg-slate-200/80 rounded-xl p-2 sm:p-4 mt-2"
           >
             <div
               className="mx-auto shadow-md bg-white overflow-hidden"

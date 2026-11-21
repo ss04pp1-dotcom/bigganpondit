@@ -48,6 +48,7 @@ import {
 } from "@/lib/constants";
 import Link from "next/link";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
+import { sortRoutines } from "@/lib/routine-sort";
 
 export interface RoutineItem {
   id: number;
@@ -308,44 +309,46 @@ export function TodayRoutineModal({
   // Filter today's classes
   const todayRoutines = useMemo(() => {
     if (!data?.routines) return [];
-    return data.routines.filter((r) => {
-      if (r.day_of_week !== todayDayOfWeek) return false;
+    return sortRoutines(
+      data.routines.filter((r) => {
+        if (r.day_of_week !== todayDayOfWeek) return false;
 
-      // Student scoping (strictly locked to student's class & batch)
-      if (isStudent) {
-        return matchesStudentRoutine(r);
-      }
-
-      // Teacher scoping (strictly locked to teacher's own teaching schedule)
-      if (isTeacher) {
-        if (data.userContext?.teacherId) {
-          const myTid = data.userContext.teacherId;
-          const matchMyId = r.teacher_id === myTid;
-          const matchMyName =
-            data.userContext.userName &&
-            r.teacher_name.includes(data.userContext.userName.split(" ")[0]);
-          const matchMyShort =
-            data.userContext.teacherShortName &&
-            (r.teacher_name.includes(data.userContext.teacherShortName) ||
-              r.teacher_short_name === data.userContext.teacherShortName);
-
-          if (!matchMyId && !matchMyName && !matchMyShort) return false;
+        // Student scoping (strictly locked to student's class & batch)
+        if (isStudent) {
+          return matchesStudentRoutine(r);
         }
+
+        // Teacher scoping (strictly locked to teacher's own teaching schedule)
+        if (isTeacher) {
+          if (data.userContext?.teacherId) {
+            const myTid = data.userContext.teacherId;
+            const matchMyId = r.teacher_id === myTid;
+            const matchMyName =
+              data.userContext.userName &&
+              r.teacher_name.includes(data.userContext.userName.split(" ")[0]);
+            const matchMyShort =
+              data.userContext.teacherShortName &&
+              (r.teacher_name.includes(data.userContext.teacherShortName) ||
+                r.teacher_short_name === data.userContext.teacherShortName);
+
+            if (!matchMyId && !matchMyName && !matchMyShort) return false;
+          }
+          return true;
+        }
+
+        // Admin / Director
+        if (isAdmin || isDirector) {
+          if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
+          if (selectedDivision !== "all" && r.division && r.division !== selectedDivision) return false;
+          if (selectedTeacher !== "all") {
+            const tid = parseInt(selectedTeacher, 10);
+            if (!isNaN(tid) && r.teacher_id !== tid) return false;
+          }
+        }
+
         return true;
-      }
-
-      // Admin / Director
-      if (isAdmin || isDirector) {
-        if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
-        if (selectedDivision !== "all" && r.division && r.division !== selectedDivision) return false;
-        if (selectedTeacher !== "all") {
-          const tid = parseInt(selectedTeacher, 10);
-          if (!isNaN(tid) && r.teacher_id !== tid) return false;
-        }
-      }
-
-      return true;
-    });
+      })
+    );
   }, [
     data,
     todayDayOfWeek,
@@ -361,44 +364,46 @@ export function TodayRoutineModal({
   // Filter selected day classes for weekly view
   const weeklyDayRoutines = useMemo(() => {
     if (!data?.routines) return [];
-    return data.routines.filter((r) => {
-      if (r.day_of_week !== selectedDay) return false;
+    return sortRoutines(
+      data.routines.filter((r) => {
+        if (r.day_of_week !== selectedDay) return false;
 
-      // Student scoping (strictly locked to student's class & batch)
-      if (isStudent) {
-        return matchesStudentRoutine(r);
-      }
-
-      // Teacher scoping (strictly locked to teacher's own teaching schedule)
-      if (isTeacher) {
-        if (data.userContext?.teacherId) {
-          const myTid = data.userContext.teacherId;
-          const matchMyId = r.teacher_id === myTid;
-          const matchMyName =
-            data.userContext.userName &&
-            r.teacher_name.includes(data.userContext.userName.split(" ")[0]);
-          const matchMyShort =
-            data.userContext.teacherShortName &&
-            (r.teacher_name.includes(data.userContext.teacherShortName) ||
-              r.teacher_short_name === data.userContext.teacherShortName);
-
-          if (!matchMyId && !matchMyName && !matchMyShort) return false;
+        // Student scoping (strictly locked to student's class & batch)
+        if (isStudent) {
+          return matchesStudentRoutine(r);
         }
+
+        // Teacher scoping (strictly locked to teacher's own teaching schedule)
+        if (isTeacher) {
+          if (data.userContext?.teacherId) {
+            const myTid = data.userContext.teacherId;
+            const matchMyId = r.teacher_id === myTid;
+            const matchMyName =
+              data.userContext.userName &&
+              r.teacher_name.includes(data.userContext.userName.split(" ")[0]);
+            const matchMyShort =
+              data.userContext.teacherShortName &&
+              (r.teacher_name.includes(data.userContext.teacherShortName) ||
+                r.teacher_short_name === data.userContext.teacherShortName);
+
+            if (!matchMyId && !matchMyName && !matchMyShort) return false;
+          }
+          return true;
+        }
+
+        // Admin / Director
+        if (isAdmin || isDirector) {
+          if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
+          if (selectedDivision !== "all" && r.division && r.division !== selectedDivision) return false;
+          if (selectedTeacher !== "all") {
+            const tid = parseInt(selectedTeacher, 10);
+            if (!isNaN(tid) && r.teacher_id !== tid) return false;
+          }
+        }
+
         return true;
-      }
-
-      // Admin / Director
-      if (isAdmin || isDirector) {
-        if (selectedClass !== "all" && r.class_name !== selectedClass) return false;
-        if (selectedDivision !== "all" && r.division && r.division !== selectedDivision) return false;
-        if (selectedTeacher !== "all") {
-          const tid = parseInt(selectedTeacher, 10);
-          if (!isNaN(tid) && r.teacher_id !== tid) return false;
-        }
-      }
-
-      return true;
-    });
+      })
+    );
   }, [
     data,
     selectedDay,

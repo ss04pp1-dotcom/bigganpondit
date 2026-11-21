@@ -32,9 +32,11 @@ import {
   Copy,
   RotateCcw,
   Settings2,
+  Printer,
 } from "lucide-react";
 import { BiometricPasswordDialog } from "./biometric-password-dialog";
 import { StudentPromotionModal } from "./student-promotion-modal";
+import { StudentAdmissionPrintDialog } from "./student-admission-print-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -132,6 +134,7 @@ interface Row {
   address?: string | null;
   blood_group?: string | null;
   dob?: string | null;
+  created_at?: string | null;
   hide_photo_from_students?: number | boolean;
 }
 
@@ -294,6 +297,7 @@ export function StudentManager({
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
+  const [printStudent, setPrintStudent] = useState<Row | null>(null);
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const pendingPreview = useMemo(() => (pendingPhoto ? URL.createObjectURL(pendingPhoto) : null), [pendingPhoto]);
 
@@ -1125,6 +1129,14 @@ export function StudentManager({
                               >
                                 ভিউ
                               </Button>
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 rounded text-[11px] font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-xs flex items-center gap-1"
+                                onClick={() => setPrintStudent(row)}
+                                title="ভর্তি ফর্ম প্রিন্ট করুন"
+                              >
+                                <Printer className="h-3 w-3" /> প্রিন্ট
+                              </Button>
                               {role === "ADMIN" && (
                                 <Button
                                   size="sm"
@@ -1273,95 +1285,115 @@ export function StudentManager({
 
                             {/* Card Actions Footer */}
                             {role === "ADMIN" ? (
-                              <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-border/40">
-                                <Button
-                                  size="sm"
-                                  className="h-8 rounded-lg text-[11px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1 px-1"
-                                  onClick={() => setViewId(row.id)}
-                                >
-                                  <Eye className="h-3 w-3" /> ভিউ
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center justify-center gap-1 px-1"
-                                  onClick={() => setBioStudent(row)}
-                                  title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
-                                >
-                                  <Fingerprint className="h-3 w-3 text-indigo-600 shrink-0" />
-                                  <span className="truncate">পাসওয়ার্ড</span>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-8 rounded-lg text-[11px] font-bold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs flex items-center justify-center gap-1 px-1"
-                                  onClick={() => {
-                                    setPendingPhoto(null);
-                                    setForm({
-                                      id: row.id,
-                                      name: row.name,
-                                      className: row.class_name,
-                                      batchId: row.batch_id ? String(row.batch_id) : "",
-                                      batchName: row.batch_name || "",
-                                      division: row.division ?? "SCIENCE",
-                                      section: row.section ?? "",
-                                      roll: String(row.roll),
-                                      username: row.username,
-                                      password: "",
-                                      photo_key: row.photo_key,
-                                      fatherName: row.father_name ?? "",
-                                      fatherOccupation: row.father_occupation ?? "",
-                                      motherName: row.mother_name ?? "",
-                                      motherOccupation: row.mother_occupation ?? "",
-                                      guardianName: row.guardian_name ?? "",
-                                      guardianOccupation: row.guardian_occupation ?? "",
-                                      guardianRelation: row.guardian_relation ?? "",
-                                      schoolName: row.school_name ?? "",
-                                      phone: row.phone ?? "",
-                                      address: row.address ?? "",
-                                      bloodGroup: row.blood_group ?? "",
-                                      dob: row.dob ?? "",
-                                      hidePhotoFromStudents: !!row.hide_photo_from_students,
-                                    });
-                                  }}
-                                >
-                                  <Pencil className="h-3 w-3 shrink-0" />
-                                  <span className="truncate">এডিট</span>
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      className="h-8 rounded-lg text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 px-1"
-                                    >
-                                      <Trash2 className="h-3 w-3 shrink-0" />
-                                      <span className="truncate">মুছুন</span>
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent className="w-[92vw] max-w-md rounded-2xl">
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        &ldquo;{row.name}&rdquo; (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>বাতিল</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
-                                        মুছে ফেলুন
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
+                              <div className="space-y-1.5 pt-1 border-t border-border/40">
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    className="h-8 rounded-lg text-[11px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1 px-1"
+                                    onClick={() => setViewId(row.id)}
+                                  >
+                                    <Eye className="h-3 w-3" /> ভিউ
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-8 rounded-lg text-[11px] font-bold bg-teal-600 text-white hover:bg-teal-700 shadow-xs flex items-center justify-center gap-1 px-1"
+                                    onClick={() => setPrintStudent(row)}
+                                    title="ভর্তি ফর্ম প্রিন্ট করুন"
+                                  >
+                                    <Printer className="h-3 w-3 shrink-0" /> প্রিন্ট
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 shadow-2xs flex items-center justify-center gap-1 px-1"
+                                    onClick={() => setBioStudent(row)}
+                                    title="ফিঙ্গারপ্রিন্ট দিয়ে পাসওয়ার্ড দেখুন"
+                                  >
+                                    <Fingerprint className="h-3 w-3 text-indigo-600 shrink-0" />
+                                    <span className="truncate">পাসওয়ার্ড</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-8 rounded-lg text-[11px] font-bold bg-[#f59e0b] text-white hover:bg-[#d97706] shadow-xs flex items-center justify-center gap-1 px-1"
+                                    onClick={() => {
+                                      setPendingPhoto(null);
+                                      setForm({
+                                        id: row.id,
+                                        name: row.name,
+                                        className: row.class_name,
+                                        batchId: row.batch_id ? String(row.batch_id) : "",
+                                        batchName: row.batch_name || "",
+                                        division: row.division ?? "SCIENCE",
+                                        section: row.section ?? "",
+                                        roll: String(row.roll),
+                                        username: row.username,
+                                        password: "",
+                                        photo_key: row.photo_key,
+                                        fatherName: row.father_name ?? "",
+                                        fatherOccupation: row.father_occupation ?? "",
+                                        motherName: row.mother_name ?? "",
+                                        motherOccupation: row.mother_occupation ?? "",
+                                        guardianName: row.guardian_name ?? "",
+                                        guardianOccupation: row.guardian_occupation ?? "",
+                                        guardianRelation: row.guardian_relation ?? "",
+                                        schoolName: row.school_name ?? "",
+                                        phone: row.phone ?? "",
+                                        address: row.address ?? "",
+                                        bloodGroup: row.blood_group ?? "",
+                                        dob: row.dob ?? "",
+                                        hidePhotoFromStudents: !!row.hide_photo_from_students,
+                                      });
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">এডিট</span>
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        className="h-8 rounded-lg text-[11px] font-bold shadow-xs flex items-center justify-center gap-1 px-1"
+                                      >
+                                        <Trash2 className="h-3 w-3 shrink-0" />
+                                        <span className="truncate">মুছুন</span>
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="w-[92vw] max-w-md rounded-2xl">
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>শিক্ষার্থী মুছে ফেলতে চান?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          &ldquo;{row.name}&rdquo; (রোল {bn(row.roll)}) এর প্রোফাইল ও সব নম্বর স্থায়ীভাবে মুছে যাবে।
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>বাতিল</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => remove(row)} className="bg-red-600 hover:bg-red-700">
+                                          মুছে ফেলুন
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                              <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-border/40">
                                 <Button
                                   size="sm"
-                                  className="h-8 w-full rounded-lg text-[12px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1.5"
+                                  className="h-8 rounded-lg text-[11px] font-bold bg-[#0d6efd] text-white hover:bg-[#0b5ed7] shadow-xs flex items-center justify-center gap-1"
                                   onClick={() => setViewId(row.id)}
                                 >
-                                  <Eye className="h-3.5 w-3.5" /> শিক্ষার্থী প্রোফাইল ও ফলাফল দেখুন
+                                  <Eye className="h-3.5 w-3.5" /> ভিউ
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-8 rounded-lg text-[11px] font-bold bg-teal-600 text-white hover:bg-teal-700 shadow-xs flex items-center justify-center gap-1"
+                                  onClick={() => setPrintStudent(row)}
+                                  title="ভর্তি ফর্ম প্রিন্ট করুন"
+                                >
+                                  <Printer className="h-3.5 w-3.5" /> প্রিন্ট
                                 </Button>
                               </div>
                             )}
@@ -2416,6 +2448,17 @@ export function StudentManager({
         students={rows}
         role={role}
         onRevealPassword={(st) => setBioStudent(st)}
+        onPrintForm={(st) => {
+          setViewId(null);
+          setPrintStudent(st);
+        }}
+      />
+
+      {/* Admission Form Print Preview & A4 Print Dialog */}
+      <StudentAdmissionPrintDialog
+        student={printStudent}
+        onClose={() => setPrintStudent(null)}
+        role={role}
       />
 
       {/* Biometric Fingerprint Password Dialog for Admin */}
@@ -2978,12 +3021,14 @@ function StudentViewDialog({
   students,
   role = "ADMIN",
   onRevealPassword,
+  onPrintForm,
 }: {
   studentId: number | null;
   onClose: () => void;
   students: Row[];
   role?: "ADMIN" | "TEACHER" | "DIRECTOR";
   onRevealPassword?: (student: Row) => void;
+  onPrintForm?: (student: Row) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"profile" | "results">("profile");
   const [data, setData] = useState<{
@@ -3026,15 +3071,28 @@ function StudentViewDialog({
     <Dialog open={studentId !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[95vw] sm:max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <StudentAvatar photoKey={student.photo_key} name={student.name} size="lg" />
-            <div>
-              <DialogTitle className="text-lg">{student.name}</DialogTitle>
-              <p className="text-[12px] text-muted-foreground">
-                {classLabel(student.class_name)}
-                {student.division ? ` — ${divisionLabel(student.division)}` : ""} • রোল {bn(student.roll)}
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 pr-6">
+            <div className="flex items-center gap-3">
+              <StudentAvatar photoKey={student.photo_key} name={student.name} size="lg" />
+              <div>
+                <DialogTitle className="text-lg">{student.name}</DialogTitle>
+                <p className="text-[12px] text-muted-foreground">
+                  {classLabel(student.class_name)}
+                  {student.division ? ` — ${divisionLabel(student.division)}` : ""} • রোল {bn(student.roll)}
+                </p>
+              </div>
             </div>
+            {onPrintForm && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onPrintForm(student)}
+                className="h-8 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs shrink-0"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                ভর্তি ফর্ম প্রিন্ট
+              </Button>
+            )}
           </div>
         </DialogHeader>
 

@@ -5,6 +5,7 @@ import { requireApiUser } from "@/lib/auth/guards";
 import { assertSameOrigin } from "@/lib/api";
 import { DAYS_OF_WEEK, getDayNameBn, getBangladeshDayOfWeek, todayISODateDhaka } from "@/lib/constants";
 import { notifyRoutineChanged } from "@/lib/push-events";
+import { sortRoutines } from "@/lib/routine-sort";
 
 export const dynamic = "force-dynamic";
 
@@ -322,8 +323,9 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Apply exact student batch & class filtering in memory
-    const rows =
+    // Apply exact student batch & class filtering in memory, then sort chronologically
+    // (12-hour strings like "01:30 PM" sort before "09:00 AM" in SQL, so sort in 24h minutes)
+    const filteredRows =
       user.role === "STUDENT"
         ? normalizedRows.filter((r) => {
             const rBatchId = r.batch_id && Number(r.batch_id) > 0 ? Number(r.batch_id) : null;
@@ -366,6 +368,8 @@ export async function GET(req: NextRequest) {
             return true;
           })
         : normalizedRows;
+
+    const rows = sortRoutines(filteredRows);
 
     // Teachers, subjects & batches directory
     let teachersList: any[] = [];

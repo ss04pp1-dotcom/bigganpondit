@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Printer,
   Search,
@@ -90,6 +90,9 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
   const [publicationName, setPublicationName] = useState<string>("বিজ্ঞান পণ্ডিত প্রকাশনী");
   const [previewIndex, setPreviewIndex] = useState(0);
 
+  const abortRef = useRef<AbortController | null>(null);
+  const reqSeqRef = useRef(0);
+
   // Reset preview index when filters change
   useEffect(() => {
     setPreviewIndex(0);
@@ -98,6 +101,11 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
   const requiresDiv = className === "9" || className === "10";
 
   const fetchCards = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++reqSeqRef.current;
+
     setLoading(true);
     try {
       const p = new URLSearchParams({
@@ -109,8 +117,13 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
       });
       if (requiresDiv) p.set("division", division);
 
-      const res = await fetch(`/api/admin/result-cards?${p.toString()}`);
+      const res = await fetch(`/api/admin/result-cards?${p.toString()}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
       const json = await res.json();
+
+      if (controller.signal.aborted || seq !== reqSeqRef.current) return;
 
       if (json.ok) {
         setCards(json.cards || []);
@@ -131,16 +144,21 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
           });
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      if ((err as { name?: string })?.name === "AbortError") return;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && seq === reqSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [mode, className, division, month, year, studentId, requiresDiv]);
 
-  // Initial load
+  // Initial load & cleanup on unmount/filter change
   useEffect(() => {
     fetchCards();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [fetchCards]);
 
   const handlePrint = () => {
@@ -220,7 +238,15 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
             {/* Class */}
             <div className="space-y-1.5">
               <Label className="text-[12px] font-semibold text-slate-700">শ্রেণি</Label>
-              <Select value={className} onValueChange={setClassName}>
+              <Select
+                value={className}
+                onValueChange={(val) => {
+                  setClassName(val);
+                  setStudentId("all");
+                  setStudentsList([]);
+                  setCards([]);
+                }}
+              >
                 <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {classesList.length > 0
@@ -242,7 +268,15 @@ export function AdminResultCardView({ isAdmin = true }: { isAdmin?: boolean } = 
             {requiresDiv && (
               <div className="space-y-1.5">
                 <Label className="text-[12px] font-semibold text-slate-700">বিভাগ</Label>
-                <Select value={division} onValueChange={setDivision}>
+                <Select
+                  value={division}
+                  onValueChange={(val) => {
+                    setDivision(val);
+                    setStudentId("all");
+                    setStudentsList([]);
+                    setCards([]);
+                  }}
+                >
                   <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SCIENCE">বিজ্ঞান</SelectItem>

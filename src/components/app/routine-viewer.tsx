@@ -46,6 +46,7 @@ import {
 import { RoutineItem } from "@/components/app/today-routine-modal";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 import { TeacherAddTopicModal } from "@/components/app/teacher-add-topic-modal";
+import { sortRoutines } from "@/lib/routine-sort";
 
 function parseTimeToMinutes(timeStr: string): number | null {
   if (!timeStr) return null;
@@ -212,7 +213,8 @@ export function RoutineViewer({
 
   // Class filtering logic
   const filtered = useMemo(() => {
-    return routines.filter((r) => {
+    return sortRoutines(
+      routines.filter((r) => {
       // 1. Day Filter
       if (activeDayNumber !== null && r.day_of_week !== activeDayNumber) {
         return false;
@@ -305,7 +307,8 @@ export function RoutineViewer({
       }
 
       return true;
-    });
+      })
+    );
   }, [
     routines,
     activeDayNumber,

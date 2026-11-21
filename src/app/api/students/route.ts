@@ -27,7 +27,7 @@ export async function GET(req: Request) {
                   st.batch_id, COALESCE(b.name, st.batch_name) as batch_name,
                   st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
                   st.guardian_name, st.guardian_occupation, st.guardian_relation,
-                  st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  st.school_name, st.phone, st.address, st.blood_group, st.dob, st.created_at,
                   c.name as class_name, u.username
            FROM students st
            JOIN classes c ON c.id = st.class_id
@@ -83,7 +83,7 @@ export async function GET(req: Request) {
                   st.batch_id, COALESCE(b.name, st.batch_name) as batch_name,
                   st.father_name, st.father_occupation, st.mother_name, st.mother_occupation,
                   st.guardian_name, st.guardian_occupation, st.guardian_relation,
-                  st.school_name, st.phone, st.address, st.blood_group, st.dob,
+                  st.school_name, st.phone, st.address, st.blood_group, st.dob, st.created_at,
                   st.hide_photo_from_students,
                   c.name as class_name, c.sort_order, u.username
            FROM students st

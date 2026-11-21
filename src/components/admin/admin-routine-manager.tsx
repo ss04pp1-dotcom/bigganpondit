@@ -48,6 +48,7 @@ import { CLASS_NUMBERS, DAYS_OF_WEEK, bn, classLabel, getDayNameBn, getBanglades
 import { RoutineItem } from "@/components/app/today-routine-modal";
 import { RoutineTopicModal } from "@/components/app/routine-topic-modal";
 import { TeacherAddTopicModal } from "@/components/app/teacher-add-topic-modal";
+import { sortRoutines } from "@/lib/routine-sort";
 
 const TIME_PRESETS = [
   { start: "09:00 AM", end: "10:00 AM" },
@@ -422,29 +423,31 @@ export function AdminRoutineManager() {
 
   // Filtered routines
   const filteredRoutines = useMemo(() => {
-    return routines.filter((r) => {
-      if (filterDay !== "all" && String(r.day_of_week) !== filterDay) return false;
-      if (filterClass !== "all" && r.class_name !== filterClass) return false;
-      if (filterBatch !== "all") {
-        const matchesId = r.batch_id && String(r.batch_id) === filterBatch;
-        const matchesName = r.batch_name && r.batch_name === filterBatch;
-        if (!matchesId && !matchesName) return false;
-      }
-      if (filterTeacher !== "all" && String(r.teacher_id) !== filterTeacher) return false;
-      if (filterPeriod !== "all") {
-        if (r.period !== filterPeriod && !r.period?.includes(filterPeriod)) return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchSub = r.subject_name.toLowerCase().includes(q);
-        const matchTea = r.teacher_name.toLowerCase().includes(q);
-        const matchRoom = r.room_no?.toLowerCase().includes(q);
-        const matchPeriod = r.period?.toLowerCase().includes(q);
-        const matchBatch = r.batch_name?.toLowerCase().includes(q);
-        if (!matchSub && !matchTea && !matchRoom && !matchPeriod && !matchBatch) return false;
-      }
-      return true;
-    });
+    return sortRoutines(
+      routines.filter((r) => {
+        if (filterDay !== "all" && String(r.day_of_week) !== filterDay) return false;
+        if (filterClass !== "all" && r.class_name !== filterClass) return false;
+        if (filterBatch !== "all") {
+          const matchesId = r.batch_id && String(r.batch_id) === filterBatch;
+          const matchesName = r.batch_name && r.batch_name === filterBatch;
+          if (!matchesId && !matchesName) return false;
+        }
+        if (filterTeacher !== "all" && String(r.teacher_id) !== filterTeacher) return false;
+        if (filterPeriod !== "all") {
+          if (r.period !== filterPeriod && !r.period?.includes(filterPeriod)) return false;
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchSub = r.subject_name.toLowerCase().includes(q);
+          const matchTea = r.teacher_name.toLowerCase().includes(q);
+          const matchRoom = r.room_no?.toLowerCase().includes(q);
+          const matchPeriod = r.period?.toLowerCase().includes(q);
+          const matchBatch = r.batch_name?.toLowerCase().includes(q);
+          if (!matchSub && !matchTea && !matchRoom && !matchPeriod && !matchBatch) return false;
+        }
+        return true;
+      })
+    );
   }, [routines, filterDay, filterClass, filterBatch, filterTeacher, filterPeriod, searchQuery]);
 
   const todayDayOfWeek = getBangladeshDayOfWeek();
